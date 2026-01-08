@@ -229,6 +229,32 @@ def confirm_proceed(prompt: str = "Proceed?") -> bool:
         print("Please enter Y or N")
 
 
+def format_address_for_display(vendor_data: dict) -> str:
+    """
+    Format vendor address for display.
+    
+    Args:
+        vendor_data: Dict with addr_name, addr_line1, addr_line2, phone, email
+        
+    Returns:
+        Multi-line formatted address string
+    """
+    lines = []
+    
+    if vendor_data.get('addr_name'):
+        lines.append(vendor_data['addr_name'])
+    if vendor_data.get('addr_line1'):
+        lines.append(vendor_data['addr_line1'])
+    if vendor_data.get('addr_line2'):
+        lines.append(vendor_data['addr_line2'])
+    if vendor_data.get('phone'):
+        lines.append(f"Phone: {vendor_data['phone']}")
+    if vendor_data.get('email'):
+        lines.append(f"Email: {vendor_data['email']}")
+    
+    return '\n'.join(lines) if lines else "(No address)"
+
+
 def calculate_distance_miles(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
     """
     Calculate distance between two points in miles.
