@@ -1,0 +1,344 @@
+"""
+Vendor management - matching, JSON database, GnuCash integration.
+"""
+
+import json
+import logging
+from pathlib import Path
+from typing import Optional, Dict, List, Tuple
+
+import config
+import gnucash_db
+import address_lookup
+from utils import (
+    fuzzy_match_vendor, 
+    strip_vendor_name, 
+    make_expense_account_name,
+    format_address_for_display,
+    confirm_proceed
+)
+
+logger = logging.getLogger(__name__)
+
+
+class VendorManager:
+    """
+    Manages vendor lookups and creation.
+    
+    Workflow:
+    1. Check local JSON database for vendor (by name or alias)
+    2. Check GnuCash database
+    3. If not found, offer to create new vendor with address lookup
+    """
+    
+    def __init__(self):
+        self.json_path = Path(config.VENDOR_DATABASE_PATH)
+        self.vendors = self._load_json_database()
+        self._gnucash_vendors = None  # Lazy load
+    
+    def _load_json_database(self) -> Dict:
+        """Load the local vendor JSON database."""
+        if not self.json_path.exists():
+            logger.info(f"Creating new vendor database: {self.json_path}")
+            self._save_json_database({'vendors': {}, 'aliases': {}})
+            return {'vendors': {}, 'aliases': {}}
+        
+        try:
+            with open(self.json_path, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+                # Ensure structure
+                if 'vendors' not in data:
+                    data['vendors'] = {}
+                if 'aliases' not in data:
+                    data['aliases'] = {}
+                return data
+        except json.JSONDecodeError as e:
+            logger.error(f"Error reading vendor database: {e}")
+            return {'vendors': {}, 'aliases': {}}
+    
+    def _save_json_database(self, data: Dict = None):
+        """Save the vendor JSON database."""
+        if data is None:
+            data = self.vendors
+        
+        # Ensure directory exists
+        self.json_path.parent.mkdir(parents=True, exist_ok=True)
+        
+        with open(self.json_path, 'w', encoding='utf-8') as f:
+            json.dump(data, f, indent=2)
+    
+    def save(self):
+        """Save current state to JSON."""
+        self._save_json_database()
+    
+    @property
+    def gnucash_vendors(self) -> List[Dict]:
+        """Lazy-load GnuCash vendors."""
+        if self._gnucash_vendors is None:
+            self._gnucash_vendors = gnucash_db.get_all_vendors()
+        return self._gnucash_vendors
+    
+    def refresh_gnucash_vendors(self):
+        """Force refresh of GnuCash vendor cache."""
+        self._gnucash_vendors = None
+    
+    def find_vendor(self, search_name: str) -> Tuple[Optional[Dict], str]:
+        """
+        Find a vendor by name.
+        
+        Returns:
+            Tuple of (vendor_data, match_type)
+            - vendor_data: Dict with vendor info or None
+            - match_type: 'exact', 'alias', 'fuzzy', 'gnucash', or 'not_found'
+        """
+        search_lower = search_name.lower().strip()
+        
+        # 1. Check aliases first (exact match)
+        for alias, vendor_key in self.vendors.get('aliases', {}).items():
+            if alias.lower() == search_lower:
+                vendor_data = self.vendors['vendors'].get(vendor_key)
+                if vendor_data:
+                    return vendor_data, 'alias'
+        
+        # 2. Check vendor names (exact match)
+        for key, data in self.vendors.get('vendors', {}).items():
+            if data.get('display_name', '').lower() == search_lower:
+                return data, 'exact'
+            if data.get('search_name', '').lower() == search_lower:
+                return data, 'exact'
+        
+        # 3. Fuzzy match against JSON vendors
+        best_key, best_score, matches = fuzzy_match_vendor(
+            search_name, 
+            self.vendors.get('vendors', {})
+        )
+        
+        if best_key and best_score >= config.FUZZY_MATCH_THRESHOLD:
+            # Check for ambiguity
+            close_matches = [m for m in matches if m[1] >= config.FUZZY_AMBIGUOUS_THRESHOLD]
+            
+            if len(close_matches) > 1:
+                # Multiple close matches - need user disambiguation
+                print(f"\nAmbiguous match for '{search_name}':")
+                for i, (key, score) in enumerate(close_matches, 1):
+                    vdata = self.vendors['vendors'][key]
+                    print(f"  {i}. {vdata.get('display_name', key)} ({score}% match)")
+                
+                while True:
+                    choice = input("Select vendor number (or 0 for new): ").strip()
+                    if choice == '0':
+                        return None, 'not_found'
+                    try:
+                        idx = int(choice) - 1
+                        if 0 <= idx < len(close_matches):
+                            chosen_key = close_matches[idx][0]
+                            return self.vendors['vendors'][chosen_key], 'fuzzy'
+                    except ValueError:
+                        pass
+                    print("Invalid choice")
+            
+            return self.vendors['vendors'][best_key], 'fuzzy'
+        
+        # 4. Check GnuCash vendors directly
+        for gv in self.gnucash_vendors:
+            if gv['name'].lower() == search_lower:
+                return self._gnucash_vendor_to_dict(gv), 'gnucash'
+        
+        return None, 'not_found'
+    
+    def _gnucash_vendor_to_dict(self, gv: Dict) -> Dict:
+        """Convert GnuCash vendor record to our format."""
+        return {
+            'gnucash_guid': gv['guid'],
+            'gnucash_id': gv['id'],
+            'display_name': gv['name'],
+            'search_name': gv['name'],
+            'addr_name': gv.get('addr_name', ''),
+            'addr_line1': gv.get('addr_addr1', ''),
+            'addr_line2': f"{gv.get('addr_addr2', '')} {gv.get('addr_addr3', '')}".strip(),
+            'phone': gv.get('addr_phone', ''),
+            'email': gv.get('addr_email', ''),
+            'notes': gv.get('notes', ''),
+            'expense_account': None  # Will need to be set
+        }
+    
+    def create_new_vendor(self, display_name: str, search_name: str = None) -> Dict:
+        """
+        Create a new vendor with address lookup.
+        
+        Returns the new vendor data dict.
+        """
+        if search_name is None:
+            search_name = display_name
+        
+        print(f"\n{'='*60}")
+        print(f"Creating new vendor: {display_name}")
+        print('='*60)
+        
+        # Look up address
+        print(f"\nSearching for address...")
+        address = address_lookup.lookup_address(search_name)
+        
+        if address:
+            print(f"\nFound address:")
+            print(f"  {address.get('name', display_name)}")
+            print(f"  {address.get('addr_line1', '')}")
+            print(f"  {address.get('addr_line2', '')}")
+            if address.get('phone'):
+                print(f"  Phone: {address['phone']}")
+            
+            if not confirm_proceed("Use this address?"):
+                address = None
+        
+        if not address:
+            print("\nNo address found or rejected.")
+            if confirm_proceed("Enter address manually?"):
+                manual = address_lookup.prompt_manual_address()
+                address = {
+                    'name': manual.get('addr_name') or display_name,
+                    'addr_line1': manual.get('addr_line1', ''),
+                    'addr_line2': manual.get('addr_line2', ''),
+                    'phone': manual.get('phone', ''),
+                    'source': 'manual'
+                }
+            else:
+                address = {
+                    'name': display_name,
+                    'addr_line1': '',
+                    'addr_line2': '',
+                    'phone': '',
+                    'source': 'skipped'
+                }
+        
+        # Create expense account name
+        expense_acct_name = make_expense_account_name(display_name)
+        
+        # Check if expense account exists
+        existing_accts = gnucash_db.find_expense_accounts_like(expense_acct_name)
+        expense_acct_guid = None
+        
+        if existing_accts:
+            print(f"\nFound existing expense account: {existing_accts[0]['name']}")
+            expense_acct_guid = existing_accts[0]['guid']
+            expense_acct_name = existing_accts[0]['name']
+        else:
+            print(f"\nWill create expense account: {expense_acct_name}")
+            if confirm_proceed("Create this expense account?"):
+                expense_acct_guid = gnucash_db.create_expense_account(expense_acct_name)
+        
+        # Create vendor in GnuCash
+        print(f"\nCreating vendor in GnuCash...")
+        vendor_guid = gnucash_db.create_vendor(
+            name=display_name,
+            addr_name=address.get('name', display_name),
+            addr_addr1=address.get('addr_line1', ''),
+            addr_addr2=address.get('addr_line2', ''),
+            addr_phone=address.get('phone', '')
+        )
+        
+        # Get the assigned vendor ID
+        vendor_record = gnucash_db.find_vendor_by_name(display_name)
+        vendor_id = vendor_record['id'] if vendor_record else None
+        
+        # Build vendor data for JSON
+        vendor_key = strip_vendor_name(display_name)
+        vendor_data = {
+            'display_name': display_name,
+            'search_name': search_name,
+            'gnucash_guid': vendor_guid,
+            'gnucash_id': vendor_id,
+            'addr_name': address.get('name', display_name),
+            'addr_line1': address.get('addr_line1', ''),
+            'addr_line2': address.get('addr_line2', ''),
+            'phone': address.get('phone', ''),
+            'address_source': address.get('source', 'unknown'),
+            'expense_account': expense_acct_name,
+            'expense_account_guid': expense_acct_guid
+        }
+        
+        # Save to JSON database
+        self.vendors['vendors'][vendor_key] = vendor_data
+        self.save()
+        
+        # Refresh GnuCash cache
+        self.refresh_gnucash_vendors()
+        
+        print(f"\n✓ Vendor created: {display_name} (ID: {vendor_id})")
+        
+        return vendor_data
+    
+    def add_alias(self, alias: str, vendor_key: str):
+        """Add an alias for a vendor."""
+        if vendor_key not in self.vendors['vendors']:
+            raise ValueError(f"Vendor key not found: {vendor_key}")
+        
+        self.vendors['aliases'][alias.lower()] = vendor_key
+        self.save()
+        logger.info(f"Added alias '{alias}' -> '{vendor_key}'")
+    
+    def get_or_create_expense_account(self, vendor_data: Dict) -> str:
+        """
+        Get or create the expense account for a vendor.
+        
+        Returns the account GUID.
+        """
+        # Check if we have it cached
+        if vendor_data.get('expense_account_guid'):
+            return vendor_data['expense_account_guid']
+        
+        # Try to find by name
+        acct_name = vendor_data.get('expense_account')
+        if not acct_name:
+            acct_name = make_expense_account_name(vendor_data.get('display_name', ''))
+        
+        # Search for existing account
+        existing = gnucash_db.find_expense_accounts_like(acct_name)
+        if existing:
+            return existing[0]['guid']
+        
+        # Also try exact match
+        exact = gnucash_db.get_account_by_name(acct_name)
+        if exact:
+            return exact['guid']
+        
+        # Create new account
+        print(f"\nExpense account not found: {acct_name}")
+        if confirm_proceed("Create it?"):
+            return gnucash_db.create_expense_account(acct_name)
+        
+        raise ValueError(f"No expense account for vendor: {vendor_data.get('display_name')}")
+    
+    def list_vendors(self) -> List[Dict]:
+        """List all vendors from JSON database."""
+        return [
+            {'key': k, **v} 
+            for k, v in self.vendors.get('vendors', {}).items()
+        ]
+    
+    def update_vendor_address(self, vendor_key: str, address_data: Dict):
+        """Update address for a vendor in both JSON and GnuCash."""
+        if vendor_key not in self.vendors['vendors']:
+            raise ValueError(f"Vendor not found: {vendor_key}")
+        
+        vendor = self.vendors['vendors'][vendor_key]
+        
+        # Update JSON
+        vendor['addr_name'] = address_data.get('addr_name', vendor.get('addr_name', ''))
+        vendor['addr_line1'] = address_data.get('addr_line1', vendor.get('addr_line1', ''))
+        vendor['addr_line2'] = address_data.get('addr_line2', vendor.get('addr_line2', ''))
+        vendor['phone'] = address_data.get('phone', vendor.get('phone', ''))
+        vendor['address_source'] = address_data.get('source', 'updated')
+        
+        self.save()
+        
+        # Update GnuCash if we have the GUID
+        if vendor.get('gnucash_guid'):
+            gnucash_db.update_vendor_address(
+                vendor['gnucash_guid'],
+                addr_name=vendor['addr_name'],
+                addr_addr1=vendor['addr_line1'],
+                addr_addr2=vendor['addr_line2'],
+                addr_phone=vendor['phone']
+            )
+        
+        logger.info(f"Updated address for vendor: {vendor_key}")
