@@ -33,6 +33,10 @@ class BillEntryGUI:
         self.root.geometry("800x700")
         self.root.minsize(600, 500)
         
+        # Database connection status
+        self.gnucash_connected = False
+        self.gnucash_error = None
+        
         # Load vendor data
         self.vendor_manager = VendorManager()
         self.all_vendors = self._load_all_vendors()
@@ -76,6 +80,7 @@ class BillEntryGUI:
         # From GnuCash database
         try:
             gc_vendors = gnucash_db.get_all_vendors()
+            self.gnucash_connected = True
             for gv in gc_vendors:
                 # Check if already in local database
                 already_local = any(
@@ -90,7 +95,8 @@ class BillEntryGUI:
                         'data': gv
                     })
         except Exception as e:
-            print(f"Warning: Could not load GnuCash vendors: {e}")
+            self.gnucash_connected = False
+            self.gnucash_error = str(e)
         
         return vendors
     
@@ -105,9 +111,46 @@ class BillEntryGUI:
         self.root.rowconfigure(0, weight=1)
         main_frame.columnconfigure(1, weight=1)
         
+        # === Database Connection Warning ===
+        if not self.gnucash_connected:
+            warning_frame = tk.Frame(main_frame, bg="#ffcccc", padx=10, pady=8)
+            warning_frame.grid(row=0, column=0, columnspan=2, sticky="ew", pady=(0, 10))
+            
+            warning_text = "⚠️ GnuCash database not connected - vendor matching disabled"
+            if self.gnucash_error:
+                warning_text += f"\n{self.gnucash_error}"
+            warning_text += "\n\nEdit src/config.py to set GNUCASH_DB_PATH to your .gnucash file"
+            
+            warning_label = tk.Label(
+                warning_frame, 
+                text=warning_text,
+                bg="#ffcccc", 
+                fg="#990000",
+                font=('TkDefaultFont', 9),
+                justify="left"
+            )
+            warning_label.pack(anchor="w")
+            
+            form_row = 1  # Shift form down
+        else:
+            # Show connected status
+            status_frame = tk.Frame(main_frame, bg="#ccffcc", padx=10, pady=5)
+            status_frame.grid(row=0, column=0, columnspan=2, sticky="ew", pady=(0, 10))
+            
+            status_label = tk.Label(
+                status_frame,
+                text=f"✓ Connected to GnuCash ({len([v for v in self.all_vendors if v['source'] == 'gnucash'])} vendors loaded)",
+                bg="#ccffcc",
+                fg="#006600",
+                font=('TkDefaultFont', 9)
+            )
+            status_label.pack(anchor="w")
+            
+            form_row = 1
+        
         # === Entry Form Section ===
         form_frame = ttk.LabelFrame(main_frame, text="New Bill Entry", padding="10")
-        form_frame.grid(row=0, column=0, columnspan=2, sticky="ew", pady=(0, 10))
+        form_frame.grid(row=form_row, column=0, columnspan=2, sticky="ew", pady=(0, 10))
         form_frame.columnconfigure(1, weight=1)
         
         # Vendor name with autocomplete
@@ -160,10 +203,10 @@ class BillEntryGUI:
         
         # === Current Bills Section ===
         bills_frame = ttk.LabelFrame(main_frame, text="Bills to Process", padding="10")
-        bills_frame.grid(row=1, column=0, columnspan=2, sticky="nsew", pady=(0, 10))
+        bills_frame.grid(row=form_row+1, column=0, columnspan=2, sticky="nsew", pady=(0, 10))
         bills_frame.columnconfigure(0, weight=1)
         bills_frame.rowconfigure(0, weight=1)
-        main_frame.rowconfigure(1, weight=1)
+        main_frame.rowconfigure(form_row+1, weight=1)
         
         # Treeview for bills
         columns = ('vendor', 'amount', 'memo', 'date')
@@ -200,7 +243,7 @@ class BillEntryGUI:
         
         # === Vendor Suggestions Section ===
         suggest_frame = ttk.LabelFrame(main_frame, text="Matching Vendors", padding="10")
-        suggest_frame.grid(row=2, column=0, columnspan=2, sticky="ew")
+        suggest_frame.grid(row=form_row+2, column=0, columnspan=2, sticky="ew")
         suggest_frame.columnconfigure(0, weight=1)
         
         # Listbox for suggestions
@@ -212,7 +255,7 @@ class BillEntryGUI:
         # === Status Bar ===
         self.status_var = tk.StringVar(value="Ready")
         status_bar = ttk.Label(main_frame, textvariable=self.status_var, relief="sunken", anchor="w")
-        status_bar.grid(row=3, column=0, columnspan=2, sticky="ew", pady=(10, 0))
+        status_bar.grid(row=form_row+3, column=0, columnspan=2, sticky="ew", pady=(10, 0))
         
         # Focus on vendor entry
         self.vendor_entry.focus()
