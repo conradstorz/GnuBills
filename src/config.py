@@ -19,9 +19,11 @@ GNUCASH_DB_PATH = Path(r"D:\Users\Conrad\Documents\GnuCash\gnuCash414\mybooks.gn
 
 # Vendor database JSON file
 VENDOR_DB_PATH = PROJECT_ROOT / "data" / "vendor_database.json"
+VENDOR_DATABASE_PATH = VENDOR_DB_PATH  # Alias for compatibility
 
 # Input file for bills to process
 BILLS_INPUT_PATH = PROJECT_ROOT / "data" / "bills_to_process.txt"
+DEFAULT_INPUT_FILE = BILLS_INPUT_PATH  # Alias for compatibility
 
 # =============================================================================
 # LOCALITY SETTINGS (for address lookup)
@@ -39,6 +41,11 @@ SEARCH_RADIUS_MILES = 100
 # Used for distance calculations and "pick closest" logic
 HOME_LATITUDE = 38.2527
 HOME_LONGITUDE = -85.7585
+CENTER_LAT = HOME_LATITUDE  # Alias for address_lookup
+CENTER_LON = HOME_LONGITUDE  # Alias for address_lookup
+
+# Default locality string for searches
+DEFAULT_LOCALITY = f"{LOCALITY_CITY}, {LOCALITY_STATE}"
 
 # =============================================================================
 # GNUCASH SETTINGS
@@ -106,6 +113,7 @@ TERMINAL_WIDTH = 80
 
 # Log file path (None to disable file logging)
 LOG_FILE_PATH = PROJECT_ROOT / "logs" / "bill_processor.log"
+LOG_FILE = LOG_FILE_PATH  # Alias for compatibility
 
 # Log level: DEBUG, INFO, WARNING, ERROR
 LOG_LEVEL = "INFO"

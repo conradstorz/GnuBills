@@ -4,6 +4,21 @@ Automate vendor bill entry with address lookup for GnuCash.
 
 ## Quick Start
 
+### Option 1: GUI Entry (Recommended)
+
+```cmd
+cd D:\Users\Conrad\Documents\GnuCash\bill_processor
+python src\bill_entry_gui.py
+```
+
+The GUI provides:
+- **Real-time fuzzy matching** as you type vendor names
+- **Tab completion** from known vendors
+- **Live preview** of bills queue
+- **Edit/remove** entries before processing
+
+### Option 2: Manual Entry
+
 1. **Edit your bills file**: `data\bills_to_process.txt`
    ```
    Acme Electric, 150.00, January service
@@ -13,7 +28,6 @@ Automate vendor bill entry with address lookup for GnuCash.
 
 2. **Run the processor**:
    ```cmd
-   cd D:\Users\Conrad\Documents\GnuCash\bill_processor
    python src\bill_processor.py
    ```
 
