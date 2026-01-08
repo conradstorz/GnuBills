@@ -2,26 +2,33 @@
 
 This document outlines the programming conventions, tools, and workflows used in this project.
 
+> **⚠️ CRITICAL: All Python execution MUST use `uv run` prefix. pip is deprecated.**
+
 ## Dependency Management
 
-### Package Installation
-Use `pip` with a virtual environment or `uv` if available.
+### UV Package Manager (REQUIRED)
+**Always use `uv` for all package management.** pip is deprecated and must not be used.
 
 ```bash
-# With pip (in virtual environment)
-pip install -r requirements.txt       # Install all dependencies
-pip install <package>                 # Add new dependency
-
-# With uv (preferred if available)
+# ✅ CORRECT - Add dependencies with uv
 uv add <package>                      # Production dependency
 uv add --dev <package>                # Development/test dependency
-uv run python script.py               # Run with correct environment
+
+# ✅ CORRECT - Run Python scripts (ALWAYS use uv run)
+uv run python script.py
+uv run pytest tests/
+
+# ❌ WRONG - NEVER use these (pip is deprecated)
+pip install <package>                 # DEPRECATED - Do not use
+pip install -r requirements.txt       # DEPRECATED - Do not use
+python script.py                      # WRONG - Bypasses uv environment
 ```
 
 ### Key Points
-- Always use a virtual environment
-- Keep `requirements.txt` updated with all dependencies
-- Document why each dependency is needed
+- **uv manages virtual environments automatically** - no manual venv creation needed
+- `uv add` automatically updates `pyproject.toml` and `uv.lock`
+- **All Python execution must use `uv run` prefix** to ensure correct environment
+- Never install packages with pip - always use `uv add`
 
 ## Testing Philosophy
 
@@ -55,15 +62,17 @@ def test_function_behavior(self, input_value):
 6. **Do NOT fix edge cases** - preserve for future analysis
 
 ### Test Execution
+**Remember: Always use `uv run` prefix for all Python/pytest commands.**
+
 ```bash
-# Run all tests
-pytest tests/ -v
+# ✅ CORRECT - Run tests with uv
+uv run pytest tests/ -v
+uv run pytest tests/test_specific_file.py -v
+uv run pytest tests/ --cov=src
 
-# Run specific test file
-pytest tests/test_specific_file.py -v
-
-# Run with coverage
-pytest tests/ --cov=src
+# ❌ WRONG - Never run pytest directly
+pytest tests/ -v                      # WRONG - Bypasses uv environment
+python -m pytest tests/               # WRONG - Bypasses uv environment
 ```
 
 ## Git Workflow
@@ -170,9 +179,21 @@ Function X of Y: function_name()
 
 ### Required Tools
 - Python 3.11+ (project uses 3.11.1+)
-- `uv` package manager
-- `pytest` for testing (via `uv add --dev pytest`)
-- `hypothesis` for property-based testing (via `uv add --dev hypothesis`)
+- **`uv` package manager (REQUIRED)** - handles all dependency and environment management
+- `pytest` for testing (install via `uv add --dev pytest`)
+- `hypothesis` for property-based testing (install via `uv add --dev hypothesis`)
+
+### Environment Setup
+```bash
+# Clone project and let uv handle everything
+git clone <repo>
+cd <project>
+uv sync                               # Creates venv and installs all dependencies
+
+# Run any Python code
+uv run python src/script.py           # ALWAYS use uv run
+uv run pytest tests/                  # ALWAYS use uv run
+```
 
 ### IDE Configuration
 - Use `.gitignore` to exclude:
@@ -180,7 +201,7 @@ Function X of Y: function_name()
   - `__pycache__/`
   - `*.pyc`
   - `.pytest_cache/`
-  - Virtual environment directories
+  - `.venv/` directory (uv-managed environment)
 
 ## Project-Specific Patterns
 
@@ -211,7 +232,10 @@ Function X of Y: function_name()
 ## Common Pitfalls to Avoid
 
 ### ❌ DON'T
-- Install packages globally without a virtual environment
+- **Use pip for anything** - pip is deprecated, use `uv add` instead
+- **Run Python directly** - always use `uv run python` prefix
+- **Run pytest directly** - always use `uv run pytest` prefix
+- **Manually create virtual environments** - uv handles this automatically
 - Fix edge cases discovered during systematic testing without documenting them first
 - Create overly broad test assumptions
 - Skip documenting edge cases in skip decorators
@@ -222,7 +246,9 @@ Function X of Y: function_name()
 - Hardcode file paths - use `config.py`
 
 ### ✅ DO
-- Use virtual environments for all projects
+- **Use `uv add` for all package installations**
+- **Use `uv run` prefix for ALL Python execution**
+- **Use `uv sync` to set up environments**
 - Suspend discovered edge cases with documentation
 - Test with diverse input strategies (text, numbers, edge values)
 - Use raw strings for Windows paths and regex patterns
@@ -247,25 +273,42 @@ Function X of Y: function_name()
 - Handle network errors gracefully
 
 ### Test Execution
-- Run specific test files during development
-- Use `-v` flag for verbose output during debugging
-- Use `-k` flag to run specific test patterns
+- Run specific test files during development: `uv run pytest tests/test_file.py`
+- Use `-v` flag for verbose output: `uv run pytest -v`
+- Use `-k` flag to run specific test patterns: `uv run pytest -k "test_name"`
 
 ## Maintenance Notes
 
 ### Regular Updates
-- Keep dependencies updated
+- Keep dependencies updated via `uv add --upgrade <package>`
+- Use `uv sync` after pulling changes to update environment
 - Review and address suspended tests periodically
 - Update this style guide as patterns evolve
 
 ### Code Review Checklist
-- [ ] Virtual environment used
+- [ ] All Python execution uses `uv run` prefix
+- [ ] Dependencies added via `uv add` (not pip)
 - [ ] Tests include edge case checks
 - [ ] Edge cases documented
 - [ ] Commit messages are descriptive
 - [ ] Type hints present for all functions
 - [ ] Configuration values in `config.py`
 - [ ] Logging used appropriately
+
+---
+
+## Quick Reference: UV Commands
+
+| Task | Command |
+|------|--------|
+| Add dependency | `uv add <package>` |
+| Add dev dependency | `uv add --dev <package>` |
+| Run Python script | `uv run python script.py` |
+| Run tests | `uv run pytest tests/` |
+| Sync environment | `uv sync` |
+| Update package | `uv add --upgrade <package>` |
+
+**Remember: NEVER use pip. ALWAYS use uv run for Python execution.**
 
 ---
 
