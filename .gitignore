@@ -3,7 +3,7 @@ __pycache__/
 *.py[cod]
 *$py.class
 
-# Virtual environments
+# Virtual environments (uv manages .venv/)
 venv/
 env/
 .venv/
@@ -26,7 +26,12 @@ build/
 
 # Logs
 *.log
+logs/
 
 # OS files
 Thumbs.db
 .DS_Store
+
+# Testing
+.pytest_cache/
+.hypothesis/
