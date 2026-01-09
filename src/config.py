@@ -15,7 +15,7 @@ PROJECT_ROOT = Path(r"D:\Users\Conrad\Documents\GnuCash\bill_processor")
 
 # GnuCash database file (SQLite format)
 # Change this to your actual .gnucash file
-GNUCASH_DB_PATH = Path(r"D:\Users\Conrad\Documents\GnuCash\gnuCash414\mybooks.gnucash")
+GNUCASH_DB_PATH = Path(r"D:\Users\Conrad\Documents\GnuCash\gnuCash414\20260108_Sqlite_Accounts_File.gnucash")
 
 # Vendor database JSON file
 VENDOR_DB_PATH = PROJECT_ROOT / "data" / "vendor_database.json"

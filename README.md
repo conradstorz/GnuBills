@@ -12,6 +12,7 @@ python src\bill_entry_gui.py
 ```
 
 The GUI provides:
+
 - **Real-time fuzzy matching** as you type vendor names
 - **Tab completion** from known vendors
 - **Live preview** of bills queue
@@ -20,13 +21,15 @@ The GUI provides:
 ### Option 2: Manual Entry
 
 1. **Edit your bills file**: `data\bills_to_process.txt`
-   ```
+
+   ```text
    Acme Electric, 150.00, January service
    Louisville Water, 75.50
    Bob's Plumbing, 340.00, Kitchen repair, 2026-01-15
    ```
 
 2. **Run the processor**:
+
    ```cmd
    python src\bill_processor.py
    ```
@@ -37,7 +40,7 @@ The GUI provides:
 
 ## Input Format
 
-```
+```text
 vendor_name, amount, memo, date
 ```
 
@@ -49,6 +52,7 @@ vendor_name, amount, memo, date
 ## Configuration
 
 Edit `src\config.py` to change:
+
 - GnuCash database path
 - Your locality for address searches
 - API keys for address lookup
@@ -56,6 +60,7 @@ Edit `src\config.py` to change:
 ## First Run
 
 On first run, the system will:
+
 1. Create `data\vendor_database.json`
 2. Prompt you to confirm settings
 3. Guide you through any missing configuration
@@ -71,6 +76,7 @@ See `docs\PROJECT_HISTORY.md` for full design history and specifications.
 - Internet connection (for address lookups)
 
 Install dependencies:
+
 ```cmd
 pip install -r requirements.txt
 ```

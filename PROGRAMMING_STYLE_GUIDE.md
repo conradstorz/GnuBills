@@ -200,6 +200,39 @@ Function X of Y: function_name()
 - **`uv` package manager (REQUIRED)** - handles all dependency and environment management
 - `pytest` for testing (install via `uv add --dev pytest`)
 - `hypothesis` for property-based testing (install via `uv add --dev hypothesis`)
+- **`loguru` for logging (REQUIRED)** - simpler API than standard library `logging`
+
+### Logging with Loguru (REQUIRED)
+
+**Always use `loguru` for logging. Do NOT use the standard library `logging` module.**
+
+```python
+# ✅ CORRECT - Use loguru
+from loguru import logger
+
+logger.info("Processing bill for {}", vendor_name)
+logger.debug("Matched vendor with score: {}", score)
+logger.error("Failed to connect: {}", error)
+logger.warning("Vendor not found, creating new entry")
+
+# ❌ WRONG - Do not use standard logging
+import logging
+logger = logging.getLogger(__name__)  # WRONG
+```
+
+### Loguru Configuration
+
+Configure loguru at the application entry point (e.g., `bill_processor.py`):
+
+```python
+from loguru import logger
+import sys
+
+# Remove default handler and add custom configuration
+logger.remove()
+logger.add(sys.stderr, level="INFO")
+logger.add("logs/app.log", rotation="1 MB", retention="7 days")
+```
 
 ### Environment Setup
 
@@ -282,7 +315,7 @@ uv run pytest tests/                  # ALWAYS use uv run
 - Document the "why" in comments and commit messages
 - Use type hints consistently
 - Use specific exception types
-- Use `logging` module instead of print statements
+- Use `loguru` for all logging (NOT standard library `logging`)
 
 ## Performance Considerations
 

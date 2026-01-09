@@ -5,10 +5,10 @@ Process bills from input file and create posted bills in GnuCash.
 """
 
 import sys
-import logging
 import argparse
 from pathlib import Path
 from datetime import date
+from loguru import logger
 
 # Add src to path for imports
 sys.path.insert(0, str(Path(__file__).parent))
@@ -25,16 +25,11 @@ from utils import (
     confirm_proceed
 )
 
-# Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    handlers=[
-        logging.FileHandler(config.LOG_FILE),
-        logging.StreamHandler()
-    ]
-)
-logger = logging.getLogger(__name__)
+# Configure loguru
+Path(config.LOG_FILE).parent.mkdir(parents=True, exist_ok=True)
+logger.remove()  # Remove default handler
+logger.add(sys.stderr, level="INFO", format="{time:YYYY-MM-DD HH:mm:ss} | {level: <8} | {message}")
+logger.add(config.LOG_FILE, rotation="1 MB", retention="7 days", level="DEBUG")
 
 
 def process_bill(

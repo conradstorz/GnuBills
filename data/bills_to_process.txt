@@ -8,3 +8,5 @@
 # Bob's Plumbing, 275.50, Pipe repair
 # City Water, 89.25, Monthly service, 2024-01-15
 
+Versailles Brewing Company, 408.73, Jukebox Commission 10/15/25 - 1/6/2026
+The Slice Restaurant, 226.70, Jukebox Commissions 4/28/25 - 1/6/2026

@@ -236,6 +236,7 @@ class BillEntryGUI:
         ttk.Button(bills_btn_frame, text="Remove Selected", command=self._remove_selected).pack(side="left", padx=5)
         ttk.Button(bills_btn_frame, text="Edit Selected", command=self._edit_selected).pack(side="left", padx=5)
         ttk.Button(bills_btn_frame, text="Refresh", command=self._load_current_bills).pack(side="left", padx=5)
+        ttk.Button(bills_btn_frame, text="Finish", command=self._finish_and_process).pack(side="left", padx=5)
         
         # Total display
         self.total_label = ttk.Label(bills_btn_frame, text="Total: $0.00", font=('TkDefaultFont', 10, 'bold'))
@@ -565,6 +566,53 @@ class BillEntryGUI:
         self._load_current_bills()
         self.status_var.set("Editing bill - make changes and click Add Bill")
         self.vendor_entry.focus()
+
+    def _finish_and_process(self):
+        """Finish bill entry and optionally run the processor."""
+        import subprocess
+        import platform
+        
+        # Check if there are bills to process
+        bills_path = Path(config.BILLS_INPUT_PATH)
+        bill_count = 0
+        
+        if bills_path.exists():
+            with open(bills_path, 'r', encoding='utf-8') as f:
+                for line in f:
+                    if parse_input_line(line):
+                        bill_count += 1
+        
+        if bill_count == 0:
+            if messagebox.askyesno("No Bills", "There are no bills to process.\n\nExit anyway?"):
+                self.root.destroy()
+            return
+        
+        # Ask user what they want to do
+        result = messagebox.askyesnocancel(
+            "Finish Bill Entry",
+            f"You have {bill_count} bill(s) queued totaling {self.total_label.cget('text').replace('Total: ', '')}.\n\n"
+            "Would you like to run the bill processor now?\n\n"
+            "Yes = Run processor and exit\n"
+            "No = Exit without processing\n"
+            "Cancel = Return to bill entry"
+        )
+        
+        if result is None:  # Cancel
+            return
+        elif result:  # Yes - run processor
+            processor_path = Path(__file__).parent / "bill_processor.py"
+            # On Windows, create a new console window for interactive input
+            if platform.system() == "Windows":
+                subprocess.Popen(
+                    [sys.executable, str(processor_path)],
+                    creationflags=subprocess.CREATE_NEW_CONSOLE
+                )
+            else:
+                # On Unix, use a terminal emulator
+                subprocess.Popen([sys.executable, str(processor_path)])
+            self.root.destroy()
+        else:  # No - just exit
+            self.root.destroy()
 
 
 def main():

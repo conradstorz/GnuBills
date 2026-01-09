@@ -5,16 +5,14 @@ Read and write vendors, bills, accounts, etc.
 
 import sqlite3
 import uuid
-import logging
 from datetime import date, datetime
 from pathlib import Path
 from typing import Optional, List, Dict, Tuple
 from decimal import Decimal
 from contextlib import contextmanager
+from loguru import logger
 
 import config
-
-logger = logging.getLogger(__name__)
 
 
 def generate_guid() -> str:

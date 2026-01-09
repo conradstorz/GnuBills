@@ -2,15 +2,13 @@
 Address lookup via Google Places API and OpenStreetMap/Nominatim.
 """
 
-import logging
 import time
 from typing import Optional, Dict, List, Tuple
 import requests
+from loguru import logger
 
 import config
 from utils import calculate_distance_miles
-
-logger = logging.getLogger(__name__)
 
 
 class AddressLookupError(Exception):

@@ -4,14 +4,12 @@ Name stripping, fuzzy matching, date parsing, etc.
 """
 
 import re
-import logging
 from datetime import datetime, date
 from typing import Optional, Tuple, List
 from thefuzz import fuzz, process
+from loguru import logger
 
 import config
-
-logger = logging.getLogger(__name__)
 
 
 def strip_vendor_name(name: str) -> str:

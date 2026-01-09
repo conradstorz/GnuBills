@@ -3,9 +3,9 @@ Vendor management - matching, JSON database, GnuCash integration.
 """
 
 import json
-import logging
 from pathlib import Path
 from typing import Optional, Dict, List, Tuple
+from loguru import logger
 
 import config
 import gnucash_db
@@ -17,8 +17,6 @@ from utils import (
     format_address_for_display,
     confirm_proceed
 )
-
-logger = logging.getLogger(__name__)
 
 
 class VendorManager:
