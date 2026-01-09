@@ -279,6 +279,191 @@ def get_lock_info() -> dict | None:
     return None
 
 
+def _is_process_running(pid: int) -> bool:
+    """
+    Check if a process with the given PID is currently running.
+    
+    Args:
+        pid: Process ID to check
+        
+    Returns:
+        True if process is running, False otherwise
+    """
+    import os
+    
+    if pid <= 0:
+        return False
+    
+    try:
+        # On Windows and Unix, sending signal 0 checks if process exists
+        os.kill(pid, 0)
+        return True
+    except OSError:
+        return False
+    except Exception:
+        # If we can't check, assume it might be running
+        return True
+
+
+def clean_stale_lock() -> bool:
+    """
+    Clean up stale locks from crashed processes on this machine.
+    
+    A lock is considered stale if:
+    - The hostname matches our hostname (same machine)
+    - The PID is no longer running
+    
+    For locks from other machines, we cannot verify if the process is running,
+    so we leave them alone.
+    
+    Returns:
+        True if a stale lock was cleaned, False otherwise
+    """
+    import socket
+    
+    is_locked, hostname, pid = is_gnucash_locked()
+    
+    if not is_locked:
+        return False  # No lock to clean
+    
+    my_hostname = socket.gethostname()
+    
+    # Only clean locks from our own machine
+    if hostname != my_hostname:
+        logger.info(f"Lock held by different machine ({hostname}), cannot verify if stale")
+        return False
+    
+    # Check if the process is still running
+    if _is_process_running(pid):
+        logger.debug(f"Lock holder PID {pid} is still running")
+        return False
+    
+    # Process is not running - this is a stale lock, clean it up
+    logger.warning(f"Cleaning stale lock from crashed process (PID {pid})")
+    
+    db_path = Path(config.GNUCASH_DB_PATH)
+    
+    try:
+        conn = sqlite3.connect(str(db_path))
+        cursor = conn.cursor()
+        cursor.execute("DELETE FROM gnclock WHERE Hostname = ? AND PID = ?",
+                      (hostname, pid))
+        conn.commit()
+        conn.close()
+        logger.info(f"Stale lock cleaned: {hostname} (PID {pid})")
+        return True
+    except sqlite3.Error as e:
+        logger.error(f"Failed to clean stale lock: {e}")
+        return False
+
+
+def acquire_lock() -> bool:
+    """
+    Acquire a lock on the GnuCash database by inserting into gnclock table.
+    
+    This prevents GnuCash and other instances of this tool from accessing
+    the database while we have it locked.
+    
+    First attempts to clean any stale locks from crashed processes on this machine.
+    
+    Returns:
+        True if lock acquired successfully, False if already locked.
+    """
+    import socket
+    import os
+    
+    # First try to clean any stale locks from this machine
+    clean_stale_lock()
+    
+    # Now check if still locked
+    is_locked, hostname, pid = is_gnucash_locked()
+    if is_locked:
+        logger.error(f"Cannot acquire lock - already locked by {hostname} (PID {pid})")
+        return False
+    
+    db_path = Path(config.GNUCASH_DB_PATH)
+    
+    try:
+        conn = sqlite3.connect(str(db_path))
+        cursor = conn.cursor()
+        
+        # Insert our lock record
+        my_hostname = socket.gethostname()
+        my_pid = os.getpid()
+        
+        cursor.execute("INSERT INTO gnclock (Hostname, PID) VALUES (?, ?)", 
+                      (my_hostname, my_pid))
+        conn.commit()
+        conn.close()
+        
+        logger.info(f"Database lock ACQUIRED: {my_hostname} (PID {my_pid})")
+        return True
+        
+    except sqlite3.Error as e:
+        logger.error(f"Failed to acquire database lock: {e}")
+        return False
+
+
+def release_lock() -> bool:
+    """
+    Release our lock on the GnuCash database by clearing the gnclock table.
+    
+    Returns:
+        True if lock released successfully, False on error.
+    """
+    import socket
+    import os
+    
+    db_path = Path(config.GNUCASH_DB_PATH)
+    
+    try:
+        conn = sqlite3.connect(str(db_path))
+        cursor = conn.cursor()
+        
+        # Only delete our own lock (matching hostname and PID)
+        my_hostname = socket.gethostname()
+        my_pid = os.getpid()
+        
+        cursor.execute("DELETE FROM gnclock WHERE Hostname = ? AND PID = ?",
+                      (my_hostname, my_pid))
+        rows_deleted = cursor.rowcount
+        conn.commit()
+        conn.close()
+        
+        if rows_deleted > 0:
+            logger.info(f"Database lock RELEASED: {my_hostname} (PID {my_pid})")
+            return True
+        else:
+            logger.warning("No lock to release (may have been released already)")
+            return True
+            
+    except sqlite3.Error as e:
+        logger.error(f"Failed to release database lock: {e}")
+        return False
+
+
+@contextmanager
+def database_lock():
+    """
+    Context manager for safely acquiring and releasing the database lock.
+    
+    Usage:
+        with database_lock():
+            # Do database operations
+            pass
+    
+    Raises:
+        RuntimeError: If lock cannot be acquired (database already locked)
+    """
+    if not acquire_lock():
+        raise RuntimeError("Cannot acquire database lock - database is in use")
+    
+    try:
+        yield
+    finally:
+        release_lock()
+
+
 @contextmanager
 def get_connection(readonly: bool = True):
     """
