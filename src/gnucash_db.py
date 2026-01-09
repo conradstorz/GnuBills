@@ -279,6 +279,40 @@ def get_lock_info() -> dict | None:
     return None
 
 
+def is_locked_by_others() -> tuple[bool, str | None, int | None]:
+    """
+    Check if database is locked by someone OTHER than our own process.
+    
+    This is used for operations within our GUI that need to verify
+    no external process (GnuCash, another instance) has the lock.
+    Our own lock is fine - we already have access.
+    
+    Returns:
+        Tuple of (is_locked_by_others, hostname, pid)
+        - is_locked_by_others: True if locked by external process
+        - hostname: Lock holder's hostname (or None)
+        - pid: Lock holder's PID (or None)
+    """
+    import os
+    
+    is_locked, hostname, pid = is_gnucash_locked()
+    
+    if not is_locked:
+        return (False, None, None)
+    
+    # Check if it's our own lock
+    my_hostname = _get_lock_hostname()
+    my_pid = os.getpid()
+    
+    if hostname == my_hostname and pid == my_pid:
+        # It's our own lock - not locked by others
+        logger.debug(f"Database locked by our own process (PID {my_pid})")
+        return (False, None, None)
+    
+    # Locked by someone else
+    return (True, hostname, pid)
+
+
 def _is_process_running(pid: int) -> bool:
     """
     Check if a process with the given PID is currently running.
@@ -305,32 +339,41 @@ def _is_process_running(pid: int) -> bool:
         return True
 
 
+def _get_lock_hostname() -> str:
+    """Get the hostname to use for our lock entries.
+    
+    Uses 'BillProcessor@hostname' format to distinguish from GnuCash locks.
+    """
+    import socket
+    return f"BillProcessor@{socket.gethostname()}"
+
+
 def clean_stale_lock() -> bool:
     """
-    Clean up stale locks from crashed processes on this machine.
+    Clean up stale locks from crashed BillProcessor processes on this machine.
     
     A lock is considered stale if:
-    - The hostname matches our hostname (same machine)
+    - The hostname matches our BillProcessor hostname format
     - The PID is no longer running
     
-    For locks from other machines, we cannot verify if the process is running,
-    so we leave them alone.
+    For locks from GnuCash or other machines, we leave them alone.
     
     Returns:
         True if a stale lock was cleaned, False otherwise
     """
-    import socket
-    
     is_locked, hostname, pid = is_gnucash_locked()
     
     if not is_locked:
         return False  # No lock to clean
     
-    my_hostname = socket.gethostname()
+    my_hostname = _get_lock_hostname()
     
-    # Only clean locks from our own machine
+    # Only clean locks from our own tool on this machine
     if hostname != my_hostname:
-        logger.info(f"Lock held by different machine ({hostname}), cannot verify if stale")
+        if hostname and hostname.startswith('BillProcessor@'):
+            logger.info(f"Lock held by BillProcessor on different machine ({hostname}), cannot verify if stale")
+        else:
+            logger.info(f"Lock held by GnuCash or other application ({hostname}), not cleaning")
         return False
     
     # Check if the process is still running
@@ -369,7 +412,6 @@ def acquire_lock() -> bool:
     Returns:
         True if lock acquired successfully, False if already locked.
     """
-    import socket
     import os
     
     # First try to clean any stale locks from this machine
@@ -387,8 +429,8 @@ def acquire_lock() -> bool:
         conn = sqlite3.connect(str(db_path))
         cursor = conn.cursor()
         
-        # Insert our lock record
-        my_hostname = socket.gethostname()
+        # Insert our lock record with BillProcessor@ prefix
+        my_hostname = _get_lock_hostname()
         my_pid = os.getpid()
         
         cursor.execute("INSERT INTO gnclock (Hostname, PID) VALUES (?, ?)", 
@@ -411,7 +453,6 @@ def release_lock() -> bool:
     Returns:
         True if lock released successfully, False on error.
     """
-    import socket
     import os
     
     db_path = Path(config.GNUCASH_DB_PATH)
@@ -420,8 +461,8 @@ def release_lock() -> bool:
         conn = sqlite3.connect(str(db_path))
         cursor = conn.cursor()
         
-        # Only delete our own lock (matching hostname and PID)
-        my_hostname = socket.gethostname()
+        # Only delete our own lock (matching our BillProcessor hostname and PID)
+        my_hostname = _get_lock_hostname()
         my_pid = os.getpid()
         
         cursor.execute("DELETE FROM gnclock WHERE Hostname = ? AND PID = ?",

@@ -360,13 +360,13 @@ class ProcessingDialog:
     
     def _start_processing(self):
         """Start processing bills."""
-        # Check for GnuCash lock
-        is_locked, hostname, pid = gnucash_db.is_gnucash_locked()
+        # Check if database is locked by someone else (our own lock is fine)
+        is_locked, hostname, pid = gnucash_db.is_locked_by_others()
         if is_locked:
             messagebox.showerror(
-                "GnuCash is Running",
-                "GnuCash appears to be running (database locked).\n\n"
-                "Please close GnuCash before processing bills.\n\n"
+                "Database is Locked",
+                "The database is locked by another process.\n\n"
+                "Please close GnuCash or other instances before processing bills.\n\n"
                 f"Locked by: {hostname}\n"
                 f"Process ID: {pid}"
             )
@@ -682,6 +682,12 @@ class BillEntryGUI:
             True if database is accessible and lock acquired
             False if database is locked (GnuCash or another instance running)
         """
+        # First, try to clean any stale locks from crashed BillProcessor instances
+        # on this machine (this handles abnormal termination like Ctrl+C)
+        if gnucash_db.clean_stale_lock():
+            logger.info("Cleaned up stale lock from previous crashed session")
+        
+        # Now check if database is still locked (by GnuCash or another instance)
         is_locked, hostname, pid = gnucash_db.is_gnucash_locked()
         if is_locked:
             logger.error(f"GnuCash database is LOCKED by {hostname} (PID {pid})")
@@ -1478,14 +1484,15 @@ class BillEntryGUI:
         """Process all queued bills within the GUI."""
         logger.info("Pre-process bills requested")
         
-        # Check for GnuCash lock first
-        is_locked, hostname, pid = gnucash_db.is_gnucash_locked()
+        # Check if database is locked by someone else (GnuCash or another instance)
+        # Our own lock is fine - we already have the database open
+        is_locked, hostname, pid = gnucash_db.is_locked_by_others()
         if is_locked:
-            logger.warning(f"GnuCash is locked by {hostname} (PID {pid}) - cannot process")
+            logger.warning(f"Database is locked by {hostname} (PID {pid}) - cannot process")
             messagebox.showerror(
-                "GnuCash is Running",
-                "GnuCash appears to be running (database locked).\n\n"
-                "Please close GnuCash before processing bills.\n\n"
+                "Database is Locked",
+                "The database is locked by another process.\n\n"
+                "Please close GnuCash or other instances before processing bills.\n\n"
                 f"Locked by: {hostname}\n"
                 f"Process ID: {pid}"
             )
@@ -1637,11 +1644,15 @@ class BillEntryGUI:
                 f.write(line)
     
     def _launch_gnucash(self):
-        """Launch GnuCash application."""
+        """Launch GnuCash application and close our GUI."""
         import subprocess
         import platform
         
         gnucash_path = config.GNUCASH_DB_PATH
+        
+        # Release our database lock BEFORE launching GnuCash
+        logger.info("Releasing database lock before launching GnuCash")
+        gnucash_db.release_lock()
         
         try:
             if platform.system() == "Windows":
@@ -1653,7 +1664,9 @@ class BillEntryGUI:
             else:  # Linux
                 subprocess.Popen(["gnucash", str(gnucash_path)])
             
-            self.status_var.set("GnuCash launched")
+            logger.info("GnuCash launched - closing Bill Processor")
+            # Close our GUI since GnuCash will now have the database
+            self.root.destroy()
         except Exception as e:
             logger.error(f"Failed to launch GnuCash: {e}")
             messagebox.showerror(
@@ -1661,6 +1674,8 @@ class BillEntryGUI:
                 f"Could not launch GnuCash:\n{e}\n\n"
                 f"Please open manually:\n{gnucash_path}"
             )
+            # Re-acquire lock since GnuCash didn't launch
+            gnucash_db.acquire_lock()
 
 
 def main():

@@ -171,6 +171,29 @@ class VerificationReport:
         
         return vc
     
+    def clear_failure(self, check_name: str):
+        """
+        Clear a specific failure from the most recent run.
+        
+        Use this when a failure has been fixed (e.g., A/P account created).
+        """
+        if not self.history:
+            return
+        
+        # Update the most recent run
+        latest_run = self.history[-1]
+        for check in latest_run.get('checks', []):
+            if check.get('check_name') == check_name and not check.get('passed', True):
+                check['passed'] = True
+                check['details'] = f"{check.get('details', '')} (Fixed)"
+                logger.info(f"Cleared verification failure: {check_name}")
+                
+                # Update run summary
+                passed = sum(1 for c in latest_run['checks'] if c.get('passed', True))
+                latest_run['passed_checks'] = passed
+                latest_run['all_passed'] = passed == latest_run['total_checks']
+                break
+    
     def get_failures(self, last_n_runs: int = 1) -> List[Dict]:
         """Get all failures from the last N runs."""
         failures = []
@@ -829,6 +852,9 @@ class SchemaDiscovery:
             e for e in self.schema['validation_errors']
             if 'Accounts Payable' not in e
         ]
+        
+        # Clear the verification failure since we've fixed it
+        self.verification.clear_failure('AP_ACCOUNT')
         
         self.save()
         logger.info(f"Updated A/P account: {name} ({guid})")
