@@ -361,12 +361,14 @@ class ProcessingDialog:
     def _start_processing(self):
         """Start processing bills."""
         # Check for GnuCash lock
-        if gnucash_db.is_gnucash_locked():
+        is_locked, hostname, pid = gnucash_db.is_gnucash_locked()
+        if is_locked:
             messagebox.showerror(
                 "GnuCash is Running",
-                "GnuCash appears to be running (lock file detected).\n\n"
+                "GnuCash appears to be running (database locked).\n\n"
                 "Please close GnuCash before processing bills.\n\n"
-                f"Lock file: {gnucash_db.get_lock_file_path()}"
+                f"Locked by: {hostname}\n"
+                f"Process ID: {pid}"
             )
             return
         
@@ -635,13 +637,18 @@ class BillEntryGUI:
         self.schema_errors = []
         self.schema_warnings = []
         
-        # Load vendor data FIRST (before validation - we need it to validate GUIDs)
+        # STEP 0: Check if database is locked BEFORE anything else
+        if not self._check_database_lock():
+            # Database is locked - show error and exit
+            return
+        
+        # Load vendor data (from JSON only - no database access)
         self.vendor_manager = VendorManager()
         
         # Run schema validation at startup (validates schema AND all stored GUIDs)
         self._validate_schema_at_startup()
         
-        # Load all vendors for autocomplete
+        # Load all vendors for autocomplete (only if database is accessible)
         self.all_vendors = self._load_all_vendors()
         
         # Autocomplete state
@@ -656,11 +663,43 @@ class BillEntryGUI:
         self.root.bind('<Control-s>', lambda e: self._save_bill())
         self.root.bind('<Control-n>', lambda e: self._clear_form())
     
+    def _check_database_lock(self) -> bool:
+        """
+        Check if GnuCash database is locked.
+        
+        This MUST be called before ANY database access.
+        
+        Returns:
+            True if database is accessible (not locked)
+            False if database is locked (GnuCash running)
+        """
+        is_locked, hostname, pid = gnucash_db.is_gnucash_locked()
+        if is_locked:
+            logger.error(f"GnuCash database is LOCKED by {hostname} (PID {pid})")
+            self.gnucash_connected = False
+            self.gnucash_error = "Database is locked by GnuCash"
+            self.schema_valid = False
+            messagebox.showerror(
+                "GnuCash is Running",
+                "The GnuCash database is currently locked.\n\n"
+                "Please close GnuCash before running this application.\n\n"
+                f"Locked by: {hostname}\n"
+                f"Process ID: {pid}"
+            )
+            # Exit the application completely
+            self.root.destroy()
+            return False
+        
+        logger.info("Database lock check: PASSED (not locked)")
+        return True
+    
     def _validate_schema_at_startup(self):
         """
         Validate GnuCash schema AND all stored data at startup.
         
-        This runs before UI is built to:
+        NOTE: Database lock check is done in __init__ BEFORE this method.
+        
+        This runs to:
         1. Discover database schema with FULL VERIFICATION
         2. Find required accounts  
         3. Validate ALL vendor GUIDs stored in vendor_database.json
@@ -1420,13 +1459,15 @@ class BillEntryGUI:
         logger.info("Pre-process bills requested")
         
         # Check for GnuCash lock first
-        if gnucash_db.is_gnucash_locked():
-            logger.warning("GnuCash is locked - cannot process")
+        is_locked, hostname, pid = gnucash_db.is_gnucash_locked()
+        if is_locked:
+            logger.warning(f"GnuCash is locked by {hostname} (PID {pid}) - cannot process")
             messagebox.showerror(
                 "GnuCash is Running",
-                "GnuCash appears to be running (lock file detected).\n\n"
+                "GnuCash appears to be running (database locked).\n\n"
                 "Please close GnuCash before processing bills.\n\n"
-                f"Lock file: {gnucash_db.get_lock_file_path()}"
+                f"Locked by: {hostname}\n"
+                f"Process ID: {pid}"
             )
             return
         

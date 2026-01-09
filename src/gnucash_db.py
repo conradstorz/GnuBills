@@ -224,26 +224,59 @@ def verify_bill_created(guid: str, expected_amount: float, vendor_guid: str) -> 
         }
 
 
-def is_gnucash_locked() -> bool:
+def is_gnucash_locked() -> tuple[bool, str | None, int | None]:
     """
     Check if GnuCash has the database locked.
     
-    GnuCash creates a .LCK file with the same base name when the file is open.
-    Returns True if locked (GnuCash is running), False otherwise.
+    GnuCash uses a 'gnclock' table inside the SQLite database with hostname
+    and PID when the database is open. An empty table means unlocked.
+    
+    Returns:
+        Tuple of (is_locked, hostname, pid)
+        - is_locked: True if database is locked
+        - hostname: The machine holding the lock (or None)
+        - pid: The process ID holding the lock (or None)
     """
     db_path = Path(config.GNUCASH_DB_PATH)
-    lock_path = db_path.with_suffix('.gnucash.LCK')
     
-    # Also check for alternate lock file naming
-    lock_path_alt = Path(str(db_path) + '.LCK')
+    if not db_path.exists():
+        return (False, None, None)
     
-    return lock_path.exists() or lock_path_alt.exists()
+    try:
+        # Open in read-only mode to check lock
+        uri = f"file:{db_path}?mode=ro"
+        conn = sqlite3.connect(uri, uri=True)
+        cursor = conn.cursor()
+        
+        # Check gnclock table for any records
+        cursor.execute("SELECT Hostname, PID FROM gnclock")
+        row = cursor.fetchone()
+        conn.close()
+        
+        if row:
+            hostname, pid = row
+            logger.warning(f"Database LOCKED by: {hostname} (PID {pid})")
+            return (True, hostname, pid)
+        
+        return (False, None, None)
+        
+    except sqlite3.OperationalError as e:
+        # If we can't read the table, assume it might be locked
+        logger.error(f"Error checking gnclock table: {e}")
+        return (True, "unknown", 0)
 
 
-def get_lock_file_path() -> Path:
-    """Return the expected lock file path for display purposes."""
-    db_path = Path(config.GNUCASH_DB_PATH)
-    return db_path.with_suffix('.gnucash.LCK')
+def get_lock_info() -> dict | None:
+    """
+    Get detailed lock information for display purposes.
+    
+    Returns:
+        Dict with 'hostname' and 'pid' if locked, None if not locked.
+    """
+    is_locked, hostname, pid = is_gnucash_locked()
+    if is_locked:
+        return {'hostname': hostname, 'pid': pid}
+    return None
 
 
 @contextmanager
