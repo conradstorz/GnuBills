@@ -53,6 +53,58 @@ def _get_column(table: str, expected_name: str) -> str:
         return expected_name
 
 
+def format_gnucash_date(dt: date, include_time: bool = True) -> str:
+    """
+    Format a date for GnuCash database storage.
+    
+    Automatically uses the format detected for the current database:
+    - ISO format: 'YYYY-MM-DD HH:MM:SS' (19 chars) - modern GnuCash
+    - Compact format: 'YYYYMMDDHHMMSS' (14 chars) - older GnuCash
+    
+    Args:
+        dt: Date or datetime to format
+        include_time: If True, include time component (default True)
+        
+    Returns:
+        Formatted date string matching the database's format
+    """
+    try:
+        schema = _get_schema()
+        date_format = schema.get_date_format()
+    except Exception:
+        # Default to ISO format if schema unavailable
+        date_format = 'iso'
+    
+    if date_format == 'compact':
+        # Compact format: YYYYMMDDHHMMSS
+        if include_time:
+            if isinstance(dt, datetime):
+                return dt.strftime("%Y%m%d%H%M%S")
+            else:
+                return dt.strftime("%Y%m%d") + "000000"
+        else:
+            return dt.strftime("%Y%m%d")
+    else:
+        # ISO format: YYYY-MM-DD HH:MM:SS
+        if include_time:
+            if isinstance(dt, datetime):
+                return dt.strftime("%Y-%m-%d %H:%M:%S")
+            else:
+                return dt.strftime("%Y-%m-%d") + " 00:00:00"
+        else:
+            return dt.strftime("%Y-%m-%d")
+
+
+def format_gnucash_timestamp() -> str:
+    """
+    Get current timestamp formatted for GnuCash database.
+    
+    Returns:
+        Current datetime in the database's format
+    """
+    return format_gnucash_date(datetime.now(), include_time=True)
+
+
 # =============================================================================
 # POST-WRITE VERIFICATION - Verify all writes succeeded
 # =============================================================================
@@ -1208,9 +1260,9 @@ def create_posted_bill(
     amount_num = int(amount * 100)
     amount_denom = 100
     
-    # Date formatting for GnuCash
-    date_str = bill_date.strftime("%Y%m%d")
-    date_posted = f"{date_str}000000"
+    # Date formatting for GnuCash - use detected format
+    date_posted = format_gnucash_date(bill_date)
+    date_entered = format_gnucash_timestamp()
     
     with get_connection(readonly=False) as conn:
         # Create the lot (tracks amounts owed)
@@ -1218,6 +1270,18 @@ def create_posted_bill(
             INSERT INTO lots (guid, account_guid, is_closed)
             VALUES (?, ?, 0)
         """, (lot_guid, ap_guid))
+        
+        # Create lot slots to link lot to invoice (required by GnuCash)
+        # Slot type 9 = GUID reference, type 4 = string
+        conn.execute("""
+            INSERT INTO slots (obj_guid, name, slot_type, guid_val)
+            VALUES (?, 'gncInvoice', 9, ?)
+        """, (lot_guid, bill_guid))
+        
+        conn.execute("""
+            INSERT INTO slots (obj_guid, name, slot_type, string_val)
+            VALUES (?, 'title', 4, ?)
+        """, (lot_guid, f"Bill {bill_id}"))
         
         # Create the invoice/bill record
         conn.execute("""
@@ -1240,7 +1304,7 @@ def create_posted_bill(
                 guid, currency_guid, num, post_date, enter_date, description
             ) VALUES (?, ?, ?, ?, ?, ?)
         """, (
-            txn_guid, usd_guid, bill_id, date_posted, date_posted, memo
+            txn_guid, usd_guid, bill_id, date_posted, date_entered, memo
         ))
         
         # Create expense split (debit - positive)
@@ -1301,7 +1365,7 @@ def create_posted_bill(
         """
         
         conn.execute(entry_sql, (
-            entry_guid, date_posted, date_posted, memo,
+            entry_guid, date_posted, date_entered, memo,
             expense_account_guid, amount_num, amount_denom,
             expense_account_guid, amount_num, amount_denom,
             bill_guid

@@ -385,6 +385,9 @@ class SchemaDiscovery:
             # Verify book GUID exists
             self._verify_book_guid(conn)
             
+            # Detect date format used by GnuCash
+            self._detect_date_format(conn)
+            
             conn.close()
             
         except FileNotFoundError as e:
@@ -562,6 +565,82 @@ class SchemaDiscovery:
                 passed=False,
                 details=str(e)
             )
+
+    def _detect_date_format(self, conn: sqlite3.Connection):
+        """
+        Detect the date format used by this GnuCash database.
+        
+        GnuCash has used different formats over versions:
+        - Compact: YYYYMMDDHHMMSS (14 chars) - older versions
+        - ISO: YYYY-MM-DD HH:MM:SS (19 chars) - newer versions
+        
+        We detect by analyzing existing transaction dates and use the
+        dominant format to ensure compatibility.
+        """
+        try:
+            # Count transactions by date format length
+            cursor = conn.execute("""
+                SELECT 
+                    CASE 
+                        WHEN length(post_date) = 14 THEN 'compact'
+                        WHEN length(post_date) = 19 THEN 'iso'
+                        ELSE 'unknown'
+                    END as format,
+                    count(*) as count
+                FROM transactions
+                WHERE post_date IS NOT NULL
+                GROUP BY format
+                ORDER BY count DESC
+            """)
+            
+            results = cursor.fetchall()
+            
+            if results:
+                # Use the most common format
+                dominant_format = results[0]['format']
+                dominant_count = results[0]['count']
+                total_count = sum(r['count'] for r in results)
+                
+                self.schema['date_format'] = dominant_format
+                
+                self.verification.check(
+                    "DATE_FORMAT", "transactions",
+                    f"Date format detected: {dominant_format}",
+                    passed=True,
+                    details=f"{dominant_count}/{total_count} transactions use {dominant_format} format"
+                )
+                logger.info(f"Detected date format: {dominant_format} ({dominant_count}/{total_count} transactions)")
+            else:
+                # No transactions, default to ISO (modern format)
+                self.schema['date_format'] = 'iso'
+                self.verification.check(
+                    "DATE_FORMAT", "transactions",
+                    "Date format defaulted to ISO (no transactions found)",
+                    passed=True,
+                    details="Empty database, using modern ISO format"
+                )
+                logger.info("No transactions found, defaulting to ISO date format")
+                
+        except sqlite3.Error as e:
+            # Default to ISO on error
+            self.schema['date_format'] = 'iso'
+            self.verification.check(
+                "DATE_FORMAT", "transactions",
+                "Date format detection failed, defaulting to ISO",
+                passed=False,
+                details=str(e)
+            )
+            logger.warning(f"Date format detection failed: {e}, defaulting to ISO")
+
+    def get_date_format(self) -> str:
+        """
+        Get the detected date format for this database.
+        
+        Returns:
+            'iso' for YYYY-MM-DD HH:MM:SS format
+            'compact' for YYYYMMDDHHMMSS format
+        """
+        return self.schema.get('date_format', 'iso')
 
     def _discover_accounts_with_verification(self, conn: sqlite3.Connection):
         """Discover and verify required accounts."""
