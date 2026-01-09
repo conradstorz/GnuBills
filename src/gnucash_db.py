@@ -866,54 +866,217 @@ def find_expense_accounts_like(pattern: str) -> List[Dict]:
         return [dict(row) for row in cursor]
 
 
-def get_expenses_parent_guid() -> Optional[str]:
-    """Get the GUID of the Expenses parent account."""
+def get_expenses_parent_guid(preferred_name: str = None) -> Optional[str]:
+    """
+    Get the GUID of an appropriate expense parent account.
+    
+    IMPORTANT: Returns only NON-PLACEHOLDER accounts. GnuCash placeholder
+    accounts cannot accept transactions - they're organizational only.
+    
+    Args:
+        preferred_name: Specific account name to look for (optional)
+        
+    Returns:
+        GUID of a non-placeholder expense account suitable as parent
+    """
+    search_name = preferred_name or config.DEFAULT_EXPENSE_PARENT
+    
     with get_connection() as conn:
-        # Try exact match first
+        # Try exact match first - but only non-placeholder
         cursor = conn.execute("""
-            SELECT guid FROM accounts 
+            SELECT guid, name, placeholder FROM accounts 
             WHERE name = ? AND account_type = 'EXPENSE'
             LIMIT 1
-        """, (config.DEFAULT_EXPENSE_PARENT,))
+        """, (search_name,))
         row = cursor.fetchone()
         if row:
-            return row['guid']
+            if row['placeholder'] == 1:
+                logger.warning(f"Configured parent '{row['name']}' is a PLACEHOLDER - cannot use for transactions")
+            else:
+                return row['guid']
         
-        # Try case-insensitive match
+        # Try case-insensitive match - only non-placeholder
         cursor = conn.execute("""
-            SELECT guid FROM accounts 
+            SELECT guid, name, placeholder FROM accounts 
             WHERE LOWER(name) = LOWER(?) AND account_type = 'EXPENSE'
             LIMIT 1
-        """, (config.DEFAULT_EXPENSE_PARENT,))
+        """, (search_name,))
         row = cursor.fetchone()
         if row:
-            return row['guid']
+            if row['placeholder'] == 1:
+                logger.warning(f"Found '{row['name']}' but it's a PLACEHOLDER - cannot use for transactions")
+            else:
+                return row['guid']
         
-        # Try to find any top-level EXPENSE account (parent_guid is root)
+        # Look for a non-placeholder expense account that has children
+        # (indicating it's meant to be a parent for expense categories)
         cursor = conn.execute("""
             SELECT a.guid, a.name FROM accounts a
             WHERE a.account_type = 'EXPENSE' 
-            AND a.parent_guid IN (SELECT guid FROM accounts WHERE account_type = 'ROOT')
+            AND a.placeholder = 0
+            AND EXISTS (SELECT 1 FROM accounts c WHERE c.parent_guid = a.guid)
+            ORDER BY a.name
             LIMIT 1
         """)
         row = cursor.fetchone()
         if row:
-            logger.warning(f"Using expense parent: {row['name']} (expected: {config.DEFAULT_EXPENSE_PARENT})")
+            logger.info(f"Using expense parent: {row['name']} (non-placeholder with children)")
             return row['guid']
         
-        # Last resort: any EXPENSE account that could be a parent
+        # Look for any non-placeholder expense account under a placeholder parent
+        # This finds accounts like "SAMUSE_Gameroom_Commissions_Paid" under "Storz Amusements LLC"
+        cursor = conn.execute("""
+            SELECT a.guid, a.name, p.name as parent_name FROM accounts a
+            JOIN accounts p ON a.parent_guid = p.guid
+            WHERE a.account_type = 'EXPENSE' 
+            AND a.placeholder = 0
+            AND p.placeholder = 1
+            ORDER BY a.name
+            LIMIT 1
+        """)
+        row = cursor.fetchone()
+        if row:
+            logger.info(f"Using expense parent: {row['name']} (under {row['parent_name']})")
+            return row['guid']
+        
+        # Last resort: any non-placeholder EXPENSE account
         cursor = conn.execute("""
             SELECT guid, name FROM accounts 
-            WHERE account_type = 'EXPENSE'
+            WHERE account_type = 'EXPENSE' AND placeholder = 0
             ORDER BY name
             LIMIT 1
         """)
         row = cursor.fetchone()
         if row:
-            logger.warning(f"Using expense parent: {row['name']} (fallback)")
+            logger.warning(f"Using expense parent: {row['name']} (fallback - any non-placeholder)")
             return row['guid']
         
+        logger.error("No suitable expense parent account found - all are placeholders!")
         return None
+
+
+def fix_orphaned_expense_accounts() -> Dict[str, str]:
+    """
+    Find and fix expense accounts that are directly under placeholder accounts.
+    
+    GnuCash placeholder accounts are for organization only and cannot accept
+    transactions. Accounts under them may have issues.
+    
+    This function:
+    1. Finds expense accounts whose parent is a placeholder
+    2. Moves them to be children of a proper non-placeholder parent
+    
+    Returns:
+        Dict of {account_name: new_parent_name} for accounts that were fixed
+    """
+    fixes = {}
+    
+    # Get a good parent account to move orphans to
+    good_parent_guid = get_expenses_parent_guid()
+    if not good_parent_guid:
+        logger.error("Cannot fix orphaned accounts - no suitable parent found")
+        return fixes
+    
+    with get_connection(readonly=False) as conn:
+        # Get the name of the good parent for logging
+        cursor = conn.execute("SELECT name FROM accounts WHERE guid = ?", (good_parent_guid,))
+        good_parent_name = cursor.fetchone()['name']
+        
+        # Find expense accounts that are direct children of a placeholder
+        # (specifically "Expenses root" since that's what our old code used)
+        cursor = conn.execute("""
+            SELECT a.guid, a.name, p.name as parent_name
+            FROM accounts a
+            JOIN accounts p ON a.parent_guid = p.guid
+            WHERE a.account_type = 'EXPENSE'
+            AND a.placeholder = 0
+            AND p.placeholder = 1
+            AND p.name = 'Expenses root'
+            AND a.name LIKE 'cmsnpd_%'
+        """)
+        
+        orphans = cursor.fetchall()
+        
+        if not orphans:
+            logger.info("No orphaned expense accounts found")
+            return fixes
+        
+        logger.info(f"Found {len(orphans)} orphaned expense accounts to fix")
+        
+        for orphan in orphans:
+            logger.info(f"Moving '{orphan['name']}' from '{orphan['parent_name']}' to '{good_parent_name}'")
+            
+            cursor = conn.execute("""
+                UPDATE accounts SET parent_guid = ? WHERE guid = ?
+            """, (good_parent_guid, orphan['guid']))
+            
+            fixes[orphan['name']] = good_parent_name
+        
+        if fixes:
+            conn.commit()
+            logger.info(f"Fixed {len(fixes)} orphaned expense accounts")
+    
+    return fixes
+
+
+def validate_account_hierarchy(account_guid: str) -> Dict:
+    """
+    Validate that an account can accept transactions.
+    
+    Checks:
+    1. Account exists
+    2. Account is not a placeholder
+    3. Account's ancestors are not all placeholders (at least one can hold transactions)
+    
+    Returns:
+        Dict with 'valid', 'issues', and 'info' fields
+    """
+    result = {'valid': True, 'issues': [], 'info': {}}
+    
+    with get_connection() as conn:
+        cursor = conn.execute("""
+            SELECT guid, name, account_type, placeholder, parent_guid
+            FROM accounts WHERE guid = ?
+        """, (account_guid,))
+        account = cursor.fetchone()
+        
+        if not account:
+            result['valid'] = False
+            result['issues'].append(f"Account {account_guid} not found")
+            return result
+        
+        result['info']['name'] = account['name']
+        result['info']['type'] = account['account_type']
+        result['info']['is_placeholder'] = account['placeholder'] == 1
+        
+        if account['placeholder'] == 1:
+            result['valid'] = False
+            result['issues'].append(f"Account '{account['name']}' is a placeholder - cannot accept transactions")
+        
+        # Check parent chain
+        parent_guid = account['parent_guid']
+        depth = 0
+        max_depth = 10
+        
+        while parent_guid and depth < max_depth:
+            cursor = conn.execute("""
+                SELECT guid, name, account_type, placeholder, parent_guid
+                FROM accounts WHERE guid = ?
+            """, (parent_guid,))
+            parent = cursor.fetchone()
+            
+            if not parent:
+                break
+            
+            if parent['account_type'] == 'ROOT':
+                break
+                
+            depth += 1
+            parent_guid = parent['parent_guid']
+        
+        result['info']['hierarchy_depth'] = depth
+    
+    return result
 
 
 def get_ap_account_guid() -> Optional[str]:

@@ -2,21 +2,25 @@
   "vendors": {
     "versailles_brewing": {
       "display_name": "Versailles Brewing Company",
-      "gnucash_guid": "3e0bb32217854e2da8b7c5b315dd0620",
-      "gnucash_id": "V0004",
+      "gnucash_guid": "684329ddb45b4a40a51720d14998b0bc",
+      "gnucash_id": "V0005",
       "addr_name": "Versailles Brewing Company",
       "addr_line1": "513 Marsailles Rd.",
       "addr_line2": "Versailles, KY 40383",
-      "phone": "859-256-0169"
+      "phone": "859-256-0169",
+      "expense_account": "cmsnpd_versailles_brewing",
+      "expense_account_guid": "c3d3fa765a2348a1883b62058977be1f"
     },
     "the_slice_restaurant": {
       "display_name": "The Slice Restaurant",
-      "gnucash_guid": "cdcb917b77114ee1a4d01841775c7fc2",
-      "gnucash_id": "V0005",
+      "gnucash_guid": "33e9f99844634ec3aee20cf944b52bce",
+      "gnucash_id": "V0004",
       "addr_name": "The Slice",
       "addr_line1": "1027 N. Luther Rd.",
       "addr_line2": "Georgetown, KY 47122",
-      "phone": "812-903-0003"
+      "phone": "812-903-0003",
+      "expense_account": "cmsnpd_the_slice_restaurant",
+      "expense_account_guid": "d34609c6b91b46c6b2de9bfb036acd23"
     }
   },
   "aliases": {}

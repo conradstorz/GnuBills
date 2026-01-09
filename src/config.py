@@ -52,8 +52,10 @@ DEFAULT_LOCALITY = f"{LOCALITY_CITY}, {LOCALITY_STATE}"
 # =============================================================================
 
 # Parent account for new expense accounts (created under this)
-# New accounts will be named: cmsnpd_<vendor_name>
-DEFAULT_EXPENSE_PARENT = "Expenses root"
+# IMPORTANT: Must be a NON-PLACEHOLDER account! Placeholder accounts cannot 
+# accept transactions in GnuCash. Use an account that can hold transactions.
+# Example: "SAMUSE_Gameroom_Commissions_Paid" - not "Expenses root" (placeholder)
+DEFAULT_EXPENSE_PARENT = "SAMUSE_Gameroom_Commissions_Paid"
 
 # Expense account prefix
 EXPENSE_ACCOUNT_PREFIX = "cmsnpd_"
