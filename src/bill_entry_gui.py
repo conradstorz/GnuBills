@@ -25,6 +25,7 @@ sys.path.insert(0, str(Path(__file__).parent))
 import config
 import gnucash_db
 import address_lookup
+from schema_discovery import SchemaDiscovery, get_schema
 from utils import fuzzy_match_vendor, strip_vendor_name, parse_input_line, make_expense_account_name
 from vendor_manager import VendorManager
 
@@ -431,9 +432,21 @@ class ProcessingDialog:
         if vendor_data:
             self._log(f"  Found vendor: {vendor_data.get('display_name')} ({match_type} match)")
             
-            # Check if vendor exists in GnuCash (has GUID)
-            if not vendor_data.get('gnucash_guid'):
-                self._log(f"  Vendor not yet in GnuCash - creating...", 'warning')
+            # Check if vendor exists in GnuCash - VERIFY the GUID, don't just check if present
+            stored_guid = vendor_data.get('gnucash_guid')
+            vendor_exists_in_gnucash = False
+            
+            if stored_guid:
+                # Verify this GUID actually exists in GnuCash (might be stale after rollback)
+                gc_vendor = gnucash_db.find_vendor_by_guid(stored_guid)
+                if gc_vendor:
+                    vendor_exists_in_gnucash = True
+                    self._log(f"  Vendor verified in GnuCash: {gc_vendor['name']}")
+                else:
+                    self._log(f"  Stored GUID is stale - vendor not in GnuCash", 'warning')
+            
+            if not vendor_exists_in_gnucash:
+                self._log(f"  Creating vendor in GnuCash...", 'warning')
                 try:
                     vendor_guid = gnucash_db.create_vendor(
                         name=vendor_data.get('display_name'),
@@ -443,7 +456,7 @@ class ProcessingDialog:
                         addr_phone=vendor_data.get('phone', '')
                     )
                     
-                    # Update JSON with GnuCash info
+                    # Update JSON with new GnuCash info
                     vendor_record = gnucash_db.find_vendor_by_name(vendor_data.get('display_name'))
                     vendor_key = strip_vendor_name(vendor_data.get('display_name'))
                     
@@ -618,6 +631,12 @@ class BillEntryGUI:
         # Database connection status
         self.gnucash_connected = False
         self.gnucash_error = None
+        self.schema_valid = False
+        self.schema_errors = []
+        self.schema_warnings = []
+        
+        # Run schema validation at startup (before anything else)
+        self._validate_schema_at_startup()
         
         # Load vendor data
         self.vendor_manager = VendorManager()
@@ -634,6 +653,101 @@ class BillEntryGUI:
         # Bind keyboard shortcuts
         self.root.bind('<Control-s>', lambda e: self._save_bill())
         self.root.bind('<Control-n>', lambda e: self._clear_form())
+    
+    def _validate_schema_at_startup(self):
+        """
+        Validate GnuCash schema at startup.
+        
+        This runs before UI is built to:
+        1. Discover database schema
+        2. Find required accounts
+        3. Offer to fix issues (create A/P account, etc.)
+        """
+        logger.info("Running startup schema validation...")
+        
+        try:
+            schema = get_schema()
+            result = schema.discover()
+            
+            self.schema_valid = result['valid']
+            self.schema_errors = result['errors']
+            self.schema_warnings = result['warnings']
+            
+            logger.info(f"Schema validation: valid={self.schema_valid}, "
+                       f"errors={len(self.schema_errors)}, warnings={len(self.schema_warnings)}")
+            
+            # If we have errors, show them and offer fixes
+            if self.schema_errors:
+                self._handle_schema_errors(schema)
+            
+            # Show warnings but don't block
+            if self.schema_warnings and self.schema_valid:
+                warn_msg = "GnuCash setup warnings:\n\n"
+                for warn in self.schema_warnings:
+                    warn_msg += f"• {warn}\n\n"
+                logger.warning(f"Schema warnings: {self.schema_warnings}")
+            
+            self.gnucash_connected = True
+            
+        except FileNotFoundError as e:
+            self.gnucash_connected = False
+            self.gnucash_error = str(e)
+            self.schema_valid = False
+            logger.error(f"Database not found: {e}")
+        except Exception as e:
+            self.gnucash_connected = False
+            self.gnucash_error = str(e)
+            self.schema_valid = False
+            logger.exception(f"Schema validation failed: {e}")
+    
+    def _handle_schema_errors(self, schema: SchemaDiscovery):
+        """Handle schema errors - offer to fix what we can."""
+        # Check if A/P account is missing
+        if schema.needs_ap_account():
+            logger.info("A/P account missing - offering to create")
+            
+            # Check we have liabilities parent first
+            liab_guid = schema.get_account_guid('liabilities_parent')
+            if not liab_guid:
+                # Can't create A/P without liabilities parent - just warn
+                messagebox.showwarning(
+                    "GnuCash Setup Issue",
+                    "No Accounts Payable account found, and no Liabilities parent account exists.\n\n"
+                    "Please create a Liabilities account in GnuCash first, then restart this application."
+                )
+                return
+            
+            # Offer to create A/P
+            if messagebox.askyesno(
+                "Create Accounts Payable?",
+                "No Accounts Payable account found in GnuCash.\n\n"
+                "This account is required for vendor bills.\n\n"
+                "Would you like to create it now?\n"
+                f"(Will be created under '{schema.get_account_name('liabilities_parent')}')"
+            ):
+                try:
+                    ap_guid = gnucash_db.create_ap_account()
+                    # Update schema with new A/P account
+                    schema.update_ap_account(ap_guid, "Accounts Payable")
+                    
+                    # Remove this error
+                    self.schema_errors = [e for e in self.schema_errors if 'Accounts Payable' not in e]
+                    self.schema_valid = len(self.schema_errors) == 0
+                    
+                    messagebox.showinfo("Success", "Accounts Payable account created!")
+                    logger.info("A/P account created successfully")
+                except Exception as e:
+                    messagebox.showerror("Error", f"Failed to create A/P account:\n{e}")
+                    logger.error(f"Failed to create A/P account: {e}")
+        
+        # If there are remaining errors, show them
+        remaining_errors = [e for e in self.schema_errors if 'Accounts Payable' not in e or schema.needs_ap_account()]
+        if remaining_errors:
+            error_msg = "GnuCash setup issues:\n\n"
+            for err in remaining_errors:
+                error_msg += f"• {err}\n\n"
+            error_msg += "Some features may not work correctly."
+            messagebox.showwarning("GnuCash Setup", error_msg)
         
     def _load_all_vendors(self) -> List[Dict]:
         """Load vendors from both JSON database and GnuCash."""
@@ -1151,8 +1265,11 @@ class BillEntryGUI:
 
     def _preprocess_bills(self):
         """Process all queued bills within the GUI."""
+        logger.info("Pre-process bills requested")
+        
         # Check for GnuCash lock first
         if gnucash_db.is_gnucash_locked():
+            logger.warning("GnuCash is locked - cannot process")
             messagebox.showerror(
                 "GnuCash is Running",
                 "GnuCash appears to be running (lock file detected).\n\n"
@@ -1161,51 +1278,52 @@ class BillEntryGUI:
             )
             return
         
-        # Validate GnuCash setup BEFORE doing anything
-        validation = gnucash_db.validate_gnucash_setup()
+        # Re-validate schema (accounts may have been moved/renamed since startup)
+        logger.info("Re-validating schema before processing...")
+        schema = get_schema()
+        result = schema.discover()
         
-        if not validation['valid']:
-            # Check if missing A/P account specifically - we can create it
-            ap_missing = any('Accounts Payable' in err or 'PAYABLE' in err for err in validation['errors'])
+        if not result['valid']:
+            logger.warning(f"Schema validation failed: {result['errors']}")
             
-            if ap_missing:
-                # Offer to create it
+            # Check if missing A/P account - we can create it
+            if schema.needs_ap_account():
                 if messagebox.askyesno(
                     "Create Accounts Payable?",
                     "No Accounts Payable account found in GnuCash.\n\n"
                     "This account is required for vendor bills.\n\n"
                     "Would you like to create it now?\n"
-                    "(Will be created under Liabilities)"
+                    f"(Will be created under '{schema.get_account_name('liabilities_parent') or 'Liabilities'}')"
                 ):
                     try:
-                        gnucash_db.create_ap_account()
+                        ap_guid = gnucash_db.create_ap_account()
+                        schema.update_ap_account(ap_guid, "Accounts Payable")
                         messagebox.showinfo("Success", "Accounts Payable account created!")
+                        logger.info("A/P account created")
                         # Re-validate
-                        validation = gnucash_db.validate_gnucash_setup()
+                        result = schema.discover()
                     except Exception as e:
+                        logger.error(f"Failed to create A/P: {e}")
                         messagebox.showerror("Error", f"Failed to create A/P account:\n{e}")
                         return
                 else:
                     return
             
-            # Check if still invalid after potential A/P creation
-            if not validation['valid']:
+            # Check if still invalid
+            if not result['valid']:
                 error_msg = "Cannot process bills - GnuCash setup issues:\n\n"
-                for err in validation['errors']:
+                for err in result['errors']:
                     error_msg += f"• {err}\n\n"
-                
                 error_msg += "Please fix these issues in GnuCash and try again."
-                
                 messagebox.showerror("GnuCash Setup Required", error_msg)
                 return
         
         # Show warnings if any
-        if validation['warnings']:
+        if result['warnings']:
             warn_msg = "GnuCash setup warnings:\n\n"
-            for warn in validation['warnings']:
+            for warn in result['warnings']:
                 warn_msg += f"• {warn}\n\n"
             warn_msg += "Continue anyway?"
-            
             if not messagebox.askyesno("Warnings", warn_msg):
                 return
         
@@ -1223,6 +1341,8 @@ class BillEntryGUI:
         if not bills:
             messagebox.showinfo("No Bills", "There are no bills to process.")
             return
+        
+        logger.info(f"Processing {len(bills)} bills")
         
         # Show processing dialog
         dialog = ProcessingDialog(

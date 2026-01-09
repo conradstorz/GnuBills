@@ -1,6 +1,9 @@
 """
 GnuCash SQLite database interface.
 Read and write vendors, bills, accounts, etc.
+
+Uses schema_discovery module to handle column name variations
+between different GnuCash versions.
 """
 
 import sqlite3
@@ -18,6 +21,32 @@ import config
 def generate_guid() -> str:
     """Generate a GnuCash-compatible GUID (32 hex chars, no dashes)."""
     return uuid.uuid4().hex
+
+
+def _get_schema():
+    """
+    Get schema discovery instance (lazy import to avoid circular deps).
+    """
+    from schema_discovery import get_schema
+    return get_schema()
+
+
+def _get_column(table: str, expected_name: str) -> str:
+    """
+    Get actual column name from schema mapping.
+    
+    Falls back to expected name if schema not available.
+    Logs a warning if mapping differs.
+    """
+    try:
+        schema = _get_schema()
+        actual = schema.get_column(table, expected_name)
+        if actual and actual != expected_name:
+            logger.debug(f"Column mapped: {table}.{expected_name} -> {actual}")
+        return actual or expected_name
+    except Exception as e:
+        logger.warning(f"Schema lookup failed for {table}.{expected_name}: {e}")
+        return expected_name
 
 
 def is_gnucash_locked() -> bool:
@@ -131,6 +160,29 @@ def find_vendor_by_id(vendor_id: str) -> Optional[Dict]:
         )
         row = cursor.fetchone()
         return dict(row) if row else None
+
+
+def find_vendor_by_guid(guid: str) -> Optional[Dict]:
+    """
+    Find a vendor by GUID.
+    
+    Use this to verify a GUID from JSON actually exists in GnuCash.
+    """
+    if not guid:
+        return None
+    
+    with get_connection() as conn:
+        cursor = conn.execute(
+            "SELECT * FROM vendors WHERE guid = ?",
+            (guid,)
+        )
+        row = cursor.fetchone()
+        if row:
+            logger.debug(f"Found vendor by GUID: {row['name']}")
+            return dict(row)
+        else:
+            logger.warning(f"Vendor GUID not found in GnuCash: {guid[:12]}...")
+            return None
 
 
 def get_next_vendor_id() -> str:
@@ -739,12 +791,18 @@ def create_posted_bill(
         ))
         
         # Create the invoice entry
-        conn.execute("""
+        # Use schema discovery for column names that may vary between versions
+        discount_num_col = _get_column('entries', 'i_discount_num')
+        discount_denom_col = _get_column('entries', 'i_discount_denom')
+        
+        logger.debug(f"Using entry columns: {discount_num_col}, {discount_denom_col}")
+        
+        entry_sql = f"""
             INSERT INTO entries (
                 guid, date, date_entered, description, action,
                 quantity_num, quantity_denom,
                 i_acct, i_price_num, i_price_denom,
-                i_discount_num, i_discount_denom, i_disc_type, i_disc_how,
+                {discount_num_col}, {discount_denom_col}, i_disc_type, i_disc_how,
                 i_taxable, i_taxincluded, i_taxtable,
                 b_acct, b_price_num, b_price_denom,
                 b_taxable, b_taxincluded, b_taxtable,
@@ -760,7 +818,9 @@ def create_posted_bill(
                 0, 0, 0, NULL,
                 NULL, ?
             )
-        """, (
+        """
+        
+        conn.execute(entry_sql, (
             entry_guid, date_posted, date_posted, memo,
             expense_account_guid, amount_num, amount_denom,
             expense_account_guid, amount_num, amount_denom,

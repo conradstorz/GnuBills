@@ -1,0 +1,616 @@
+{
+  "schema_version": 1,
+  "last_validated": "2026-01-08T23:14:54.225034",
+  "database_path": "D:\\Users\\Conrad\\Documents\\GnuCash\\gnuCash414\\CFSIV_Sqlite3_database.gnucash",
+  "tables": {
+    "vendors": {
+      "columns": {
+        "guid": {
+          "type": "text(32)",
+          "nullable": false,
+          "primary_key": true
+        },
+        "name": {
+          "type": "text(2048)",
+          "nullable": false,
+          "primary_key": false
+        },
+        "id": {
+          "type": "text(2048)",
+          "nullable": false,
+          "primary_key": false
+        },
+        "notes": {
+          "type": "text(2048)",
+          "nullable": false,
+          "primary_key": false
+        },
+        "currency": {
+          "type": "text(32)",
+          "nullable": false,
+          "primary_key": false
+        },
+        "active": {
+          "type": "INTEGER",
+          "nullable": false,
+          "primary_key": false
+        },
+        "tax_override": {
+          "type": "INTEGER",
+          "nullable": false,
+          "primary_key": false
+        },
+        "addr_name": {
+          "type": "text(1024)",
+          "nullable": true,
+          "primary_key": false
+        },
+        "addr_addr1": {
+          "type": "text(1024)",
+          "nullable": true,
+          "primary_key": false
+        },
+        "addr_addr2": {
+          "type": "text(1024)",
+          "nullable": true,
+          "primary_key": false
+        },
+        "addr_addr3": {
+          "type": "text(1024)",
+          "nullable": true,
+          "primary_key": false
+        },
+        "addr_addr4": {
+          "type": "text(1024)",
+          "nullable": true,
+          "primary_key": false
+        },
+        "addr_phone": {
+          "type": "text(128)",
+          "nullable": true,
+          "primary_key": false
+        },
+        "addr_fax": {
+          "type": "text(128)",
+          "nullable": true,
+          "primary_key": false
+        },
+        "addr_email": {
+          "type": "text(256)",
+          "nullable": true,
+          "primary_key": false
+        },
+        "terms": {
+          "type": "text(32)",
+          "nullable": true,
+          "primary_key": false
+        },
+        "tax_inc": {
+          "type": "text(2048)",
+          "nullable": true,
+          "primary_key": false
+        },
+        "tax_table": {
+          "type": "text(32)",
+          "nullable": true,
+          "primary_key": false
+        }
+      },
+      "column_count": 18
+    },
+    "accounts": {
+      "columns": {
+        "guid": {
+          "type": "text(32)",
+          "nullable": false,
+          "primary_key": true
+        },
+        "name": {
+          "type": "text(2048)",
+          "nullable": false,
+          "primary_key": false
+        },
+        "account_type": {
+          "type": "text(2048)",
+          "nullable": false,
+          "primary_key": false
+        },
+        "commodity_guid": {
+          "type": "text(32)",
+          "nullable": true,
+          "primary_key": false
+        },
+        "commodity_scu": {
+          "type": "INTEGER",
+          "nullable": false,
+          "primary_key": false
+        },
+        "non_std_scu": {
+          "type": "INTEGER",
+          "nullable": false,
+          "primary_key": false
+        },
+        "parent_guid": {
+          "type": "text(32)",
+          "nullable": true,
+          "primary_key": false
+        },
+        "code": {
+          "type": "text(2048)",
+          "nullable": true,
+          "primary_key": false
+        },
+        "description": {
+          "type": "text(2048)",
+          "nullable": true,
+          "primary_key": false
+        },
+        "hidden": {
+          "type": "INTEGER",
+          "nullable": true,
+          "primary_key": false
+        },
+        "placeholder": {
+          "type": "INTEGER",
+          "nullable": true,
+          "primary_key": false
+        }
+      },
+      "column_count": 11
+    },
+    "invoices": {
+      "columns": {
+        "guid": {
+          "type": "text(32)",
+          "nullable": false,
+          "primary_key": true
+        },
+        "id": {
+          "type": "text(2048)",
+          "nullable": false,
+          "primary_key": false
+        },
+        "date_opened": {
+          "type": "text(19)",
+          "nullable": true,
+          "primary_key": false
+        },
+        "date_posted": {
+          "type": "text(19)",
+          "nullable": true,
+          "primary_key": false
+        },
+        "notes": {
+          "type": "text(2048)",
+          "nullable": false,
+          "primary_key": false
+        },
+        "active": {
+          "type": "INTEGER",
+          "nullable": false,
+          "primary_key": false
+        },
+        "currency": {
+          "type": "text(32)",
+          "nullable": false,
+          "primary_key": false
+        },
+        "owner_type": {
+          "type": "INTEGER",
+          "nullable": true,
+          "primary_key": false
+        },
+        "owner_guid": {
+          "type": "text(32)",
+          "nullable": true,
+          "primary_key": false
+        },
+        "terms": {
+          "type": "text(32)",
+          "nullable": true,
+          "primary_key": false
+        },
+        "billing_id": {
+          "type": "text(2048)",
+          "nullable": true,
+          "primary_key": false
+        },
+        "post_txn": {
+          "type": "text(32)",
+          "nullable": true,
+          "primary_key": false
+        },
+        "post_lot": {
+          "type": "text(32)",
+          "nullable": true,
+          "primary_key": false
+        },
+        "post_acc": {
+          "type": "text(32)",
+          "nullable": true,
+          "primary_key": false
+        },
+        "billto_type": {
+          "type": "INTEGER",
+          "nullable": true,
+          "primary_key": false
+        },
+        "billto_guid": {
+          "type": "text(32)",
+          "nullable": true,
+          "primary_key": false
+        },
+        "charge_amt_num": {
+          "type": "bigint",
+          "nullable": true,
+          "primary_key": false
+        },
+        "charge_amt_denom": {
+          "type": "bigint",
+          "nullable": true,
+          "primary_key": false
+        }
+      },
+      "column_count": 18
+    },
+    "entries": {
+      "columns": {
+        "guid": {
+          "type": "text(32)",
+          "nullable": false,
+          "primary_key": true
+        },
+        "date": {
+          "type": "text(19)",
+          "nullable": false,
+          "primary_key": false
+        },
+        "date_entered": {
+          "type": "text(19)",
+          "nullable": true,
+          "primary_key": false
+        },
+        "description": {
+          "type": "text(2048)",
+          "nullable": true,
+          "primary_key": false
+        },
+        "action": {
+          "type": "text(2048)",
+          "nullable": true,
+          "primary_key": false
+        },
+        "notes": {
+          "type": "text(2048)",
+          "nullable": true,
+          "primary_key": false
+        },
+        "quantity_num": {
+          "type": "bigint",
+          "nullable": true,
+          "primary_key": false
+        },
+        "quantity_denom": {
+          "type": "bigint",
+          "nullable": true,
+          "primary_key": false
+        },
+        "i_acct": {
+          "type": "text(32)",
+          "nullable": true,
+          "primary_key": false
+        },
+        "i_price_num": {
+          "type": "bigint",
+          "nullable": true,
+          "primary_key": false
+        },
+        "i_price_denom": {
+          "type": "bigint",
+          "nullable": true,
+          "primary_key": false
+        },
+        "i_discount_num": {
+          "type": "bigint",
+          "nullable": true,
+          "primary_key": false
+        },
+        "i_discount_denom": {
+          "type": "bigint",
+          "nullable": true,
+          "primary_key": false
+        },
+        "invoice": {
+          "type": "text(32)",
+          "nullable": true,
+          "primary_key": false
+        },
+        "i_disc_type": {
+          "type": "text(2048)",
+          "nullable": true,
+          "primary_key": false
+        },
+        "i_disc_how": {
+          "type": "text(2048)",
+          "nullable": true,
+          "primary_key": false
+        },
+        "i_taxable": {
+          "type": "INTEGER",
+          "nullable": true,
+          "primary_key": false
+        },
+        "i_taxincluded": {
+          "type": "INTEGER",
+          "nullable": true,
+          "primary_key": false
+        },
+        "i_taxtable": {
+          "type": "text(32)",
+          "nullable": true,
+          "primary_key": false
+        },
+        "b_acct": {
+          "type": "text(32)",
+          "nullable": true,
+          "primary_key": false
+        },
+        "b_price_num": {
+          "type": "bigint",
+          "nullable": true,
+          "primary_key": false
+        },
+        "b_price_denom": {
+          "type": "bigint",
+          "nullable": true,
+          "primary_key": false
+        },
+        "bill": {
+          "type": "text(32)",
+          "nullable": true,
+          "primary_key": false
+        },
+        "b_taxable": {
+          "type": "INTEGER",
+          "nullable": true,
+          "primary_key": false
+        },
+        "b_taxincluded": {
+          "type": "INTEGER",
+          "nullable": true,
+          "primary_key": false
+        },
+        "b_taxtable": {
+          "type": "text(32)",
+          "nullable": true,
+          "primary_key": false
+        },
+        "b_paytype": {
+          "type": "INTEGER",
+          "nullable": true,
+          "primary_key": false
+        },
+        "billable": {
+          "type": "INTEGER",
+          "nullable": true,
+          "primary_key": false
+        },
+        "billto_type": {
+          "type": "INTEGER",
+          "nullable": true,
+          "primary_key": false
+        },
+        "billto_guid": {
+          "type": "text(32)",
+          "nullable": true,
+          "primary_key": false
+        },
+        "order_guid": {
+          "type": "text(32)",
+          "nullable": true,
+          "primary_key": false
+        }
+      },
+      "column_count": 31
+    },
+    "transactions": {
+      "columns": {
+        "guid": {
+          "type": "text(32)",
+          "nullable": false,
+          "primary_key": true
+        },
+        "currency_guid": {
+          "type": "text(32)",
+          "nullable": false,
+          "primary_key": false
+        },
+        "num": {
+          "type": "text(2048)",
+          "nullable": false,
+          "primary_key": false
+        },
+        "post_date": {
+          "type": "text(19)",
+          "nullable": true,
+          "primary_key": false
+        },
+        "enter_date": {
+          "type": "text(19)",
+          "nullable": true,
+          "primary_key": false
+        },
+        "description": {
+          "type": "text(2048)",
+          "nullable": true,
+          "primary_key": false
+        }
+      },
+      "column_count": 6
+    },
+    "splits": {
+      "columns": {
+        "guid": {
+          "type": "text(32)",
+          "nullable": false,
+          "primary_key": true
+        },
+        "tx_guid": {
+          "type": "text(32)",
+          "nullable": false,
+          "primary_key": false
+        },
+        "account_guid": {
+          "type": "text(32)",
+          "nullable": false,
+          "primary_key": false
+        },
+        "memo": {
+          "type": "text(2048)",
+          "nullable": false,
+          "primary_key": false
+        },
+        "action": {
+          "type": "text(2048)",
+          "nullable": false,
+          "primary_key": false
+        },
+        "reconcile_state": {
+          "type": "text(1)",
+          "nullable": false,
+          "primary_key": false
+        },
+        "reconcile_date": {
+          "type": "text(19)",
+          "nullable": true,
+          "primary_key": false
+        },
+        "value_num": {
+          "type": "bigint",
+          "nullable": false,
+          "primary_key": false
+        },
+        "value_denom": {
+          "type": "bigint",
+          "nullable": false,
+          "primary_key": false
+        },
+        "quantity_num": {
+          "type": "bigint",
+          "nullable": false,
+          "primary_key": false
+        },
+        "quantity_denom": {
+          "type": "bigint",
+          "nullable": false,
+          "primary_key": false
+        },
+        "lot_guid": {
+          "type": "text(32)",
+          "nullable": true,
+          "primary_key": false
+        }
+      },
+      "column_count": 12
+    },
+    "lots": {
+      "columns": {
+        "guid": {
+          "type": "text(32)",
+          "nullable": false,
+          "primary_key": true
+        },
+        "account_guid": {
+          "type": "text(32)",
+          "nullable": true,
+          "primary_key": false
+        },
+        "is_closed": {
+          "type": "INTEGER",
+          "nullable": false,
+          "primary_key": false
+        }
+      },
+      "column_count": 3
+    },
+    "commodities": {
+      "columns": {
+        "guid": {
+          "type": "text(32)",
+          "nullable": false,
+          "primary_key": true
+        },
+        "namespace": {
+          "type": "text(2048)",
+          "nullable": false,
+          "primary_key": false
+        },
+        "mnemonic": {
+          "type": "text(2048)",
+          "nullable": false,
+          "primary_key": false
+        },
+        "fullname": {
+          "type": "text(2048)",
+          "nullable": true,
+          "primary_key": false
+        },
+        "cusip": {
+          "type": "text(2048)",
+          "nullable": true,
+          "primary_key": false
+        },
+        "fraction": {
+          "type": "INTEGER",
+          "nullable": false,
+          "primary_key": false
+        },
+        "quote_flag": {
+          "type": "INTEGER",
+          "nullable": false,
+          "primary_key": false
+        },
+        "quote_source": {
+          "type": "text(2048)",
+          "nullable": true,
+          "primary_key": false
+        },
+        "quote_tz": {
+          "type": "text(2048)",
+          "nullable": true,
+          "primary_key": false
+        }
+      },
+      "column_count": 9
+    }
+  },
+  "required_accounts": {
+    "accounts_payable": {
+      "guid": "8aad6de3295c4528b5c882829932fd6c",
+      "name": "Accounts Payable",
+      "account_type": "PAYABLE",
+      "can_create": true
+    },
+    "expense_parent": {
+      "guid": "6b7f7b71f0a748bcb963f3d3e56df580",
+      "name": "Expenses root",
+      "account_type": "EXPENSE",
+      "can_create": false
+    },
+    "liabilities_parent": {
+      "guid": "171683286aa948288674572890c30765",
+      "name": "Liabilities root",
+      "account_type": "LIABILITY",
+      "can_create": false
+    }
+  },
+  "required_commodities": {
+    "usd": {
+      "guid": "003f6054aa3c413691a20aa036a307d8",
+      "mnemonic": "USD",
+      "namespace": "CURRENCY"
+    }
+  },
+  "validation_errors": [],
+  "validation_warnings": []
+}
