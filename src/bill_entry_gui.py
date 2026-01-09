@@ -6,22 +6,604 @@ Features:
 - Tab completion from known vendors
 - Validation of entries
 - View and edit current bills queue
+- Integrated bill processing with progress display
 """
 
 import tkinter as tk
 from tkinter import ttk, messagebox, scrolledtext
 import sys
+import time
+import threading
 from pathlib import Path
 from datetime import date, datetime
-from typing import List, Dict, Optional, Tuple
+from typing import List, Dict, Optional, Tuple, Callable
+from loguru import logger
 
 # Add src to path for imports
 sys.path.insert(0, str(Path(__file__).parent))
 
 import config
 import gnucash_db
-from utils import fuzzy_match_vendor, strip_vendor_name, parse_input_line
+import address_lookup
+from utils import fuzzy_match_vendor, strip_vendor_name, parse_input_line, make_expense_account_name
 from vendor_manager import VendorManager
+
+
+class NewVendorDialog:
+    """Dialog for creating a new vendor with address options."""
+    
+    def __init__(self, parent: tk.Tk, vendor_name: str, all_vendors: List[Dict], prefill_data: Dict = None):
+        self.result = None  # Will be 'create', 'match', or 'skip'
+        self.vendor_data = None
+        self.matched_vendor = None
+        self.prefill_data = prefill_data  # Data to restore if reopening after error
+        
+        self.dialog = tk.Toplevel(parent)
+        self.dialog.title(f"New Vendor: {vendor_name}")
+        self.dialog.geometry("550x550")
+        self.dialog.transient(parent)
+        self.dialog.grab_set()
+        
+        self.vendor_name = vendor_name
+        self.all_vendors = all_vendors
+        
+        self._create_widgets()
+        self._prefill_fields()  # Fill in any preserved data
+        
+        # Center on parent
+        self.dialog.update_idletasks()
+        x = parent.winfo_x() + (parent.winfo_width() - self.dialog.winfo_width()) // 2
+        y = parent.winfo_y() + (parent.winfo_height() - self.dialog.winfo_height()) // 2
+        self.dialog.geometry(f"+{x}+{y}")
+    
+    def _prefill_fields(self):
+        """Fill in fields with preserved data from a previous failed attempt."""
+        if not self.prefill_data:
+            return
+        
+        # Clear and fill display name
+        self.name_entry.delete(0, tk.END)
+        self.name_entry.insert(0, self.prefill_data.get('display_name', self.vendor_name))
+        
+        # Fill address fields
+        if self.prefill_data.get('addr_name'):
+            self.addr_name_entry.insert(0, self.prefill_data['addr_name'])
+        if self.prefill_data.get('addr_line1'):
+            self.addr_line1_entry.insert(0, self.prefill_data['addr_line1'])
+        if self.prefill_data.get('addr_line2'):
+            self.addr_line2_entry.insert(0, self.prefill_data['addr_line2'])
+        if self.prefill_data.get('phone'):
+            self.phone_entry.insert(0, self.prefill_data['phone'])
+        
+    def _create_widgets(self):
+        main_frame = ttk.Frame(self.dialog, padding="10")
+        main_frame.pack(fill="both", expand=True)
+        
+        # Header
+        header_text = f"Vendor '{self.vendor_name}' not found"
+        if self.prefill_data:
+            header_text = f"Retry: {self.vendor_name} (your data preserved)"
+        ttk.Label(
+            main_frame, 
+            text=header_text,
+            font=('TkDefaultFont', 11, 'bold')
+        ).pack(pady=(0, 10))
+        
+        # === Option 1: Match to Existing Vendor ===
+        match_frame = ttk.LabelFrame(main_frame, text="Option 1: Match to Existing Vendor", padding="10")
+        match_frame.pack(fill="x", pady=(0, 10))
+        
+        ttk.Label(match_frame, text="Search:").pack(side="left")
+        self.match_search = ttk.Entry(match_frame, width=30)
+        self.match_search.pack(side="left", padx=(5, 10))
+        self.match_search.bind('<KeyRelease>', self._on_match_search)
+        
+        self.match_combo = ttk.Combobox(match_frame, width=35, state="readonly")
+        self.match_combo.pack(side="left", padx=(0, 10))
+        
+        ttk.Button(match_frame, text="Use Selected", command=self._use_matched).pack(side="left")
+        
+        # Populate combo with vendor names
+        vendor_names = sorted(set(v['name'] for v in self.all_vendors))
+        self.match_combo['values'] = vendor_names
+        
+        # === Option 2: Create New Vendor ===
+        create_frame = ttk.LabelFrame(main_frame, text="Option 2: Create New Vendor", padding="10")
+        create_frame.pack(fill="both", expand=True, pady=(0, 10))
+        create_frame.columnconfigure(1, weight=1)
+        
+        # Display name
+        ttk.Label(create_frame, text="Display Name:").grid(row=0, column=0, sticky="w", pady=3)
+        self.name_entry = ttk.Entry(create_frame, width=40)
+        self.name_entry.grid(row=0, column=1, sticky="ew", pady=3, padx=(5, 0))
+        self.name_entry.insert(0, self.vendor_name)
+        
+        # Address fields
+        ttk.Label(create_frame, text="Address Name:").grid(row=1, column=0, sticky="w", pady=3)
+        self.addr_name_entry = ttk.Entry(create_frame, width=40)
+        self.addr_name_entry.grid(row=1, column=1, sticky="ew", pady=3, padx=(5, 0))
+        
+        ttk.Label(create_frame, text="Street Address:").grid(row=2, column=0, sticky="w", pady=3)
+        self.addr_line1_entry = ttk.Entry(create_frame, width=40)
+        self.addr_line1_entry.grid(row=2, column=1, sticky="ew", pady=3, padx=(5, 0))
+        
+        ttk.Label(create_frame, text="City, State ZIP:").grid(row=3, column=0, sticky="w", pady=3)
+        self.addr_line2_entry = ttk.Entry(create_frame, width=40)
+        self.addr_line2_entry.grid(row=3, column=1, sticky="ew", pady=3, padx=(5, 0))
+        
+        ttk.Label(create_frame, text="Phone:").grid(row=4, column=0, sticky="w", pady=3)
+        self.phone_entry = ttk.Entry(create_frame, width=20)
+        self.phone_entry.grid(row=4, column=1, sticky="w", pady=3, padx=(5, 0))
+        
+        # Web search button
+        search_btn_frame = ttk.Frame(create_frame)
+        search_btn_frame.grid(row=5, column=0, columnspan=2, pady=(10, 5))
+        
+        ttk.Button(
+            search_btn_frame, 
+            text="🔍 Web Search for Address", 
+            command=self._web_search
+        ).pack(side="left", padx=5)
+        
+        self.search_status = ttk.Label(search_btn_frame, text="", foreground="gray")
+        self.search_status.pack(side="left", padx=5)
+        
+        # Create buttons
+        create_btn_frame = ttk.Frame(create_frame)
+        create_btn_frame.grid(row=6, column=0, columnspan=2, pady=(10, 0))
+        
+        ttk.Button(
+            create_btn_frame, 
+            text="Create Vendor", 
+            command=self._create_vendor
+        ).pack(side="left", padx=5)
+        
+        ttk.Button(
+            create_btn_frame, 
+            text="Create Without Address", 
+            command=self._create_no_address
+        ).pack(side="left", padx=5)
+        
+        # === Option 3: Skip ===
+        skip_frame = ttk.Frame(main_frame)
+        skip_frame.pack(fill="x", pady=(0, 10))
+        
+        ttk.Button(
+            skip_frame, 
+            text="Skip This Bill", 
+            command=self._skip
+        ).pack(side="right")
+        
+    def _on_match_search(self, event):
+        """Filter vendor combo based on search text."""
+        search = self.match_search.get().lower()
+        if len(search) < 2:
+            return
+        
+        matches = [v['name'] for v in self.all_vendors 
+                   if search in v['name'].lower()]
+        self.match_combo['values'] = sorted(set(matches))[:20]
+        if matches:
+            self.match_combo.set(matches[0])
+    
+    def _use_matched(self):
+        """Use the selected existing vendor."""
+        selected = self.match_combo.get()
+        if not selected:
+            messagebox.showwarning("No Selection", "Please select a vendor to match to.")
+            return
+        
+        # Find the vendor data
+        for v in self.all_vendors:
+            if v['name'] == selected:
+                self.result = 'match'
+                self.matched_vendor = v
+                self.dialog.destroy()
+                return
+        
+        messagebox.showerror("Error", "Could not find selected vendor.")
+    
+    def _web_search(self):
+        """Search for address using web APIs."""
+        search_name = self.name_entry.get().strip() or self.vendor_name
+        self.search_status.config(text="Searching...", foreground="blue")
+        self.dialog.update()
+        
+        try:
+            result = address_lookup.lookup_address(search_name)
+            
+            if result:
+                self.search_status.config(text="✓ Found", foreground="green")
+                # Fill in the fields
+                self.addr_name_entry.delete(0, tk.END)
+                self.addr_name_entry.insert(0, result.get('name', ''))
+                
+                self.addr_line1_entry.delete(0, tk.END)
+                self.addr_line1_entry.insert(0, result.get('addr_line1', ''))
+                
+                self.addr_line2_entry.delete(0, tk.END)
+                self.addr_line2_entry.insert(0, result.get('addr_line2', ''))
+                
+                self.phone_entry.delete(0, tk.END)
+                self.phone_entry.insert(0, result.get('phone', ''))
+            else:
+                self.search_status.config(text="No results found", foreground="orange")
+        except Exception as e:
+            logger.error(f"Address lookup error: {e}")
+            self.search_status.config(text=f"Error: {e}", foreground="red")
+    
+    def _create_vendor(self):
+        """Create vendor with entered address."""
+        name = self.name_entry.get().strip()
+        if not name:
+            messagebox.showwarning("Required", "Display name is required.")
+            return
+        
+        self.result = 'create'
+        self.vendor_data = {
+            'display_name': name,
+            'addr_name': self.addr_name_entry.get().strip() or name,
+            'addr_line1': self.addr_line1_entry.get().strip(),
+            'addr_line2': self.addr_line2_entry.get().strip(),
+            'phone': self.phone_entry.get().strip(),
+        }
+        self.dialog.destroy()
+    
+    def _create_no_address(self):
+        """Create vendor without address info."""
+        name = self.name_entry.get().strip() or self.vendor_name
+        
+        self.result = 'create'
+        self.vendor_data = {
+            'display_name': name,
+            'addr_name': name,
+            'addr_line1': '',
+            'addr_line2': '',
+            'phone': '',
+        }
+        self.dialog.destroy()
+    
+    def _skip(self):
+        """Skip this bill."""
+        self.result = 'skip'
+        self.dialog.destroy()
+    
+    def show(self) -> Tuple[str, Optional[Dict]]:
+        """Show dialog and return result."""
+        self.dialog.wait_window()
+        return self.result, self.vendor_data or self.matched_vendor
+
+
+class ProcessingDialog:
+    """Dialog showing bill processing progress."""
+    
+    def __init__(self, parent: tk.Tk, bills: List[Dict], vendor_manager: VendorManager, 
+                 all_vendors: List[Dict], on_complete: Callable):
+        self.parent = parent
+        self.bills = bills
+        self.vendor_manager = vendor_manager
+        self.all_vendors = all_vendors
+        self.on_complete = on_complete
+        
+        self.results = {'success': [], 'failed': [], 'skipped': []}
+        self.processing = False
+        self.current_bill_idx = 0
+        
+        self.dialog = tk.Toplevel(parent)
+        self.dialog.title("Processing Bills")
+        self.dialog.geometry("600x450")
+        self.dialog.transient(parent)
+        self.dialog.protocol("WM_DELETE_WINDOW", self._on_close)
+        
+        self._create_widgets()
+        
+        # Center on parent
+        self.dialog.update_idletasks()
+        x = parent.winfo_x() + (parent.winfo_width() - self.dialog.winfo_width()) // 2
+        y = parent.winfo_y() + (parent.winfo_height() - self.dialog.winfo_height()) // 2
+        self.dialog.geometry(f"+{x}+{y}")
+        
+    def _create_widgets(self):
+        main_frame = ttk.Frame(self.dialog, padding="10")
+        main_frame.pack(fill="both", expand=True)
+        main_frame.columnconfigure(0, weight=1)
+        main_frame.rowconfigure(1, weight=1)
+        
+        # Progress bar
+        progress_frame = ttk.Frame(main_frame)
+        progress_frame.grid(row=0, column=0, sticky="ew", pady=(0, 10))
+        progress_frame.columnconfigure(0, weight=1)
+        
+        self.progress_label = ttk.Label(progress_frame, text="Ready to process...")
+        self.progress_label.grid(row=0, column=0, sticky="w")
+        
+        self.progress_bar = ttk.Progressbar(progress_frame, mode='determinate', length=400)
+        self.progress_bar.grid(row=1, column=0, sticky="ew", pady=(5, 0))
+        self.progress_bar['maximum'] = len(self.bills)
+        
+        # Log area
+        log_frame = ttk.LabelFrame(main_frame, text="Processing Log", padding="5")
+        log_frame.grid(row=1, column=0, sticky="nsew", pady=(0, 10))
+        log_frame.columnconfigure(0, weight=1)
+        log_frame.rowconfigure(0, weight=1)
+        
+        self.log_text = scrolledtext.ScrolledText(log_frame, height=15, width=70, state='disabled')
+        self.log_text.grid(row=0, column=0, sticky="nsew")
+        
+        # Configure tags for colored text
+        self.log_text.tag_configure('success', foreground='green')
+        self.log_text.tag_configure('error', foreground='red')
+        self.log_text.tag_configure('warning', foreground='orange')
+        self.log_text.tag_configure('info', foreground='blue')
+        
+        # Buttons
+        btn_frame = ttk.Frame(main_frame)
+        btn_frame.grid(row=2, column=0, sticky="ew")
+        
+        self.start_btn = ttk.Button(btn_frame, text="Start Processing", command=self._start_processing)
+        self.start_btn.pack(side="left", padx=5)
+        
+        self.close_btn = ttk.Button(btn_frame, text="Close", command=self._on_close, state='disabled')
+        self.close_btn.pack(side="right", padx=5)
+        
+    def _log(self, message: str, tag: str = None):
+        """Add message to log area."""
+        self.log_text.config(state='normal')
+        if tag:
+            self.log_text.insert(tk.END, message + "\n", tag)
+        else:
+            self.log_text.insert(tk.END, message + "\n")
+        self.log_text.see(tk.END)
+        self.log_text.config(state='disabled')
+        self.dialog.update()
+    
+    def _start_processing(self):
+        """Start processing bills."""
+        # Check for GnuCash lock
+        if gnucash_db.is_gnucash_locked():
+            messagebox.showerror(
+                "GnuCash is Running",
+                "GnuCash appears to be running (lock file detected).\n\n"
+                "Please close GnuCash before processing bills.\n\n"
+                f"Lock file: {gnucash_db.get_lock_file_path()}"
+            )
+            return
+        
+        self.processing = True
+        self.start_btn.config(state='disabled')
+        self._log("Starting bill processing...", 'info')
+        self._log(f"Processing {len(self.bills)} bill(s)\n")
+        
+        # Process bills one at a time with delay for visibility
+        self.dialog.after(100, self._process_next_bill)
+    
+    def _process_next_bill(self):
+        """Process the next bill in the queue."""
+        if self.current_bill_idx >= len(self.bills):
+            self._processing_complete()
+            return
+        
+        bill = self.bills[self.current_bill_idx]
+        self.progress_bar['value'] = self.current_bill_idx + 1
+        self.progress_label.config(
+            text=f"Processing {self.current_bill_idx + 1} of {len(self.bills)}: {bill['vendor_name']}"
+        )
+        
+        self._log(f"{'─'*50}")
+        self._log(f"Bill {self.current_bill_idx + 1}: {bill['vendor_name']}")
+        self._log(f"  Amount: ${bill['amount']:.2f}")
+        self._log(f"  Memo: {bill['memo']}")
+        
+        # Try to process this bill
+        try:
+            success = self._process_single_bill(bill)
+            if success:
+                self.results['success'].append(bill)
+                self._log(f"  ✓ Bill created successfully", 'success')
+            elif success is None:
+                self.results['skipped'].append(bill)
+                self._log(f"  ⊘ Bill skipped", 'warning')
+            else:
+                self.results['failed'].append(bill)
+                self._log(f"  ✗ Bill failed", 'error')
+        except Exception as e:
+            logger.exception(f"Error processing bill: {e}")
+            self.results['failed'].append(bill)
+            self._log(f"  ✗ Error: {e}", 'error')
+        
+        self.current_bill_idx += 1
+        
+        # Schedule next bill with delay for readability
+        self.dialog.after(500, self._process_next_bill)
+    
+    def _process_single_bill(self, bill: Dict) -> Optional[bool]:
+        """
+        Process a single bill. Returns True if success, False if failed, None if skipped.
+        """
+        vendor_name = bill['vendor_name']
+        amount = bill['amount']
+        memo = bill['memo']
+        bill_date = bill['date']
+        
+        # Find vendor
+        vendor_data, match_type = self.vendor_manager.find_vendor(vendor_name)
+        
+        if vendor_data:
+            self._log(f"  Found vendor: {vendor_data.get('display_name')} ({match_type} match)")
+            
+            # Check if vendor exists in GnuCash (has GUID)
+            if not vendor_data.get('gnucash_guid'):
+                self._log(f"  Vendor not yet in GnuCash - creating...", 'warning')
+                try:
+                    vendor_guid = gnucash_db.create_vendor(
+                        name=vendor_data.get('display_name'),
+                        addr_name=vendor_data.get('addr_name', ''),
+                        addr_addr1=vendor_data.get('addr_line1', ''),
+                        addr_addr2=vendor_data.get('addr_line2', ''),
+                        addr_phone=vendor_data.get('phone', '')
+                    )
+                    
+                    # Update JSON with GnuCash info
+                    vendor_record = gnucash_db.find_vendor_by_name(vendor_data.get('display_name'))
+                    vendor_key = strip_vendor_name(vendor_data.get('display_name'))
+                    
+                    if vendor_key in self.vendor_manager.vendors['vendors']:
+                        self.vendor_manager.vendors['vendors'][vendor_key]['gnucash_guid'] = vendor_guid
+                        self.vendor_manager.vendors['vendors'][vendor_key]['gnucash_id'] = vendor_record['id'] if vendor_record else None
+                        self.vendor_manager.save()
+                    
+                    vendor_data['gnucash_guid'] = vendor_guid
+                    self._log(f"  ✓ Vendor created in GnuCash", 'success')
+                except Exception as e:
+                    self._log(f"  ✗ Failed to create vendor in GnuCash: {e}", 'error')
+                    return False
+        else:
+            self._log(f"  Vendor not found - opening dialog...", 'warning')
+            
+            # Show new vendor dialog - loop until success or skip
+            prefill_data = None
+            while True:
+                dialog = NewVendorDialog(self.dialog, vendor_name, self.all_vendors, prefill_data)
+                result, data = dialog.show()
+                
+                if result == 'skip':
+                    return None
+                elif result == 'match':
+                    vendor_data = data
+                    self._log(f"  Matched to: {vendor_data.get('name', vendor_data.get('display_name'))}")
+                    break
+                elif result == 'create':
+                    # IMMEDIATELY save user's data to JSON - this is precious!
+                    vendor_key = strip_vendor_name(data['display_name'])
+                    self._log(f"  Saving vendor data to local database...")
+                    self.vendor_manager.vendors['vendors'][vendor_key] = {
+                        'display_name': data['display_name'],
+                        'gnucash_guid': None,  # Will be filled in after GnuCash creation
+                        'gnucash_id': None,
+                        'addr_name': data['addr_name'],
+                        'addr_line1': data['addr_line1'],
+                        'addr_line2': data['addr_line2'],
+                        'phone': data['phone'],
+                    }
+                    self.vendor_manager.save()
+                    self._log(f"  ✓ Vendor data saved to JSON", 'success')
+                    
+                    # Now try to create in GnuCash
+                    self._log(f"  Creating vendor in GnuCash: {data['display_name']}")
+                    try:
+                        vendor_guid = gnucash_db.create_vendor(
+                            name=data['display_name'],
+                            addr_name=data['addr_name'],
+                            addr_addr1=data['addr_line1'],
+                            addr_addr2=data['addr_line2'],
+                            addr_phone=data['phone']
+                        )
+                        
+                        # Get vendor record and update JSON with GnuCash info
+                        vendor_record = gnucash_db.find_vendor_by_name(data['display_name'])
+                        
+                        # Update the JSON record with GnuCash GUID
+                        self.vendor_manager.vendors['vendors'][vendor_key]['gnucash_guid'] = vendor_guid
+                        self.vendor_manager.vendors['vendors'][vendor_key]['gnucash_id'] = vendor_record['id'] if vendor_record else None
+                        self.vendor_manager.save()
+                        
+                        vendor_data = {
+                            'gnucash_guid': vendor_guid,
+                            'gnucash_id': vendor_record['id'] if vendor_record else None,
+                            'display_name': data['display_name'],
+                        }
+                        
+                        self._log(f"  ✓ Vendor created in GnuCash", 'success')
+                        break  # Success - exit loop
+                    except Exception as e:
+                        self._log(f"  ✗ Failed to create in GnuCash: {e}", 'error')
+                        self._log(f"  ℹ Vendor data is safely stored in JSON", 'info')
+                        # Data is already saved to JSON, offer to retry or continue
+                        retry = messagebox.askyesno(
+                            "GnuCash Creation Failed",
+                            f"Failed to create vendor in GnuCash: {e}\n\n"
+                            "Your vendor data has been saved to the local database.\n\n"
+                            "Would you like to retry creating in GnuCash?\n"
+                            "(No = Skip this bill for now)"
+                        )
+                        if retry:
+                            prefill_data = data
+                            continue
+                        else:
+                            return None  # Skip this bill
+                else:
+                    return None
+        
+        # Get expense account
+        try:
+            expense_acct_name = make_expense_account_name(
+                vendor_data.get('display_name') or vendor_data.get('name', vendor_name)
+            )
+            existing_accts = gnucash_db.find_expense_accounts_like(expense_acct_name)
+            
+            if existing_accts:
+                expense_acct_guid = existing_accts[0]['guid']
+                self._log(f"  Using expense account: {existing_accts[0]['name']}")
+            else:
+                self._log(f"  Creating expense account: {expense_acct_name}")
+                expense_acct_guid = gnucash_db.create_expense_account(expense_acct_name)
+        except Exception as e:
+            self._log(f"  ✗ Expense account error: {e}", 'error')
+            return False
+        
+        # Create the bill
+        try:
+            vendor_guid = vendor_data.get('gnucash_guid') or vendor_data.get('guid')
+            if not vendor_guid:
+                gc_vendor = gnucash_db.find_vendor_by_name(
+                    vendor_data.get('display_name') or vendor_data.get('name')
+                )
+                if gc_vendor:
+                    vendor_guid = gc_vendor['guid']
+                else:
+                    self._log(f"  ✗ Could not find vendor GUID", 'error')
+                    return False
+            
+            bill_guid = gnucash_db.create_posted_bill(
+                vendor_guid=vendor_guid,
+                expense_account_guid=expense_acct_guid,
+                amount=amount,
+                memo=memo,
+                bill_date=bill_date
+            )
+            
+            return True
+            
+        except Exception as e:
+            logger.exception(f"Error creating bill: {e}")
+            self._log(f"  ✗ Failed to create bill: {e}", 'error')
+            return False
+    
+    def _processing_complete(self):
+        """Called when all bills have been processed."""
+        self.processing = False
+        self.close_btn.config(state='normal')
+        
+        self._log(f"\n{'='*50}")
+        self._log("PROCESSING COMPLETE", 'info')
+        self._log(f"  Successful: {len(self.results['success'])}", 'success')
+        self._log(f"  Failed: {len(self.results['failed'])}", 'error' if self.results['failed'] else None)
+        self._log(f"  Skipped: {len(self.results['skipped'])}", 'warning' if self.results['skipped'] else None)
+        
+        self.progress_label.config(text="Processing complete!")
+        
+    def _on_close(self):
+        """Handle dialog close."""
+        if self.processing:
+            if not messagebox.askyesno("Processing", "Processing is still running. Cancel?"):
+                return
+        
+        self.dialog.destroy()
+        self.on_complete(self.results)
+    
+    def show(self):
+        """Show the dialog."""
+        self.dialog.wait_window()
 
 
 class BillEntryGUI:
@@ -236,7 +818,7 @@ class BillEntryGUI:
         ttk.Button(bills_btn_frame, text="Remove Selected", command=self._remove_selected).pack(side="left", padx=5)
         ttk.Button(bills_btn_frame, text="Edit Selected", command=self._edit_selected).pack(side="left", padx=5)
         ttk.Button(bills_btn_frame, text="Refresh", command=self._load_current_bills).pack(side="left", padx=5)
-        ttk.Button(bills_btn_frame, text="Finish", command=self._finish_and_process).pack(side="left", padx=5)
+        ttk.Button(bills_btn_frame, text="Pre-process Bills", command=self._preprocess_bills).pack(side="left", padx=5)
         
         # Total display
         self.total_label = ttk.Label(bills_btn_frame, text="Total: $0.00", font=('TkDefaultFont', 10, 'bold'))
@@ -567,52 +1149,185 @@ class BillEntryGUI:
         self.status_var.set("Editing bill - make changes and click Add Bill")
         self.vendor_entry.focus()
 
-    def _finish_and_process(self):
-        """Finish bill entry and optionally run the processor."""
-        import subprocess
-        import platform
+    def _preprocess_bills(self):
+        """Process all queued bills within the GUI."""
+        # Check for GnuCash lock first
+        if gnucash_db.is_gnucash_locked():
+            messagebox.showerror(
+                "GnuCash is Running",
+                "GnuCash appears to be running (lock file detected).\n\n"
+                "Please close GnuCash before processing bills.\n\n"
+                f"Lock file: {gnucash_db.get_lock_file_path()}"
+            )
+            return
         
-        # Check if there are bills to process
+        # Validate GnuCash setup BEFORE doing anything
+        validation = gnucash_db.validate_gnucash_setup()
+        
+        if not validation['valid']:
+            # Check if missing A/P account specifically - we can create it
+            ap_missing = any('Accounts Payable' in err or 'PAYABLE' in err for err in validation['errors'])
+            
+            if ap_missing:
+                # Offer to create it
+                if messagebox.askyesno(
+                    "Create Accounts Payable?",
+                    "No Accounts Payable account found in GnuCash.\n\n"
+                    "This account is required for vendor bills.\n\n"
+                    "Would you like to create it now?\n"
+                    "(Will be created under Liabilities)"
+                ):
+                    try:
+                        gnucash_db.create_ap_account()
+                        messagebox.showinfo("Success", "Accounts Payable account created!")
+                        # Re-validate
+                        validation = gnucash_db.validate_gnucash_setup()
+                    except Exception as e:
+                        messagebox.showerror("Error", f"Failed to create A/P account:\n{e}")
+                        return
+                else:
+                    return
+            
+            # Check if still invalid after potential A/P creation
+            if not validation['valid']:
+                error_msg = "Cannot process bills - GnuCash setup issues:\n\n"
+                for err in validation['errors']:
+                    error_msg += f"• {err}\n\n"
+                
+                error_msg += "Please fix these issues in GnuCash and try again."
+                
+                messagebox.showerror("GnuCash Setup Required", error_msg)
+                return
+        
+        # Show warnings if any
+        if validation['warnings']:
+            warn_msg = "GnuCash setup warnings:\n\n"
+            for warn in validation['warnings']:
+                warn_msg += f"• {warn}\n\n"
+            warn_msg += "Continue anyway?"
+            
+            if not messagebox.askyesno("Warnings", warn_msg):
+                return
+        
+        # Load bills from file
         bills_path = Path(config.BILLS_INPUT_PATH)
-        bill_count = 0
+        bills = []
         
         if bills_path.exists():
             with open(bills_path, 'r', encoding='utf-8') as f:
                 for line in f:
-                    if parse_input_line(line):
-                        bill_count += 1
+                    parsed = parse_input_line(line)
+                    if parsed:
+                        bills.append(parsed)
         
-        if bill_count == 0:
-            if messagebox.askyesno("No Bills", "There are no bills to process.\n\nExit anyway?"):
-                self.root.destroy()
+        if not bills:
+            messagebox.showinfo("No Bills", "There are no bills to process.")
             return
         
-        # Ask user what they want to do
-        result = messagebox.askyesnocancel(
-            "Finish Bill Entry",
-            f"You have {bill_count} bill(s) queued totaling {self.total_label.cget('text').replace('Total: ', '')}.\n\n"
-            "Would you like to run the bill processor now?\n\n"
-            "Yes = Run processor and exit\n"
-            "No = Exit without processing\n"
-            "Cancel = Return to bill entry"
+        # Show processing dialog
+        dialog = ProcessingDialog(
+            self.root,
+            bills,
+            self.vendor_manager,
+            self.all_vendors,
+            self._on_processing_complete
         )
+        dialog.show()
+    
+    def _on_processing_complete(self, results: Dict):
+        """Handle completion of bill processing."""
+        success_count = len(results['success'])
+        failed_count = len(results['failed'])
+        skipped_count = len(results['skipped'])
         
-        if result is None:  # Cancel
-            return
-        elif result:  # Yes - run processor
-            processor_path = Path(__file__).parent / "bill_processor.py"
-            # On Windows, create a new console window for interactive input
-            if platform.system() == "Windows":
-                subprocess.Popen(
-                    [sys.executable, str(processor_path)],
-                    creationflags=subprocess.CREATE_NEW_CONSOLE
-                )
+        # Remove successfully processed bills from file
+        if results['success']:
+            self._remove_processed_bills(results['success'])
+        
+        # Show summary
+        summary = f"Processing Complete!\n\n"
+        summary += f"✓ Successful: {success_count}\n"
+        summary += f"✗ Failed: {failed_count}\n"
+        summary += f"⊘ Skipped: {skipped_count}\n"
+        
+        if results['failed']:
+            summary += f"\nFailed bills remain in queue for retry."
+        
+        if results['skipped']:
+            summary += f"\nSkipped bills remain in queue."
+        
+        if success_count > 0:
+            summary += f"\n\nBills have been entered into GnuCash.\n"
+            summary += f"Database: {config.GNUCASH_DB_PATH}"
+            
+            # Offer to launch GnuCash
+            if messagebox.askyesno(
+                "Processing Complete",
+                summary + "\n\nWould you like to launch GnuCash now?"
+            ):
+                self._launch_gnucash()
             else:
-                # On Unix, use a terminal emulator
-                subprocess.Popen([sys.executable, str(processor_path)])
-            self.root.destroy()
-        else:  # No - just exit
-            self.root.destroy()
+                messagebox.showinfo("Processing Complete", summary)
+        else:
+            messagebox.showinfo("Processing Complete", summary)
+        
+        # Refresh the bills list
+        self._load_current_bills()
+        
+        # Reload vendors in case new ones were created
+        self.all_vendors = self._load_all_vendors()
+    
+    def _remove_processed_bills(self, processed_bills: List[Dict]):
+        """Remove successfully processed bills from the input file."""
+        bills_path = Path(config.BILLS_INPUT_PATH)
+        
+        if not bills_path.exists():
+            return
+        
+        # Get vendor names of processed bills
+        processed_vendors = {b['vendor_name'].lower() for b in processed_bills}
+        
+        # Read all lines
+        with open(bills_path, 'r', encoding='utf-8') as f:
+            lines = f.readlines()
+        
+        # Write back only unprocessed lines
+        with open(bills_path, 'w', encoding='utf-8') as f:
+            for line in lines:
+                parsed = parse_input_line(line)
+                if parsed:
+                    # Check if this bill was processed
+                    if parsed['vendor_name'].lower() in processed_vendors:
+                        # Remove from set so we only remove one instance
+                        processed_vendors.discard(parsed['vendor_name'].lower())
+                        continue
+                f.write(line)
+    
+    def _launch_gnucash(self):
+        """Launch GnuCash application."""
+        import subprocess
+        import platform
+        
+        gnucash_path = config.GNUCASH_DB_PATH
+        
+        try:
+            if platform.system() == "Windows":
+                # Try to open with associated application
+                import os
+                os.startfile(str(gnucash_path))
+            elif platform.system() == "Darwin":  # macOS
+                subprocess.Popen(["open", str(gnucash_path)])
+            else:  # Linux
+                subprocess.Popen(["gnucash", str(gnucash_path)])
+            
+            self.status_var.set("GnuCash launched")
+        except Exception as e:
+            logger.error(f"Failed to launch GnuCash: {e}")
+            messagebox.showerror(
+                "Launch Failed",
+                f"Could not launch GnuCash:\n{e}\n\n"
+                f"Please open manually:\n{gnucash_path}"
+            )
 
 
 def main():

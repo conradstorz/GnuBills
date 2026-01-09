@@ -20,6 +20,28 @@ def generate_guid() -> str:
     return uuid.uuid4().hex
 
 
+def is_gnucash_locked() -> bool:
+    """
+    Check if GnuCash has the database locked.
+    
+    GnuCash creates a .LCK file with the same base name when the file is open.
+    Returns True if locked (GnuCash is running), False otherwise.
+    """
+    db_path = Path(config.GNUCASH_DB_PATH)
+    lock_path = db_path.with_suffix('.gnucash.LCK')
+    
+    # Also check for alternate lock file naming
+    lock_path_alt = Path(str(db_path) + '.LCK')
+    
+    return lock_path.exists() or lock_path_alt.exists()
+
+
+def get_lock_file_path() -> Path:
+    """Return the expected lock file path for display purposes."""
+    db_path = Path(config.GNUCASH_DB_PATH)
+    return db_path.with_suffix('.gnucash.LCK')
+
+
 @contextmanager
 def get_connection(readonly: bool = True):
     """
@@ -131,10 +153,10 @@ def get_next_vendor_id() -> str:
             if match:
                 num = int(match.group(1))
                 # Use same format as config
-                return config.VENDOR_ID_FORMAT.format(num + 1)
+                return config.VENDOR_ID_FORMAT.format(prefix=config.VENDOR_ID_PREFIX, num=num + 1)
         
         # First vendor
-        return config.VENDOR_ID_FORMAT.format(1)
+        return config.VENDOR_ID_FORMAT.format(prefix=config.VENDOR_ID_PREFIX, num=1)
 
 
 def create_vendor(
@@ -161,18 +183,37 @@ def create_vendor(
         currency_guid = get_usd_guid()
     
     with get_connection(readonly=False) as conn:
-        conn.execute("""
-            INSERT INTO vendors (
-                guid, id, name, currency,
-                addr_name, addr_addr1, addr_addr2, addr_addr3, addr_addr4,
-                addr_phone, addr_email, notes, active,
-                tax_override, tax_included
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, 0, 1)
-        """, (
+        # First, check what columns exist in the vendors table
+        cursor = conn.execute("PRAGMA table_info(vendors)")
+        columns = {row['name'] for row in cursor.fetchall()}
+        
+        # Build INSERT based on available columns
+        base_columns = [
+            'guid', 'id', 'name', 'currency',
+            'addr_name', 'addr_addr1', 'addr_addr2', 'addr_addr3', 'addr_addr4',
+            'addr_phone', 'addr_email', 'notes', 'active'
+        ]
+        base_values = [
             vendor_guid, vendor_id, name, currency_guid,
             addr_name, addr_addr1, addr_addr2, addr_addr3, addr_addr4,
-            addr_phone, addr_email, notes
-        ))
+            addr_phone, addr_email, notes, 1  # active=1
+        ]
+        
+        # Add optional columns if they exist
+        if 'tax_override' in columns:
+            base_columns.append('tax_override')
+            base_values.append(0)
+        if 'tax_included' in columns:
+            base_columns.append('tax_included')
+            base_values.append(1)
+        
+        placeholders = ', '.join(['?'] * len(base_columns))
+        column_names = ', '.join(base_columns)
+        
+        conn.execute(f"""
+            INSERT INTO vendors ({column_names})
+            VALUES ({placeholders})
+        """, base_values)
         conn.commit()
         
     logger.info(f"Created vendor: {name} (ID: {vendor_id}, GUID: {vendor_guid})")
@@ -276,25 +317,187 @@ def find_expense_accounts_like(pattern: str) -> List[Dict]:
 def get_expenses_parent_guid() -> Optional[str]:
     """Get the GUID of the Expenses parent account."""
     with get_connection() as conn:
+        # Try exact match first
         cursor = conn.execute("""
             SELECT guid FROM accounts 
-            WHERE name = 'Expenses' AND account_type = 'EXPENSE'
+            WHERE name = ? AND account_type = 'EXPENSE'
+            LIMIT 1
+        """, (config.DEFAULT_EXPENSE_PARENT,))
+        row = cursor.fetchone()
+        if row:
+            return row['guid']
+        
+        # Try case-insensitive match
+        cursor = conn.execute("""
+            SELECT guid FROM accounts 
+            WHERE LOWER(name) = LOWER(?) AND account_type = 'EXPENSE'
+            LIMIT 1
+        """, (config.DEFAULT_EXPENSE_PARENT,))
+        row = cursor.fetchone()
+        if row:
+            return row['guid']
+        
+        # Try to find any top-level EXPENSE account (parent_guid is root)
+        cursor = conn.execute("""
+            SELECT a.guid, a.name FROM accounts a
+            WHERE a.account_type = 'EXPENSE' 
+            AND a.parent_guid IN (SELECT guid FROM accounts WHERE account_type = 'ROOT')
             LIMIT 1
         """)
         row = cursor.fetchone()
-        return row['guid'] if row else None
+        if row:
+            logger.warning(f"Using expense parent: {row['name']} (expected: {config.DEFAULT_EXPENSE_PARENT})")
+            return row['guid']
+        
+        # Last resort: any EXPENSE account that could be a parent
+        cursor = conn.execute("""
+            SELECT guid, name FROM accounts 
+            WHERE account_type = 'EXPENSE'
+            ORDER BY name
+            LIMIT 1
+        """)
+        row = cursor.fetchone()
+        if row:
+            logger.warning(f"Using expense parent: {row['name']} (fallback)")
+            return row['guid']
+        
+        return None
 
 
 def get_ap_account_guid() -> Optional[str]:
-    """Get the GUID of the Accounts Payable account."""
+    """
+    Get the GUID of the Accounts Payable account.
+    
+    Searches by:
+    1. Account type = 'PAYABLE' (correct way)
+    2. Account name containing 'payable' (fallback)
+    """
     with get_connection() as conn:
+        # First try: find by account_type = PAYABLE (the correct way)
         cursor = conn.execute("""
-            SELECT guid FROM accounts 
+            SELECT guid, name FROM accounts 
             WHERE account_type = 'PAYABLE'
             LIMIT 1
         """)
         row = cursor.fetchone()
-        return row['guid'] if row else None
+        if row:
+            logger.debug(f"Found A/P account by type: {row['name']}")
+            return row['guid']
+        
+        # Fallback: search by name containing 'payable'
+        cursor = conn.execute("""
+            SELECT guid, name, account_type FROM accounts 
+            WHERE LOWER(name) LIKE '%payable%'
+            ORDER BY 
+                CASE WHEN account_type = 'LIABILITY' THEN 1
+                     WHEN account_type = 'ASSET' THEN 2
+                     ELSE 3 END
+            LIMIT 1
+        """)
+        row = cursor.fetchone()
+        if row:
+            logger.warning(f"No PAYABLE type account found. Using '{row['name']}' ({row['account_type']}) as fallback")
+            return row['guid']
+        
+        return None
+
+
+def validate_gnucash_setup() -> Dict[str, any]:
+    """
+    Validate that GnuCash has the required setup for bill processing.
+    
+    Returns a dict with:
+        - valid: bool - True if all requirements met
+        - errors: list - Critical issues that prevent processing
+        - warnings: list - Non-critical issues
+        - info: dict - Information about found accounts
+    """
+    result = {
+        'valid': True,
+        'errors': [],
+        'warnings': [],
+        'info': {}
+    }
+    
+    with get_connection() as conn:
+        # Check 1: USD currency exists
+        cursor = conn.execute("""
+            SELECT guid FROM commodities 
+            WHERE mnemonic = 'USD' AND namespace = 'CURRENCY'
+        """)
+        row = cursor.fetchone()
+        if row:
+            result['info']['usd_guid'] = row['guid']
+        else:
+            result['errors'].append("USD currency not found in GnuCash")
+            result['valid'] = False
+        
+        # Check 2: Accounts Payable account (CRITICAL)
+        cursor = conn.execute("""
+            SELECT guid, name FROM accounts WHERE account_type = 'PAYABLE'
+        """)
+        row = cursor.fetchone()
+        if row:
+            result['info']['ap_account'] = row['name']
+            result['info']['ap_guid'] = row['guid']
+        else:
+            # Check if there's one with a similar name but wrong type
+            cursor = conn.execute("""
+                SELECT name, account_type FROM accounts 
+                WHERE LOWER(name) LIKE '%payable%'
+            """)
+            similar = cursor.fetchone()
+            if similar:
+                result['errors'].append(
+                    f"No account with type 'PAYABLE' found. "
+                    f"Found '{similar['name']}' but it has type '{similar['account_type']}'. "
+                    f"In GnuCash, edit this account and change its type to 'A/Payable'."
+                )
+            else:
+                result['errors'].append(
+                    "No Accounts Payable account found. "
+                    "In GnuCash: Actions → New Account → "
+                    "Name: 'Accounts Payable', Type: 'A/Payable', Parent: 'Liabilities'"
+                )
+            result['valid'] = False
+        
+        # Check 3: Expense parent account
+        cursor = conn.execute("""
+            SELECT guid, name FROM accounts 
+            WHERE account_type = 'EXPENSE' 
+            AND parent_guid IN (SELECT guid FROM accounts WHERE account_type = 'ROOT')
+        """)
+        row = cursor.fetchone()
+        if row:
+            result['info']['expense_parent'] = row['name']
+            result['info']['expense_parent_guid'] = row['guid']
+        else:
+            result['warnings'].append(
+                f"No top-level Expense account found. "
+                f"Expected '{config.DEFAULT_EXPENSE_PARENT}'. "
+                f"New expense accounts may not be created correctly."
+            )
+        
+        # Check 4: Count existing expense accounts (informational)
+        cursor = conn.execute("""
+            SELECT COUNT(*) as cnt FROM accounts WHERE account_type = 'EXPENSE'
+        """)
+        result['info']['expense_account_count'] = cursor.fetchone()['cnt']
+        
+        # Check 5: Count vendors
+        cursor = conn.execute("SELECT COUNT(*) as cnt FROM vendors")
+        result['info']['vendor_count'] = cursor.fetchone()['cnt']
+        
+        # Check 6: List available account types (informational)
+        cursor = conn.execute("""
+            SELECT DISTINCT account_type, COUNT(*) as cnt 
+            FROM accounts 
+            GROUP BY account_type 
+            ORDER BY cnt DESC
+        """)
+        result['info']['account_types'] = {row['account_type']: row['cnt'] for row in cursor}
+    
+    return result
 
 
 def create_expense_account(name: str, parent_guid: str = None) -> str:
@@ -322,6 +525,74 @@ def create_expense_account(name: str, parent_guid: str = None) -> str:
     
     logger.info(f"Created expense account: {name} (GUID: {account_guid})")
     return account_guid
+
+
+def get_liabilities_parent_guid() -> Optional[str]:
+    """Get the GUID of the top-level Liabilities account."""
+    with get_connection() as conn:
+        # Find top-level LIABILITY account (parent is ROOT)
+        cursor = conn.execute("""
+            SELECT a.guid, a.name FROM accounts a
+            WHERE a.account_type = 'LIABILITY' 
+            AND a.parent_guid IN (SELECT guid FROM accounts WHERE account_type = 'ROOT')
+            LIMIT 1
+        """)
+        row = cursor.fetchone()
+        if row:
+            return row['guid']
+        
+        # Fallback: any LIABILITY account with 'root' or 'liabilities' in name
+        cursor = conn.execute("""
+            SELECT guid, name FROM accounts 
+            WHERE account_type = 'LIABILITY'
+            AND (LOWER(name) LIKE '%root%' OR LOWER(name) = 'liabilities')
+            LIMIT 1
+        """)
+        row = cursor.fetchone()
+        if row:
+            return row['guid']
+        
+        return None
+
+
+def create_ap_account(name: str = "Accounts Payable") -> str:
+    """
+    Create an Accounts Payable account under Liabilities.
+    
+    Returns the new account's GUID.
+    """
+    parent_guid = get_liabilities_parent_guid()
+    if not parent_guid:
+        raise ValueError("Could not find Liabilities parent account")
+    
+    account_guid = generate_guid()
+    usd_guid = get_usd_guid()
+    
+    with get_connection(readonly=False) as conn:
+        conn.execute("""
+            INSERT INTO accounts (
+                guid, name, account_type, commodity_guid, commodity_scu, 
+                non_std_scu, parent_guid, hidden, placeholder
+            ) VALUES (?, ?, 'PAYABLE', ?, 100, 0, ?, 0, 0)
+        """, (account_guid, name, usd_guid, parent_guid))
+        conn.commit()
+    
+    logger.info(f"Created A/P account: {name} (GUID: {account_guid})")
+    return account_guid
+
+
+def ensure_ap_account_exists() -> str:
+    """
+    Ensure an Accounts Payable account exists, creating one if needed.
+    
+    Returns the A/P account GUID.
+    """
+    ap_guid = get_ap_account_guid()
+    if ap_guid:
+        return ap_guid
+    
+    logger.info("No A/P account found - creating one")
+    return create_ap_account()
 
 
 def get_usd_guid() -> str:
@@ -358,9 +629,9 @@ def get_next_bill_id() -> str:
             match = re.search(r'(\d+)', row['id'])
             if match:
                 num = int(match.group(1))
-                return config.BILL_ID_FORMAT.format(num + 1)
+                return config.BILL_ID_FORMAT.format(prefix=config.BILL_ID_PREFIX, num=num + 1)
         
-        return config.BILL_ID_FORMAT.format(1)
+        return config.BILL_ID_FORMAT.format(prefix=config.BILL_ID_PREFIX, num=1)
 
 
 def create_posted_bill(
@@ -473,7 +744,7 @@ def create_posted_bill(
                 guid, date, date_entered, description, action,
                 quantity_num, quantity_denom,
                 i_acct, i_price_num, i_price_denom,
-                i_disc_num, i_disc_denom, i_disc_type, i_disc_how,
+                i_discount_num, i_discount_denom, i_disc_type, i_disc_how,
                 i_taxable, i_taxincluded, i_taxtable,
                 b_acct, b_price_num, b_price_denom,
                 b_taxable, b_taxincluded, b_taxtable,

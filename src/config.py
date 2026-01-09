@@ -15,7 +15,7 @@ PROJECT_ROOT = Path(r"D:\Users\Conrad\Documents\GnuCash\bill_processor")
 
 # GnuCash database file (SQLite format)
 # Change this to your actual .gnucash file
-GNUCASH_DB_PATH = Path(r"D:\Users\Conrad\Documents\GnuCash\gnuCash414\20260108_Sqlite_Accounts_File.gnucash")
+GNUCASH_DB_PATH = Path(r"D:\Users\Conrad\Documents\GnuCash\gnuCash414\CFSIV_Sqlite3_database.gnucash")
 
 # Vendor database JSON file
 VENDOR_DB_PATH = PROJECT_ROOT / "data" / "vendor_database.json"
@@ -53,7 +53,7 @@ DEFAULT_LOCALITY = f"{LOCALITY_CITY}, {LOCALITY_STATE}"
 
 # Parent account for new expense accounts (created under this)
 # New accounts will be named: cmsnpd_<vendor_name>
-DEFAULT_EXPENSE_PARENT = "Expenses"
+DEFAULT_EXPENSE_PARENT = "Expenses root"
 
 # Expense account prefix
 EXPENSE_ACCOUNT_PREFIX = "cmsnpd_"
