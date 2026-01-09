@@ -4,6 +4,10 @@ Read and write vendors, bills, accounts, etc.
 
 Uses schema_discovery module to handle column name variations
 between different GnuCash versions.
+
+POST-WRITE VERIFICATION:
+Every INSERT or UPDATE operation MUST be followed by verification.
+User data is SACRED - we verify writes succeeded before returning.
 """
 
 import sqlite3
@@ -47,6 +51,177 @@ def _get_column(table: str, expected_name: str) -> str:
     except Exception as e:
         logger.warning(f"Schema lookup failed for {table}.{expected_name}: {e}")
         return expected_name
+
+
+# =============================================================================
+# POST-WRITE VERIFICATION - Verify all writes succeeded
+# =============================================================================
+
+class WriteVerificationError(Exception):
+    """Raised when a database write cannot be verified."""
+    pass
+
+
+def verify_record_exists(table: str, guid: str, description: str = "") -> bool:
+    """
+    Verify a record with the given GUID exists in the table.
+    
+    Args:
+        table: Table name to check
+        guid: GUID to look for
+        description: Human-readable description for logging
+        
+    Returns:
+        True if record exists, raises WriteVerificationError if not
+    """
+    with get_connection() as conn:
+        cursor = conn.execute(f"SELECT guid FROM {table} WHERE guid = ?", (guid,))
+        row = cursor.fetchone()
+        
+        if row:
+            logger.debug(f"POST-WRITE VERIFIED: {description or table} with GUID {guid[:12]}... exists")
+            return True
+        else:
+            error_msg = f"POST-WRITE VERIFICATION FAILED: {description or table} with GUID {guid} NOT FOUND in {table}"
+            logger.error(error_msg)
+            
+            # Record failure in schema verification
+            try:
+                schema = _get_schema()
+                if hasattr(schema, 'verification') and schema.verification.current_run:
+                    schema.verification.check(
+                        "POST_WRITE_VERIFY", table,
+                        f"Record exists after INSERT: {description}",
+                        passed=False,
+                        details=f"GUID {guid} not found in {table} after write"
+                    )
+            except Exception:
+                pass  # Don't fail on logging failure
+            
+            raise WriteVerificationError(error_msg)
+
+
+def verify_vendor_created(guid: str, expected_name: str) -> Dict:
+    """
+    Verify a vendor was created successfully.
+    
+    Returns the vendor record if found, raises WriteVerificationError if not.
+    """
+    with get_connection() as conn:
+        cursor = conn.execute(
+            "SELECT guid, id, name FROM vendors WHERE guid = ?",
+            (guid,)
+        )
+        row = cursor.fetchone()
+        
+        if row:
+            actual_name = row['name']
+            if actual_name == expected_name:
+                logger.info(f"POST-WRITE VERIFIED: Vendor '{expected_name}' created (ID: {row['id']})")
+                return dict(row)
+            else:
+                logger.warning(f"POST-WRITE WARNING: Vendor name mismatch. Expected '{expected_name}', got '{actual_name}'")
+                return dict(row)
+        else:
+            error_msg = f"POST-WRITE VERIFICATION FAILED: Vendor '{expected_name}' with GUID {guid} NOT FOUND"
+            logger.error(error_msg)
+            raise WriteVerificationError(error_msg)
+
+
+def verify_account_created(guid: str, expected_name: str, expected_type: str) -> Dict:
+    """
+    Verify an account was created successfully.
+    
+    Returns the account record if found, raises WriteVerificationError if not.
+    """
+    with get_connection() as conn:
+        cursor = conn.execute(
+            "SELECT guid, name, account_type FROM accounts WHERE guid = ?",
+            (guid,)
+        )
+        row = cursor.fetchone()
+        
+        if row:
+            actual_name = row['name']
+            actual_type = row['account_type']
+            
+            issues = []
+            if actual_name != expected_name:
+                issues.append(f"name mismatch (expected '{expected_name}', got '{actual_name}')")
+            if actual_type != expected_type:
+                issues.append(f"type mismatch (expected '{expected_type}', got '{actual_type}')")
+            
+            if issues:
+                logger.warning(f"POST-WRITE WARNING: Account created with issues: {', '.join(issues)}")
+            else:
+                logger.info(f"POST-WRITE VERIFIED: Account '{expected_name}' ({expected_type}) created")
+            
+            return dict(row)
+        else:
+            error_msg = f"POST-WRITE VERIFICATION FAILED: Account '{expected_name}' with GUID {guid} NOT FOUND"
+            logger.error(error_msg)
+            raise WriteVerificationError(error_msg)
+
+
+def verify_bill_created(guid: str, expected_amount: float, vendor_guid: str) -> Dict:
+    """
+    Verify a bill/invoice was created successfully.
+    
+    Checks:
+    1. Invoice record exists
+    2. Linked to correct vendor
+    3. Transaction and splits exist
+    
+    Returns bill info if verified, raises WriteVerificationError if not.
+    """
+    with get_connection() as conn:
+        # Check invoice exists and links to vendor
+        cursor = conn.execute("""
+            SELECT i.guid, i.id, i.owner_guid, i.post_txn, i.post_lot,
+                   v.name as vendor_name
+            FROM invoices i
+            LEFT JOIN vendors v ON i.owner_guid = v.guid
+            WHERE i.guid = ?
+        """, (guid,))
+        row = cursor.fetchone()
+        
+        if not row:
+            error_msg = f"POST-WRITE VERIFICATION FAILED: Invoice with GUID {guid} NOT FOUND"
+            logger.error(error_msg)
+            raise WriteVerificationError(error_msg)
+        
+        # Verify vendor link
+        if row['owner_guid'] != vendor_guid:
+            error_msg = f"POST-WRITE VERIFICATION FAILED: Invoice vendor mismatch. Expected {vendor_guid[:12]}..., got {row['owner_guid'][:12] if row['owner_guid'] else 'None'}..."
+            logger.error(error_msg)
+            raise WriteVerificationError(error_msg)
+        
+        # Verify transaction exists
+        txn_guid = row['post_txn']
+        cursor = conn.execute("SELECT guid FROM transactions WHERE guid = ?", (txn_guid,))
+        txn_row = cursor.fetchone()
+        if not txn_row:
+            error_msg = f"POST-WRITE VERIFICATION FAILED: Transaction {txn_guid} for invoice NOT FOUND"
+            logger.error(error_msg)
+            raise WriteVerificationError(error_msg)
+        
+        # Verify splits exist (should be at least 2 - expense and AP)
+        cursor = conn.execute("SELECT COUNT(*) as cnt FROM splits WHERE tx_guid = ?", (txn_guid,))
+        split_count = cursor.fetchone()['cnt']
+        if split_count < 2:
+            error_msg = f"POST-WRITE VERIFICATION FAILED: Expected 2+ splits, found {split_count}"
+            logger.error(error_msg)
+            raise WriteVerificationError(error_msg)
+        
+        logger.info(f"POST-WRITE VERIFIED: Bill {row['id']} for vendor '{row['vendor_name']}' created successfully")
+        return {
+            'guid': row['guid'],
+            'id': row['id'],
+            'vendor_guid': row['owner_guid'],
+            'vendor_name': row['vendor_name'],
+            'transaction_guid': txn_guid,
+            'split_count': split_count
+        }
 
 
 def is_gnucash_locked() -> bool:
@@ -221,12 +396,21 @@ def create_vendor(
     addr_phone: str = "",
     addr_email: str = "",
     notes: str = "",
-    currency_guid: str = None
+    currency_guid: str = None,
+    verify: bool = True
 ) -> str:
     """
     Create a new vendor in GnuCash.
     
+    Args:
+        name: Vendor name (required)
+        addr_*: Address fields (optional)
+        notes: Notes (optional)
+        currency_guid: Currency GUID (defaults to USD)
+        verify: If True, verify the vendor was created (default True)
+    
     Returns the new vendor's GUID.
+    Raises WriteVerificationError if verification fails.
     """
     vendor_guid = generate_guid()
     vendor_id = get_next_vendor_id()
@@ -267,8 +451,13 @@ def create_vendor(
             VALUES ({placeholders})
         """, base_values)
         conn.commit()
-        
+    
     logger.info(f"Created vendor: {name} (ID: {vendor_id}, GUID: {vendor_guid})")
+    
+    # POST-WRITE VERIFICATION - User data is SACRED
+    if verify:
+        verify_vendor_created(vendor_guid, name)
+    
     return vendor_guid
 
 
@@ -552,11 +741,17 @@ def validate_gnucash_setup() -> Dict[str, any]:
     return result
 
 
-def create_expense_account(name: str, parent_guid: str = None) -> str:
+def create_expense_account(name: str, parent_guid: str = None, verify: bool = True) -> str:
     """
     Create a new expense account.
     
+    Args:
+        name: Account name
+        parent_guid: Parent account GUID (defaults to Expenses parent)
+        verify: If True, verify the account was created (default True)
+    
     Returns the new account's GUID.
+    Raises WriteVerificationError if verification fails.
     """
     if parent_guid is None:
         parent_guid = get_expenses_parent_guid()
@@ -576,6 +771,11 @@ def create_expense_account(name: str, parent_guid: str = None) -> str:
         conn.commit()
     
     logger.info(f"Created expense account: {name} (GUID: {account_guid})")
+    
+    # POST-WRITE VERIFICATION
+    if verify:
+        verify_account_created(account_guid, name, 'EXPENSE')
+    
     return account_guid
 
 
@@ -607,11 +807,16 @@ def get_liabilities_parent_guid() -> Optional[str]:
         return None
 
 
-def create_ap_account(name: str = "Accounts Payable") -> str:
+def create_ap_account(name: str = "Accounts Payable", verify: bool = True) -> str:
     """
     Create an Accounts Payable account under Liabilities.
     
+    Args:
+        name: Account name (default "Accounts Payable")
+        verify: If True, verify the account was created (default True)
+    
     Returns the new account's GUID.
+    Raises WriteVerificationError if verification fails.
     """
     parent_guid = get_liabilities_parent_guid()
     if not parent_guid:
@@ -630,6 +835,11 @@ def create_ap_account(name: str = "Accounts Payable") -> str:
         conn.commit()
     
     logger.info(f"Created A/P account: {name} (GUID: {account_guid})")
+    
+    # POST-WRITE VERIFICATION
+    if verify:
+        verify_account_created(account_guid, name, 'PAYABLE')
+    
     return account_guid
 
 
@@ -692,7 +902,8 @@ def create_posted_bill(
     amount: float,
     memo: str = "",
     bill_date: date = None,
-    due_date: date = None
+    due_date: date = None,
+    verify: bool = True
 ) -> str:
     """
     Create a posted bill (vendor invoice) in GnuCash.
@@ -702,7 +913,17 @@ def create_posted_bill(
     2. A billterm lot for tracking
     3. Transaction entries (debit expense, credit AP)
     
+    Args:
+        vendor_guid: GUID of the vendor
+        expense_account_guid: GUID of expense account to debit
+        amount: Bill amount
+        memo: Bill description/memo
+        bill_date: Date of bill (defaults to today)
+        due_date: Due date (defaults to bill_date)
+        verify: If True, verify the bill was created (default True)
+    
     Returns the bill GUID.
+    Raises WriteVerificationError if verification fails.
     """
     if bill_date is None:
         bill_date = date.today()
@@ -830,6 +1051,11 @@ def create_posted_bill(
         conn.commit()
     
     logger.info(f"Created posted bill: {bill_id} for ${amount:.2f} (GUID: {bill_guid})")
+    
+    # POST-WRITE VERIFICATION - User data is SACRED
+    if verify:
+        verify_bill_created(bill_guid, amount, vendor_guid)
+    
     return bill_guid
 
 

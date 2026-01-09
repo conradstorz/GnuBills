@@ -635,11 +635,13 @@ class BillEntryGUI:
         self.schema_errors = []
         self.schema_warnings = []
         
-        # Run schema validation at startup (before anything else)
+        # Load vendor data FIRST (before validation - we need it to validate GUIDs)
+        self.vendor_manager = VendorManager()
+        
+        # Run schema validation at startup (validates schema AND all stored GUIDs)
         self._validate_schema_at_startup()
         
-        # Load vendor data
-        self.vendor_manager = VendorManager()
+        # Load all vendors for autocomplete
         self.all_vendors = self._load_all_vendors()
         
         # Autocomplete state
@@ -656,14 +658,21 @@ class BillEntryGUI:
     
     def _validate_schema_at_startup(self):
         """
-        Validate GnuCash schema at startup.
+        Validate GnuCash schema AND all stored data at startup.
         
         This runs before UI is built to:
-        1. Discover database schema
-        2. Find required accounts
-        3. Offer to fix issues (create A/P account, etc.)
+        1. Discover database schema with FULL VERIFICATION
+        2. Find required accounts  
+        3. Validate ALL vendor GUIDs stored in vendor_database.json
+        4. Clear stale GUIDs (from database rollback, etc.)
+        5. Offer to fix issues (create A/P account, etc.)
+        6. Log ALL verification failures to history
+        
+        This is CRITICAL for data integrity - ensures we never use stale GUIDs.
         """
-        logger.info("Running startup schema validation...")
+        logger.info("=" * 60)
+        logger.info("STARTUP VALIDATION - Verifying ALL stored data")
+        logger.info("=" * 60)
         
         try:
             schema = get_schema()
@@ -673,12 +682,61 @@ class BillEntryGUI:
             self.schema_errors = result['errors']
             self.schema_warnings = result['warnings']
             
+            # Get verification details
+            self.verification_result = result.get('verification', {})
+            
             logger.info(f"Schema validation: valid={self.schema_valid}, "
                        f"errors={len(self.schema_errors)}, warnings={len(self.schema_warnings)}")
+            
+            # Log verification summary
+            if self.verification_result:
+                passed = self.verification_result.get('passed_checks', 0)
+                total = self.verification_result.get('total_checks', 0)
+                failed = self.verification_result.get('failed_checks', 0)
+                logger.info(f"Verification: {passed}/{total} checks passed, {failed} failed")
             
             # If we have errors, show them and offer fixes
             if self.schema_errors:
                 self._handle_schema_errors(schema)
+            
+            # ====== VENDOR GUID VALIDATION ======
+            # This is critical - catch stale GUIDs from database rollbacks
+            logger.info("Validating vendor GUIDs against GnuCash...")
+            sync_result = schema.sync_vendors_with_gnucash(self.vendor_manager)
+            
+            # Report stale GUIDs found
+            if sync_result['stale_cleared']:
+                stale_names = [s['display_name'] for s in sync_result['stale_cleared']]
+                warn_msg = (
+                    f"Found {len(stale_names)} vendor(s) with stale GnuCash references:\n\n"
+                )
+                for name in stale_names:
+                    warn_msg += f"• {name}\n"
+                warn_msg += (
+                    "\nThese vendors will need to be re-created in GnuCash.\n"
+                    "(This can happen after a database restore/rollback)"
+                )
+                self.schema_warnings.append(warn_msg)
+                logger.warning(f"Cleared stale GUIDs for: {stale_names}")
+            
+            # Report GnuCash vendors not in our database
+            if sync_result['newly_found']:
+                logger.info(f"Found {len(sync_result['newly_found'])} GnuCash vendors not in local database")
+                for v in sync_result['newly_found'][:5]:  # Log first 5
+                    logger.debug(f"  - {v['name']} (ID: {v['id']})")
+            
+            logger.info(f"Vendor validation complete: {len(sync_result['verified'])} verified, "
+                       f"{len(sync_result['stale_cleared'])} stale cleared")
+            
+            # ====== EXPENSE ACCOUNT VALIDATION ======
+            # Validate default_expense_account GUIDs stored for vendors
+            self._validate_expense_account_guids(schema)
+            
+            # ====== SHOW VERIFICATION FAILURES ======
+            # Get any failures from current or previous runs
+            failures = schema.get_verification_failures(last_n_runs=1)
+            if failures:
+                self._show_verification_failures(failures)
             
             # Show warnings but don't block
             if self.schema_warnings and self.schema_valid:
@@ -688,6 +746,10 @@ class BillEntryGUI:
                 logger.warning(f"Schema warnings: {self.schema_warnings}")
             
             self.gnucash_connected = True
+            
+            logger.info("=" * 60)
+            logger.info("STARTUP VALIDATION COMPLETE")
+            logger.info("=" * 60)
             
         except FileNotFoundError as e:
             self.gnucash_connected = False
@@ -699,6 +761,96 @@ class BillEntryGUI:
             self.gnucash_error = str(e)
             self.schema_valid = False
             logger.exception(f"Schema validation failed: {e}")
+    
+    def _validate_expense_account_guids(self, schema: SchemaDiscovery):
+        """
+        Validate expense account GUIDs stored in vendor data.
+        
+        Each vendor can have a default_expense_account - verify these exist.
+        """
+        logger.info("Validating expense account GUIDs...")
+        
+        vendors = self.vendor_manager.vendors.get('vendors', {})
+        invalid_expense_accounts = []
+        
+        try:
+            conn = schema._get_connection()
+            
+            for vendor_key, vendor_data in vendors.items():
+                expense_guid = vendor_data.get('default_expense_account')
+                if not expense_guid:
+                    continue
+                
+                # Check if account exists
+                cursor = conn.execute(
+                    "SELECT guid, name FROM accounts WHERE guid = ?",
+                    (expense_guid,)
+                )
+                row = cursor.fetchone()
+                
+                if not row:
+                    logger.warning(f"Invalid expense account GUID for {vendor_key}: {expense_guid[:12]}...")
+                    invalid_expense_accounts.append({
+                        'vendor_key': vendor_key,
+                        'display_name': vendor_data.get('display_name', vendor_key),
+                        'old_guid': expense_guid
+                    })
+                    # Clear the invalid GUID
+                    vendor_data['default_expense_account'] = None
+            
+            conn.close()
+            
+            if invalid_expense_accounts:
+                self.vendor_manager.save()
+                names = [a['display_name'] for a in invalid_expense_accounts]
+                logger.warning(f"Cleared invalid expense accounts for: {names}")
+                self.schema_warnings.append(
+                    f"Cleared {len(invalid_expense_accounts)} invalid expense account references"
+                )
+                
+        except Exception as e:
+            logger.error(f"Error validating expense accounts: {e}")
+    
+    def _show_verification_failures(self, failures: list):
+        """
+        Show verification failures to the user and log them prominently.
+        
+        These failures are IMPORTANT - they indicate issues with the database
+        that could cause data loss or corruption.
+        """
+        if not failures:
+            return
+        
+        logger.warning("=" * 60)
+        logger.warning(f"VERIFICATION FAILURES: {len(failures)} issues found")
+        logger.warning("=" * 60)
+        
+        for f in failures:
+            logger.warning(
+                f"  [{f.get('check_name')}] {f.get('table')}: "
+                f"{f.get('description')} - {f.get('details', 'No details')}"
+            )
+        
+        # Build message for user (only show if there are critical failures)
+        critical_failures = [f for f in failures 
+                           if f.get('check_name') in 
+                           ('AP_ACCOUNT', 'USD_CURRENCY', 'BOOK_GUID', 
+                            'POST_WRITE_VERIFY', 'DB_FILE', 'DB_ACCESS')]
+        
+        if critical_failures:
+            msg = "Database Verification Issues:\n\n"
+            for f in critical_failures[:5]:  # Show max 5
+                msg += f"• {f.get('check_name')}: {f.get('description')}\n"
+                if f.get('details'):
+                    msg += f"  Details: {f.get('details')}\n"
+                msg += "\n"
+            
+            if len(critical_failures) > 5:
+                msg += f"... and {len(critical_failures) - 5} more issues.\n"
+            
+            msg += "\nSee the log file for complete details."
+            
+            messagebox.showwarning("Verification Issues", msg)
     
     def _handle_schema_errors(self, schema: SchemaDiscovery):
         """Handle schema errors - offer to fix what we can."""
