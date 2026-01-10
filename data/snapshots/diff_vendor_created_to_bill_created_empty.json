@@ -1,0 +1,69 @@
+{
+  "from": "vendor_created",
+  "to": "bill_created_empty",
+  "from_timestamp": "2026-01-09T16:11:49.222034",
+  "to_timestamp": "2026-01-09T16:17:12.574769",
+  "changes": {
+    "invoices": {
+      "added": [
+        {
+          "guid": "63efd2b7b1694f7e8612cdffecb17586",
+          "id": "B-ID1",
+          "date_opened": "2026-01-09 10:59:00",
+          "date_posted": null,
+          "notes": "this is the bill notes area",
+          "active": 1,
+          "currency": "c30af8dfe58c47099f57ad2eadf02e43",
+          "owner_type": 4,
+          "owner_guid": "4814b58d24cb4c7ab84d27331e7af826",
+          "terms": null,
+          "billing_id": "billing id 1",
+          "post_txn": null,
+          "post_lot": null,
+          "post_acc": null,
+          "billto_type": 2,
+          "billto_guid": "acaa38f6e32f4ecc82c755bcb74d63fa",
+          "charge_amt_num": 0,
+          "charge_amt_denom": 1
+        }
+      ],
+      "removed": [],
+      "modified": []
+    },
+    "slots": {
+      "added": [
+        {
+          "id": 12241,
+          "obj_guid": "63efd2b7b1694f7e8612cdffecb17586",
+          "name": "credit-note",
+          "slot_type": 1,
+          "int64_val": 0,
+          "string_val": null,
+          "double_val": null,
+          "timespec_val": "1970-01-01 00:00:00",
+          "guid_val": null,
+          "numeric_val_num": 0,
+          "numeric_val_denom": 1,
+          "gdate_val": null
+        }
+      ],
+      "removed": [
+        {
+          "id": 11741,
+          "obj_guid": "261a2ce697e24c9993356b412b9cdb47",
+          "name": "online_id",
+          "slot_type": 4,
+          "int64_val": 0,
+          "string_val": "f3fbf48679d28f5f03cc422d560345fe",
+          "double_val": null,
+          "timespec_val": "1970-01-01 00:00:00",
+          "guid_val": null,
+          "numeric_val_num": 0,
+          "numeric_val_denom": 1,
+          "gdate_val": null
+        }
+      ],
+      "modified": []
+    }
+  }
+}

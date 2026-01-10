@@ -1,0 +1,82 @@
+{
+  "from": "bill_created_empty",
+  "to": "bill_with_entry",
+  "from_timestamp": "2026-01-09T16:17:12.574769",
+  "to_timestamp": "2026-01-09T16:20:17.346481",
+  "changes": {
+    "entries": {
+      "added": [
+        {
+          "guid": "5bd4a1da82ad457f8e27fe71bd972835",
+          "date": "2026-01-09 17:00:00",
+          "date_entered": "2026-01-09 21:19:30",
+          "description": "description of first register detail entry",
+          "action": "",
+          "notes": "",
+          "quantity_num": 1,
+          "quantity_denom": 1,
+          "i_acct": null,
+          "i_price_num": 0,
+          "i_price_denom": 1,
+          "i_discount_num": 0,
+          "i_discount_denom": 1,
+          "invoice": null,
+          "i_disc_type": "PERCENT",
+          "i_disc_how": "PRETAX",
+          "i_taxable": 1,
+          "i_taxincluded": 0,
+          "i_taxtable": null,
+          "b_acct": "3fd492d92c494b13af6c0c0ef79dfb3b",
+          "b_price_num": 22827,
+          "b_price_denom": 50,
+          "bill": "63efd2b7b1694f7e8612cdffecb17586",
+          "b_taxable": 0,
+          "b_taxincluded": 0,
+          "b_taxtable": null,
+          "b_paytype": 1,
+          "billable": 0,
+          "billto_type": null,
+          "billto_guid": null,
+          "order_guid": null
+        }
+      ],
+      "removed": [],
+      "modified": []
+    },
+    "slots": {
+      "added": [
+        {
+          "id": 12242,
+          "obj_guid": "63efd2b7b1694f7e8612cdffecb17586",
+          "name": "credit-note",
+          "slot_type": 1,
+          "int64_val": 0,
+          "string_val": null,
+          "double_val": null,
+          "timespec_val": "1970-01-01 00:00:00",
+          "guid_val": null,
+          "numeric_val_num": 0,
+          "numeric_val_denom": 1,
+          "gdate_val": null
+        }
+      ],
+      "removed": [
+        {
+          "id": 12241,
+          "obj_guid": "63efd2b7b1694f7e8612cdffecb17586",
+          "name": "credit-note",
+          "slot_type": 1,
+          "int64_val": 0,
+          "string_val": null,
+          "double_val": null,
+          "timespec_val": "1970-01-01 00:00:00",
+          "guid_val": null,
+          "numeric_val_num": 0,
+          "numeric_val_denom": 1,
+          "gdate_val": null
+        }
+      ],
+      "modified": []
+    }
+  }
+}
