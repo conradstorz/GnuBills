@@ -510,7 +510,7 @@ class ProcessingDialog:
                             name=data['display_name'],
                             addr_name=data['addr_name'],
                             addr_addr1=data['addr_line1'],
-                            addr_addr2=data['addr_line2'],
+                            addr_addr3=data['addr_line2'],  # City/State/ZIP goes to addr3
                             addr_phone=data['phone']
                         )
                         
@@ -807,7 +807,7 @@ class CreateBillsDialog:
                         name=vendor_data.get('display_name'),
                         addr_name=vendor_data.get('addr_name', ''),
                         addr_addr1=vendor_data.get('addr_line1', ''),
-                        addr_addr2=vendor_data.get('addr_line2', ''),
+                        addr_addr3=vendor_data.get('addr_line2', ''),  # City/State/ZIP goes to addr3
                         addr_phone=vendor_data.get('phone', '')
                     )
                     
@@ -860,7 +860,7 @@ class CreateBillsDialog:
                             name=data['display_name'],
                             addr_name=data['addr_name'],
                             addr_addr1=data['addr_line1'],
-                            addr_addr2=data['addr_line2'],
+                            addr_addr3=data['addr_line2'],  # City/State/ZIP goes to addr3
                             addr_phone=data['phone']
                         )
                         
@@ -1463,9 +1463,20 @@ class BillEntryGUI:
             
             form_row = 1
         
+        # === Vendor Suggestions Section (at top for visibility) ===
+        suggest_frame = ttk.LabelFrame(main_frame, text="Matching Vendors (type in Vendor field below)", padding="5")
+        suggest_frame.grid(row=form_row, column=0, columnspan=2, sticky="ew", pady=(0, 10))
+        suggest_frame.columnconfigure(0, weight=1)
+        
+        # Listbox for suggestions - reduced height
+        self.suggest_list = tk.Listbox(suggest_frame, height=3)
+        self.suggest_list.grid(row=0, column=0, sticky="ew")
+        self.suggest_list.bind('<Double-Button-1>', self._on_suggest_select)
+        self.suggest_list.bind('<Return>', self._on_suggest_select)
+        
         # === Entry Form Section ===
         form_frame = ttk.LabelFrame(main_frame, text="New Bill Entry", padding="10")
-        form_frame.grid(row=form_row, column=0, columnspan=2, sticky="ew", pady=(0, 10))
+        form_frame.grid(row=form_row+1, column=0, columnspan=2, sticky="ew", pady=(0, 10))
         form_frame.columnconfigure(1, weight=1)
         
         # Vendor name with autocomplete
@@ -1478,14 +1489,25 @@ class BillEntryGUI:
         self.vendor_entry.bind('<Down>', self._on_down_arrow)
         self.vendor_entry.bind('<Escape>', self._close_autocomplete)
         
-        # Match indicator
-        self.match_label = ttk.Label(form_frame, text="", foreground="gray")
-        self.match_label.grid(row=0, column=2, padx=(10, 0))
+        # Match indicator and details button
+        match_frame = ttk.Frame(form_frame)
+        match_frame.grid(row=0, column=2, padx=(10, 0), sticky="w")
         
-        # Amount
-        ttk.Label(form_frame, text="Amount:").grid(row=1, column=0, sticky="w", pady=5)
+        self.match_label = ttk.Label(match_frame, text="", foreground="gray")
+        self.match_label.pack(side="left")
+        
+        self.details_btn = ttk.Button(match_frame, text="📋", width=3, command=self._show_vendor_details)
+        self.details_btn.pack(side="left", padx=(5, 0))
+        self.details_btn.config(state='disabled')  # Enable when vendor selected
+        
+        # Vendor address preview (shown when vendor is selected)
+        self.vendor_addr_label = ttk.Label(form_frame, text="", foreground="gray", font=('TkDefaultFont', 8))
+        self.vendor_addr_label.grid(row=1, column=1, columnspan=2, sticky="w", padx=(5, 0))
+        
+        # Amount (shifted down one row)
+        ttk.Label(form_frame, text="Amount:").grid(row=2, column=0, sticky="w", pady=5)
         amount_frame = ttk.Frame(form_frame)
-        amount_frame.grid(row=1, column=1, sticky="w", pady=5, padx=(5, 0))
+        amount_frame.grid(row=2, column=1, sticky="w", pady=5, padx=(5, 0))
         
         ttk.Label(amount_frame, text="$").pack(side="left")
         self.amount_entry = ttk.Entry(amount_frame, width=15)
@@ -1493,15 +1515,15 @@ class BillEntryGUI:
         self.amount_entry.bind('<Return>', lambda e: self._save_bill())
         
         # Memo
-        ttk.Label(form_frame, text="Memo:").grid(row=2, column=0, sticky="w", pady=5)
+        ttk.Label(form_frame, text="Memo:").grid(row=3, column=0, sticky="w", pady=5)
         self.memo_entry = ttk.Entry(form_frame, width=40)
-        self.memo_entry.grid(row=2, column=1, sticky="ew", pady=5, padx=(5, 0))
+        self.memo_entry.grid(row=3, column=1, sticky="ew", pady=5, padx=(5, 0))
         self.memo_entry.insert(0, config.DEFAULT_MEMO)
         
         # Date
-        ttk.Label(form_frame, text="Date:").grid(row=3, column=0, sticky="w", pady=5)
+        ttk.Label(form_frame, text="Date:").grid(row=4, column=0, sticky="w", pady=5)
         date_frame = ttk.Frame(form_frame)
-        date_frame.grid(row=3, column=1, sticky="w", pady=5, padx=(5, 0))
+        date_frame.grid(row=4, column=1, sticky="w", pady=5, padx=(5, 0))
         
         self.date_entry = ttk.Entry(date_frame, width=15)
         self.date_entry.pack(side="left")
@@ -1511,17 +1533,17 @@ class BillEntryGUI:
         
         # Buttons
         button_frame = ttk.Frame(form_frame)
-        button_frame.grid(row=4, column=0, columnspan=3, pady=(15, 0))
+        button_frame.grid(row=5, column=0, columnspan=3, pady=(15, 0))
         
         ttk.Button(button_frame, text="Add Bill (Ctrl+S)", command=self._save_bill).pack(side="left", padx=5)
         ttk.Button(button_frame, text="Clear (Ctrl+N)", command=self._clear_form).pack(side="left", padx=5)
         
         # === Current Bills Section ===
         bills_frame = ttk.LabelFrame(main_frame, text="Bills to Process", padding="10")
-        bills_frame.grid(row=form_row+1, column=0, columnspan=2, sticky="nsew", pady=(0, 10))
+        bills_frame.grid(row=form_row+2, column=0, columnspan=2, sticky="nsew", pady=(0, 10))
         bills_frame.columnconfigure(0, weight=1)
         bills_frame.rowconfigure(0, weight=1)
-        main_frame.rowconfigure(form_row+1, weight=1)
+        main_frame.rowconfigure(form_row+2, weight=1)
         
         # Treeview for bills - increased height for better visibility
         columns = ('vendor', 'amount', 'memo', 'date')
@@ -1558,7 +1580,7 @@ class BillEntryGUI:
         
         # === Three-Step Processing Section ===
         process_frame = ttk.LabelFrame(main_frame, text="Bill Processing (Three-Step Workflow)", padding="10")
-        process_frame.grid(row=form_row+2, column=0, columnspan=2, sticky="ew", pady=(10, 0))
+        process_frame.grid(row=form_row+3, column=0, columnspan=2, sticky="ew", pady=(10, 0))
         
         # Checking account selector
         acct_frame = ttk.Frame(process_frame)
@@ -1620,17 +1642,6 @@ class BillEntryGUI:
         
         # Update counts
         self._update_bill_counts()
-        
-        # === Vendor Suggestions Section (collapsible) ===
-        suggest_frame = ttk.LabelFrame(main_frame, text="Matching Vendors (type in Vendor field above)", padding="5")
-        suggest_frame.grid(row=form_row+3, column=0, columnspan=2, sticky="ew")
-        suggest_frame.columnconfigure(0, weight=1)
-        
-        # Listbox for suggestions - reduced height
-        self.suggest_list = tk.Listbox(suggest_frame, height=3)
-        self.suggest_list.grid(row=0, column=0, sticky="ew")
-        self.suggest_list.bind('<Double-Button-1>', self._on_suggest_select)
-        self.suggest_list.bind('<Return>', self._on_suggest_select)
         
         # === Status Bar ===
         self.status_var = tk.StringVar(value="Ready - Use X or Exit button to close")
@@ -1904,6 +1915,7 @@ class BillEntryGUI:
             self.suggest_list.delete(0, tk.END)
             self.match_label.config(text="", foreground="gray")
             self.selected_vendor = None
+            self._update_vendor_address_preview(None)
             return
         
         # Find matches
@@ -1915,21 +1927,25 @@ class BillEntryGUI:
             source_tag = f" [{match['source']}]" if match['source'] != 'local' else ""
             self.suggest_list.insert(tk.END, f"{match['name']} ({match['score']}%){source_tag}")
         
-        # Update match indicator
+        # Update match indicator and address preview
         if matches:
             best = matches[0]
             if best['score'] >= 90:
                 self.match_label.config(text=f"✓ {best['name']}", foreground="green")
                 self.selected_vendor = best
+                self._update_vendor_address_preview(best)
             elif best['score'] >= config.FUZZY_MATCH_THRESHOLD:
                 self.match_label.config(text=f"? {best['name']}", foreground="orange")
                 self.selected_vendor = best
+                self._update_vendor_address_preview(best)
             else:
                 self.match_label.config(text="New vendor", foreground="blue")
                 self.selected_vendor = None
+                self._update_vendor_address_preview(None)
         else:
             self.match_label.config(text="New vendor", foreground="blue")
             self.selected_vendor = None
+            self._update_vendor_address_preview(None)
     
     def _find_vendor_matches(self, search_text: str) -> List[Dict]:
         """Find vendors matching search text with fuzzy matching."""
@@ -1969,6 +1985,88 @@ class BillEntryGUI:
                 unique_matches.append(m)
         
         return unique_matches
+    
+    def _update_vendor_address_preview(self, vendor: Optional[Dict]):
+        """Update the vendor address preview label."""
+        if not vendor:
+            self.vendor_addr_label.config(text="")
+            self.details_btn.config(state='disabled')
+            return
+        
+        self.details_btn.config(state='normal')
+        
+        # Build address preview from vendor data
+        data = vendor.get('data', {})
+        parts = []
+        
+        # Try different field names depending on source
+        addr_name = data.get('addr_name') or data.get('addr_line1') or ''
+        addr1 = data.get('addr_addr1') or data.get('addr_line1') or ''
+        addr2 = data.get('addr_addr2') or data.get('addr_line2') or ''
+        addr3 = data.get('addr_addr3') or ''
+        phone = data.get('addr_phone') or data.get('phone') or ''
+        
+        # Build a compact preview
+        if addr_name and addr_name != vendor['name']:
+            parts.append(addr_name)
+        if addr1:
+            parts.append(addr1)
+        if addr3:  # Usually City, State ZIP
+            parts.append(addr3)
+        if phone:
+            parts.append(f"📞 {phone}")
+        
+        if parts:
+            preview = " | ".join(parts)
+            # Truncate if too long
+            if len(preview) > 80:
+                preview = preview[:77] + "..."
+            self.vendor_addr_label.config(text=preview)
+        else:
+            self.vendor_addr_label.config(text="(No address on file - click 📋 to add)")
+    
+    def _show_vendor_details(self):
+        """Show full vendor details in a popup dialog."""
+        if not self.selected_vendor:
+            return
+        
+        vendor = self.selected_vendor
+        data = vendor.get('data', {})
+        
+        # Build details message
+        details = f"Vendor: {vendor['name']}\n"
+        details += f"Source: {vendor['source']}\n"
+        details += "-" * 40 + "\n"
+        
+        # Address fields
+        fields = [
+            ('Contact Name', data.get('addr_name') or data.get('addr_line1')),
+            ('Address 1', data.get('addr_addr1') or data.get('addr_line1')),
+            ('Address 2', data.get('addr_addr2') or data.get('addr_line2')),
+            ('City/State/ZIP', data.get('addr_addr3')),
+            ('Country', data.get('addr_addr4')),
+            ('Phone', data.get('addr_phone') or data.get('phone')),
+            ('Email', data.get('addr_email') or data.get('email')),
+        ]
+        
+        for label, value in fields:
+            if value:
+                details += f"{label}: {value}\n"
+        
+        # GnuCash info if available
+        details += "-" * 40 + "\n"
+        gnucash_guid = data.get('gnucash_guid') or data.get('guid')
+        gnucash_id = data.get('gnucash_id') or data.get('id')
+        
+        if gnucash_guid:
+            details += f"GnuCash GUID: {gnucash_guid[:16]}...\n"
+        if gnucash_id:
+            details += f"GnuCash ID: {gnucash_id}\n"
+        
+        if not gnucash_guid:
+            details += "(Not yet in GnuCash - will be created on first bill)\n"
+        
+        messagebox.showinfo("Vendor Details", details)
     
     def _on_tab_complete(self, event):
         """Tab completion - fill in best match."""
@@ -2095,6 +2193,8 @@ class BillEntryGUI:
         self.date_entry.delete(0, tk.END)
         self.date_entry.insert(0, date.today().strftime("%Y-%m-%d"))
         self.match_label.config(text="", foreground="gray")
+        self.vendor_addr_label.config(text="")
+        self.details_btn.config(state='disabled')
         self.suggest_list.delete(0, tk.END)
         self.selected_vendor = None
         self.vendor_entry.focus()

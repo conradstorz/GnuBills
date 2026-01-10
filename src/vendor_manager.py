@@ -230,7 +230,7 @@ class VendorManager:
             name=display_name,
             addr_name=address.get('name', display_name),
             addr_addr1=address.get('addr_line1', ''),
-            addr_addr2=address.get('addr_line2', ''),
+            addr_addr3=address.get('addr_line2', ''),  # City/State/ZIP goes to addr3
             addr_phone=address.get('phone', '')
         )
         
