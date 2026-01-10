@@ -973,8 +973,8 @@ class BillEntryGUI:
     def __init__(self, root: tk.Tk):
         self.root = root
         self.root.title("GnuCash Bill Entry")
-        self.root.geometry("800x700")
-        self.root.minsize(600, 500)
+        self.root.geometry("900x800")
+        self.root.minsize(700, 600)
         
         # Database connection status
         self.gnucash_connected = False
@@ -1467,9 +1467,9 @@ class BillEntryGUI:
         bills_frame.rowconfigure(0, weight=1)
         main_frame.rowconfigure(form_row+1, weight=1)
         
-        # Treeview for bills
+        # Treeview for bills - increased height for better visibility
         columns = ('vendor', 'amount', 'memo', 'date')
-        self.bills_tree = ttk.Treeview(bills_frame, columns=columns, show='headings', height=8)
+        self.bills_tree = ttk.Treeview(bills_frame, columns=columns, show='headings', height=10)
         
         self.bills_tree.heading('vendor', text='Vendor')
         self.bills_tree.heading('amount', text='Amount')
@@ -1559,22 +1559,25 @@ class BillEntryGUI:
         self.posted_count_label = ttk.Label(status_process_frame, text="Posted (Unpaid): 0", foreground="purple")
         self.posted_count_label.pack(side="left", padx=10)
         
+        # Exit button
+        ttk.Button(status_process_frame, text="Exit", command=self._on_closing, width=10).pack(side="right", padx=10)
+        
         # Update counts
         self._update_bill_counts()
         
-        # === Vendor Suggestions Section ===
-        suggest_frame = ttk.LabelFrame(main_frame, text="Matching Vendors", padding="10")
+        # === Vendor Suggestions Section (collapsible) ===
+        suggest_frame = ttk.LabelFrame(main_frame, text="Matching Vendors (type in Vendor field above)", padding="5")
         suggest_frame.grid(row=form_row+3, column=0, columnspan=2, sticky="ew")
         suggest_frame.columnconfigure(0, weight=1)
         
-        # Listbox for suggestions
-        self.suggest_list = tk.Listbox(suggest_frame, height=5)
+        # Listbox for suggestions - reduced height
+        self.suggest_list = tk.Listbox(suggest_frame, height=3)
         self.suggest_list.grid(row=0, column=0, sticky="ew")
         self.suggest_list.bind('<Double-Button-1>', self._on_suggest_select)
         self.suggest_list.bind('<Return>', self._on_suggest_select)
         
         # === Status Bar ===
-        self.status_var = tk.StringVar(value="Ready")
+        self.status_var = tk.StringVar(value="Ready - Use X or Exit button to close")
         status_bar = ttk.Label(main_frame, textvariable=self.status_var, relief="sunken", anchor="w")
         status_bar.grid(row=form_row+4, column=0, columnspan=2, sticky="ew", pady=(10, 0))
         
