@@ -984,6 +984,8 @@ class BillEntryGUI:
         self.schema_warnings = []
         
         # STEP 0: Check if database is locked BEFORE anything else
+        # This also creates a backup if successful
+        self.backup_path = None  # Will be set by _check_database_lock
         if not self._check_database_lock():
             # Database is locked - show error and exit
             return
@@ -1004,6 +1006,11 @@ class BillEntryGUI:
         # Build UI
         self._create_widgets()
         self._load_current_bills()
+        
+        # Show backup status
+        if self.backup_path:
+            backup_name = Path(self.backup_path).name
+            self.status_var.set(f"Backup created: {backup_name}")
         
         # Bind keyboard shortcuts
         self.root.bind('<Control-s>', lambda e: self._save_bill())
@@ -1051,7 +1058,22 @@ class BillEntryGUI:
             self.root.destroy()
             return False
         
-        # Database is available - acquire our lock
+        # Database is available - create backup before we modify anything
+        backup_path = self._create_database_backup()
+        if backup_path:
+            logger.info(f"Database backup created: {backup_path}")
+        else:
+            # Backup failed - ask user if they want to continue
+            if not messagebox.askyesno(
+                "Backup Warning",
+                "Failed to create database backup.\n\n"
+                "Do you want to continue anyway?\n"
+                "(Not recommended - changes cannot be easily undone)"
+            ):
+                self.root.destroy()
+                return False
+        
+        # Now acquire our lock
         if not gnucash_db.acquire_lock():
             logger.error("Failed to acquire database lock")
             messagebox.showerror(
@@ -1064,6 +1086,40 @@ class BillEntryGUI:
         
         logger.info("Database lock check: PASSED - lock acquired")
         return True
+    
+    def _create_database_backup(self) -> Optional[str]:
+        """
+        Create a timestamped backup of the GnuCash database.
+        
+        Backup is named: originalname_backup_YYYYMMDD_HHMMSS.gnucash
+        Stored in the same directory as the original database.
+        
+        Returns:
+            Path to backup file if successful, None if failed
+        """
+        import shutil
+        
+        db_path = Path(config.GNUCASH_DB_PATH)
+        if not db_path.exists():
+            logger.error(f"Database file not found: {db_path}")
+            return None
+        
+        # Create backup filename with timestamp
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        backup_name = f"{db_path.stem}_backup_{timestamp}{db_path.suffix}"
+        backup_path = db_path.parent / backup_name
+        
+        try:
+            shutil.copy2(str(db_path), str(backup_path))
+            logger.info(f"Created database backup: {backup_path}")
+            
+            # Store backup path for reference
+            self.backup_path = backup_path
+            
+            return str(backup_path)
+        except Exception as e:
+            logger.error(f"Failed to create database backup: {e}")
+            return None
     
     def _validate_schema_at_startup(self):
         """
