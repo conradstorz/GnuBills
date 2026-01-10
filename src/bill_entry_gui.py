@@ -621,6 +621,352 @@ class ProcessingDialog:
         self.dialog.wait_window()
 
 
+class CreateBillsDialog:
+    """
+    Dialog for creating bills from the input file.
+    
+    This is Step 1 of the three-step workflow:
+    - Creates invoice records with entries (UNPOSTED)
+    - Creates vendors in GnuCash if needed
+    - Creates expense accounts if needed
+    
+    Bills created here must be posted and paid separately.
+    """
+    
+    def __init__(self, parent: tk.Tk, bills: List[Dict], vendor_manager: VendorManager, 
+                 all_vendors: List[Dict], on_complete: Callable):
+        self.parent = parent
+        self.bills = bills
+        self.vendor_manager = vendor_manager
+        self.all_vendors = all_vendors
+        self.on_complete = on_complete
+        
+        self.results = {'success': [], 'failed': [], 'skipped': []}
+        self.processing = False
+        self.current_bill_idx = 0
+        
+        self.dialog = tk.Toplevel(parent)
+        self.dialog.title("Create Bills (Step 1 of 3)")
+        self.dialog.geometry("600x450")
+        self.dialog.transient(parent)
+        self.dialog.protocol("WM_DELETE_WINDOW", self._on_close)
+        
+        self._create_widgets()
+        
+        # Center on parent
+        self.dialog.update_idletasks()
+        x = parent.winfo_x() + (parent.winfo_width() - self.dialog.winfo_width()) // 2
+        y = parent.winfo_y() + (parent.winfo_height() - self.dialog.winfo_height()) // 2
+        self.dialog.geometry(f"+{x}+{y}")
+        
+    def _create_widgets(self):
+        main_frame = ttk.Frame(self.dialog, padding="10")
+        main_frame.pack(fill="both", expand=True)
+        main_frame.columnconfigure(0, weight=1)
+        main_frame.rowconfigure(1, weight=1)
+        
+        # Info label
+        info_label = ttk.Label(
+            main_frame, 
+            text="Step 1: Creating bills from input file.\n"
+                 "Bills will be created as UNPOSTED. Use 'Post Bills' next.",
+            foreground="blue"
+        )
+        info_label.grid(row=0, column=0, sticky="w", pady=(0, 10))
+        
+        # Progress bar
+        progress_frame = ttk.Frame(main_frame)
+        progress_frame.grid(row=1, column=0, sticky="ew", pady=(0, 10))
+        progress_frame.columnconfigure(0, weight=1)
+        
+        self.progress_label = ttk.Label(progress_frame, text="Ready to create bills...")
+        self.progress_label.grid(row=0, column=0, sticky="w")
+        
+        self.progress_bar = ttk.Progressbar(progress_frame, mode='determinate', length=400)
+        self.progress_bar.grid(row=1, column=0, sticky="ew", pady=(5, 0))
+        self.progress_bar['maximum'] = len(self.bills)
+        
+        # Log area
+        log_frame = ttk.LabelFrame(main_frame, text="Creation Log", padding="5")
+        log_frame.grid(row=2, column=0, sticky="nsew", pady=(0, 10))
+        log_frame.columnconfigure(0, weight=1)
+        log_frame.rowconfigure(0, weight=1)
+        main_frame.rowconfigure(2, weight=1)
+        
+        self.log_text = scrolledtext.ScrolledText(log_frame, height=15, width=70, state='disabled')
+        self.log_text.grid(row=0, column=0, sticky="nsew")
+        
+        # Configure tags for colored text
+        self.log_text.tag_configure('success', foreground='green')
+        self.log_text.tag_configure('error', foreground='red')
+        self.log_text.tag_configure('warning', foreground='orange')
+        self.log_text.tag_configure('info', foreground='blue')
+        
+        # Buttons
+        btn_frame = ttk.Frame(main_frame)
+        btn_frame.grid(row=3, column=0, sticky="ew")
+        
+        self.start_btn = ttk.Button(btn_frame, text="Start Creating Bills", command=self._start_processing)
+        self.start_btn.pack(side="left", padx=5)
+        
+        self.close_btn = ttk.Button(btn_frame, text="Close", command=self._on_close, state='disabled')
+        self.close_btn.pack(side="right", padx=5)
+        
+    def _log(self, message: str, tag: str = None):
+        """Add message to log area."""
+        self.log_text.config(state='normal')
+        if tag:
+            self.log_text.insert(tk.END, message + "\n", tag)
+        else:
+            self.log_text.insert(tk.END, message + "\n")
+        self.log_text.see(tk.END)
+        self.log_text.config(state='disabled')
+        self.dialog.update()
+    
+    def _start_processing(self):
+        """Start creating bills."""
+        self.processing = True
+        self.start_btn.config(state='disabled')
+        self._log("Starting bill creation...", 'info')
+        self._log(f"Creating {len(self.bills)} bill(s)\n")
+        
+        # Process bills one at a time with delay for visibility
+        self.dialog.after(100, self._process_next_bill)
+    
+    def _process_next_bill(self):
+        """Process the next bill in the queue."""
+        if self.current_bill_idx >= len(self.bills):
+            self._processing_complete()
+            return
+        
+        bill = self.bills[self.current_bill_idx]
+        self.progress_bar['value'] = self.current_bill_idx + 1
+        self.progress_label.config(
+            text=f"Creating {self.current_bill_idx + 1} of {len(self.bills)}: {bill['vendor_name']}"
+        )
+        
+        self._log(f"{'─'*50}")
+        self._log(f"Bill {self.current_bill_idx + 1}: {bill['vendor_name']}")
+        self._log(f"  Amount: ${bill['amount']:.2f}")
+        self._log(f"  Memo: {bill['memo']}")
+        
+        # Try to process this bill
+        try:
+            success = self._create_single_bill(bill)
+            if success:
+                self.results['success'].append(bill)
+                self._log(f"  ✓ Bill created (UNPOSTED)", 'success')
+            elif success is None:
+                self.results['skipped'].append(bill)
+                self._log(f"  ⊘ Bill skipped", 'warning')
+            else:
+                self.results['failed'].append(bill)
+                self._log(f"  ✗ Bill failed", 'error')
+        except Exception as e:
+            logger.exception(f"Error creating bill: {e}")
+            self.results['failed'].append(bill)
+            self._log(f"  ✗ Error: {e}", 'error')
+        
+        self.current_bill_idx += 1
+        
+        # Schedule next bill with delay for readability
+        self.dialog.after(500, self._process_next_bill)
+    
+    def _create_single_bill(self, bill: Dict) -> Optional[bool]:
+        """
+        Create a single bill. Returns True if success, False if failed, None if skipped.
+        Uses the new create_bill() function that creates UNPOSTED bills.
+        """
+        vendor_name = bill['vendor_name']
+        amount = bill['amount']
+        memo = bill['memo']
+        bill_date = bill['date']
+        
+        # Find vendor
+        vendor_data, match_type = self.vendor_manager.find_vendor(vendor_name)
+        
+        if vendor_data:
+            self._log(f"  Found vendor: {vendor_data.get('display_name')} ({match_type} match)")
+            
+            # Check if vendor exists in GnuCash - VERIFY the GUID
+            stored_guid = vendor_data.get('gnucash_guid')
+            vendor_exists_in_gnucash = False
+            
+            if stored_guid:
+                gc_vendor = gnucash_db.find_vendor_by_guid(stored_guid)
+                if gc_vendor:
+                    vendor_exists_in_gnucash = True
+                    self._log(f"  Vendor verified in GnuCash: {gc_vendor['name']}")
+                else:
+                    self._log(f"  Stored GUID is stale - vendor not in GnuCash", 'warning')
+            
+            if not vendor_exists_in_gnucash:
+                self._log(f"  Creating vendor in GnuCash...", 'warning')
+                try:
+                    vendor_guid = gnucash_db.create_vendor(
+                        name=vendor_data.get('display_name'),
+                        addr_name=vendor_data.get('addr_name', ''),
+                        addr_addr1=vendor_data.get('addr_line1', ''),
+                        addr_addr2=vendor_data.get('addr_line2', ''),
+                        addr_phone=vendor_data.get('phone', '')
+                    )
+                    
+                    # Update JSON with new GnuCash info
+                    vendor_record = gnucash_db.find_vendor_by_name(vendor_data.get('display_name'))
+                    vendor_key = strip_vendor_name(vendor_data.get('display_name'))
+                    
+                    if vendor_key in self.vendor_manager.vendors['vendors']:
+                        self.vendor_manager.vendors['vendors'][vendor_key]['gnucash_guid'] = vendor_guid
+                        self.vendor_manager.vendors['vendors'][vendor_key]['gnucash_id'] = vendor_record['id'] if vendor_record else None
+                        self.vendor_manager.save()
+                    
+                    vendor_data['gnucash_guid'] = vendor_guid
+                    self._log(f"  ✓ Vendor created in GnuCash", 'success')
+                except Exception as e:
+                    self._log(f"  ✗ Failed to create vendor in GnuCash: {e}", 'error')
+                    return False
+        else:
+            self._log(f"  Vendor not found - opening dialog...", 'warning')
+            
+            # Show new vendor dialog
+            prefill_data = None
+            while True:
+                dialog = NewVendorDialog(self.dialog, vendor_name, self.all_vendors, prefill_data)
+                result, data = dialog.show()
+                
+                if result == 'skip':
+                    return None
+                elif result == 'match':
+                    vendor_data = data
+                    self._log(f"  Matched to: {vendor_data.get('name', vendor_data.get('display_name'))}")
+                    break
+                elif result == 'create':
+                    # Save to JSON
+                    vendor_key = strip_vendor_name(data['display_name'])
+                    self.vendor_manager.vendors['vendors'][vendor_key] = {
+                        'display_name': data['display_name'],
+                        'gnucash_guid': None,
+                        'gnucash_id': None,
+                        'addr_name': data['addr_name'],
+                        'addr_line1': data['addr_line1'],
+                        'addr_line2': data['addr_line2'],
+                        'phone': data['phone'],
+                    }
+                    self.vendor_manager.save()
+                    
+                    # Create in GnuCash
+                    try:
+                        vendor_guid = gnucash_db.create_vendor(
+                            name=data['display_name'],
+                            addr_name=data['addr_name'],
+                            addr_addr1=data['addr_line1'],
+                            addr_addr2=data['addr_line2'],
+                            addr_phone=data['phone']
+                        )
+                        
+                        vendor_record = gnucash_db.find_vendor_by_name(data['display_name'])
+                        
+                        self.vendor_manager.vendors['vendors'][vendor_key]['gnucash_guid'] = vendor_guid
+                        self.vendor_manager.vendors['vendors'][vendor_key]['gnucash_id'] = vendor_record['id'] if vendor_record else None
+                        self.vendor_manager.save()
+                        
+                        vendor_data = {
+                            'gnucash_guid': vendor_guid,
+                            'gnucash_id': vendor_record['id'] if vendor_record else None,
+                            'display_name': data['display_name'],
+                        }
+                        
+                        self._log(f"  ✓ Vendor created in GnuCash", 'success')
+                        break
+                    except Exception as e:
+                        self._log(f"  ✗ Failed to create in GnuCash: {e}", 'error')
+                        retry = messagebox.askyesno(
+                            "GnuCash Creation Failed",
+                            f"Failed to create vendor in GnuCash: {e}\n\n"
+                            "Would you like to retry?\n(No = Skip this bill)"
+                        )
+                        if retry:
+                            prefill_data = data
+                            continue
+                        else:
+                            return None
+                else:
+                    return None
+        
+        # Get expense account
+        try:
+            expense_acct_name = make_expense_account_name(
+                vendor_data.get('display_name') or vendor_data.get('name', vendor_name)
+            )
+            existing_accts = gnucash_db.find_expense_accounts_like(expense_acct_name)
+            
+            if existing_accts:
+                expense_acct_guid = existing_accts[0]['guid']
+                self._log(f"  Using expense account: {existing_accts[0]['name']}")
+            else:
+                self._log(f"  Creating expense account: {expense_acct_name}")
+                expense_acct_guid = gnucash_db.create_expense_account(expense_acct_name)
+        except Exception as e:
+            self._log(f"  ✗ Expense account error: {e}", 'error')
+            return False
+        
+        # Create the UNPOSTED bill using new function
+        try:
+            vendor_guid = vendor_data.get('gnucash_guid') or vendor_data.get('guid')
+            if not vendor_guid:
+                gc_vendor = gnucash_db.find_vendor_by_name(
+                    vendor_data.get('display_name') or vendor_data.get('name')
+                )
+                if gc_vendor:
+                    vendor_guid = gc_vendor['guid']
+                else:
+                    self._log(f"  ✗ Could not find vendor GUID", 'error')
+                    return False
+            
+            # Use the new create_bill() function (creates UNPOSTED bill)
+            bill_guid = gnucash_db.create_bill(
+                vendor_guid=vendor_guid,
+                expense_account_guid=expense_acct_guid,
+                amount=amount,
+                memo=memo,
+                bill_date=bill_date
+            )
+            
+            return True
+            
+        except Exception as e:
+            logger.exception(f"Error creating bill: {e}")
+            self._log(f"  ✗ Failed to create bill: {e}", 'error')
+            return False
+    
+    def _processing_complete(self):
+        """Called when all bills have been processed."""
+        self.processing = False
+        self.close_btn.config(state='normal')
+        
+        self._log(f"\n{'='*50}")
+        self._log("BILL CREATION COMPLETE", 'info')
+        self._log(f"  Created: {len(self.results['success'])}", 'success')
+        self._log(f"  Failed: {len(self.results['failed'])}", 'error' if self.results['failed'] else None)
+        self._log(f"  Skipped: {len(self.results['skipped'])}", 'warning' if self.results['skipped'] else None)
+        self._log(f"\nBills are UNPOSTED. Click 'Post Bills' to post them.", 'info')
+        
+        self.progress_label.config(text="Bill creation complete!")
+        
+    def _on_close(self):
+        """Handle dialog close."""
+        if self.processing:
+            if not messagebox.askyesno("Processing", "Processing is still running. Cancel?"):
+                return
+        
+        self.dialog.destroy()
+        self.on_complete(self.results)
+    
+    def show(self):
+        """Show the dialog."""
+        self.dialog.wait_window()
+
+
 class BillEntryGUI:
     """Main GUI application for bill entry."""
     
@@ -1149,15 +1495,76 @@ class BillEntryGUI:
         ttk.Button(bills_btn_frame, text="Remove Selected", command=self._remove_selected).pack(side="left", padx=5)
         ttk.Button(bills_btn_frame, text="Edit Selected", command=self._edit_selected).pack(side="left", padx=5)
         ttk.Button(bills_btn_frame, text="Refresh", command=self._load_current_bills).pack(side="left", padx=5)
-        ttk.Button(bills_btn_frame, text="Pre-process Bills", command=self._preprocess_bills).pack(side="left", padx=5)
         
         # Total display
         self.total_label = ttk.Label(bills_btn_frame, text="Total: $0.00", font=('TkDefaultFont', 10, 'bold'))
         self.total_label.pack(side="right", padx=20)
         
+        # === Three-Step Processing Section ===
+        process_frame = ttk.LabelFrame(main_frame, text="Bill Processing (Three-Step Workflow)", padding="10")
+        process_frame.grid(row=form_row+2, column=0, columnspan=2, sticky="ew", pady=(10, 0))
+        
+        # Checking account selector
+        acct_frame = ttk.Frame(process_frame)
+        acct_frame.pack(fill="x", pady=(0, 10))
+        
+        ttk.Label(acct_frame, text="Payment Account:").pack(side="left")
+        self.checking_combo = ttk.Combobox(acct_frame, state="readonly", width=35)
+        self.checking_combo.pack(side="left", padx=(5, 10))
+        self._load_checking_accounts()
+        
+        ttk.Button(acct_frame, text="↻", width=3, command=self._load_checking_accounts).pack(side="left")
+        
+        # Three processing buttons
+        btn_process_frame = ttk.Frame(process_frame)
+        btn_process_frame.pack(fill="x", pady=5)
+        
+        # Button 1: Create Bills (from file → unposted bills)
+        self.create_bills_btn = ttk.Button(
+            btn_process_frame, 
+            text="1. Create Bills", 
+            command=self._create_bills,
+            width=20
+        )
+        self.create_bills_btn.pack(side="left", padx=5)
+        
+        # Button 2: Post Bills (unposted → posted)
+        self.post_bills_btn = ttk.Button(
+            btn_process_frame, 
+            text="2. Post Bills", 
+            command=self._post_bills,
+            width=20
+        )
+        self.post_bills_btn.pack(side="left", padx=5)
+        
+        # Button 3: Pay Bills (posted → paid)
+        self.pay_bills_btn = ttk.Button(
+            btn_process_frame, 
+            text="3. Pay Bills", 
+            command=self._pay_bills,
+            width=20
+        )
+        self.pay_bills_btn.pack(side="left", padx=5)
+        
+        # Status labels showing counts in each state
+        status_process_frame = ttk.Frame(process_frame)
+        status_process_frame.pack(fill="x", pady=(5, 0))
+        
+        self.file_count_label = ttk.Label(status_process_frame, text="In File: 0", foreground="blue")
+        self.file_count_label.pack(side="left", padx=10)
+        
+        self.unposted_count_label = ttk.Label(status_process_frame, text="Unposted: 0", foreground="orange")
+        self.unposted_count_label.pack(side="left", padx=10)
+        
+        self.posted_count_label = ttk.Label(status_process_frame, text="Posted (Unpaid): 0", foreground="purple")
+        self.posted_count_label.pack(side="left", padx=10)
+        
+        # Update counts
+        self._update_bill_counts()
+        
         # === Vendor Suggestions Section ===
         suggest_frame = ttk.LabelFrame(main_frame, text="Matching Vendors", padding="10")
-        suggest_frame.grid(row=form_row+2, column=0, columnspan=2, sticky="ew")
+        suggest_frame.grid(row=form_row+3, column=0, columnspan=2, sticky="ew")
         suggest_frame.columnconfigure(0, weight=1)
         
         # Listbox for suggestions
@@ -1169,10 +1576,262 @@ class BillEntryGUI:
         # === Status Bar ===
         self.status_var = tk.StringVar(value="Ready")
         status_bar = ttk.Label(main_frame, textvariable=self.status_var, relief="sunken", anchor="w")
-        status_bar.grid(row=form_row+3, column=0, columnspan=2, sticky="ew", pady=(10, 0))
+        status_bar.grid(row=form_row+4, column=0, columnspan=2, sticky="ew", pady=(10, 0))
         
         # Focus on vendor entry
         self.vendor_entry.focus()
+    
+    def _load_checking_accounts(self):
+        """Load checking/bank accounts into the combo box."""
+        try:
+            accounts = gnucash_db.get_checking_accounts()
+            self.checking_accounts = accounts
+            
+            # Format for display
+            account_names = [f"{a['name']}" for a in accounts]
+            self.checking_combo['values'] = account_names
+            
+            # Select first account by default
+            if account_names:
+                self.checking_combo.current(0)
+        except Exception as e:
+            logger.error(f"Failed to load checking accounts: {e}")
+            self.checking_accounts = []
+            self.checking_combo['values'] = ['(No checking accounts found)']
+    
+    def _get_selected_checking_guid(self) -> Optional[str]:
+        """Get the GUID of the selected checking account."""
+        idx = self.checking_combo.current()
+        if idx >= 0 and idx < len(self.checking_accounts):
+            return self.checking_accounts[idx]['guid']
+        return None
+    
+    def _update_bill_counts(self):
+        """Update the bill count labels for each state."""
+        # Count bills in file
+        file_count = 0
+        bills_path = Path(config.BILLS_INPUT_PATH)
+        if bills_path.exists():
+            with open(bills_path, 'r', encoding='utf-8') as f:
+                for line in f:
+                    if parse_input_line(line):
+                        file_count += 1
+        
+        self.file_count_label.config(text=f"In File: {file_count}")
+        
+        # Count bills in GnuCash by state
+        try:
+            unposted = gnucash_db.get_bills_by_status('unposted')
+            posted_unpaid = gnucash_db.get_bills_by_status('posted_unpaid')
+            
+            self.unposted_count_label.config(text=f"Unposted: {len(unposted)}")
+            self.posted_count_label.config(text=f"Posted (Unpaid): {len(posted_unpaid)}")
+        except Exception as e:
+            logger.error(f"Failed to get bill counts: {e}")
+            self.unposted_count_label.config(text="Unposted: ?")
+            self.posted_count_label.config(text="Posted (Unpaid): ?")
+    
+    def _create_bills(self):
+        """Step 1: Create bills from file (unposted)."""
+        logger.info("Create Bills requested")
+        
+        # Check database lock
+        is_locked, hostname, pid = gnucash_db.is_locked_by_others()
+        if is_locked:
+            messagebox.showerror(
+                "Database is Locked",
+                f"Database locked by {hostname} (PID {pid}).\n\n"
+                "Please close GnuCash or other instances first."
+            )
+            return
+        
+        # Load bills from file
+        bills_path = Path(config.BILLS_INPUT_PATH)
+        bills = []
+        
+        if bills_path.exists():
+            with open(bills_path, 'r', encoding='utf-8') as f:
+                for line in f:
+                    parsed = parse_input_line(line)
+                    if parsed:
+                        bills.append(parsed)
+        
+        if not bills:
+            messagebox.showinfo("No Bills", "No bills in the input file to create.")
+            return
+        
+        # Show processing dialog for creation
+        dialog = CreateBillsDialog(
+            self.root,
+            bills,
+            self.vendor_manager,
+            self.all_vendors,
+            self._on_create_complete
+        )
+        dialog.show()
+    
+    def _on_create_complete(self, results: Dict):
+        """Handle completion of bill creation."""
+        success_count = len(results['success'])
+        
+        # Remove successfully created bills from file
+        if results['success']:
+            self._remove_processed_bills(results['success'])
+        
+        # Refresh displays
+        self._load_current_bills()
+        self._update_bill_counts()
+        self.all_vendors = self._load_all_vendors()
+        
+        summary = f"Bill Creation Complete!\n\n"
+        summary += f"✓ Created: {success_count}\n"
+        summary += f"✗ Failed: {len(results['failed'])}\n"
+        summary += f"⊘ Skipped: {len(results['skipped'])}\n"
+        
+        if success_count > 0:
+            summary += f"\nBills created as UNPOSTED.\nClick 'Post Bills' to post them."
+        
+        messagebox.showinfo("Create Bills Complete", summary)
+    
+    def _post_bills(self):
+        """Step 2: Post unposted bills."""
+        logger.info("Post Bills requested")
+        
+        # Check database lock
+        is_locked, hostname, pid = gnucash_db.is_locked_by_others()
+        if is_locked:
+            messagebox.showerror(
+                "Database is Locked",
+                f"Database locked by {hostname} (PID {pid}).\n\n"
+                "Please close GnuCash or other instances first."
+            )
+            return
+        
+        # Get unposted bills
+        try:
+            unposted_bills = gnucash_db.get_bills_by_status('unposted')
+        except Exception as e:
+            messagebox.showerror("Error", f"Failed to get unposted bills: {e}")
+            return
+        
+        if not unposted_bills:
+            messagebox.showinfo("No Bills", "No unposted bills to post.")
+            return
+        
+        # Confirm
+        if not messagebox.askyesno(
+            "Post Bills",
+            f"Post {len(unposted_bills)} unposted bill(s)?\n\n"
+            "This will create accounting transactions for each bill."
+        ):
+            return
+        
+        # Process each bill
+        success_count = 0
+        failed = []
+        
+        for bill in unposted_bills:
+            try:
+                gnucash_db.post_bill(bill['guid'])
+                success_count += 1
+                logger.info(f"Posted bill: {bill['id']}")
+            except Exception as e:
+                logger.error(f"Failed to post bill {bill['id']}: {e}")
+                failed.append((bill, str(e)))
+        
+        self._update_bill_counts()
+        
+        summary = f"Bill Posting Complete!\n\n"
+        summary += f"✓ Posted: {success_count}\n"
+        summary += f"✗ Failed: {len(failed)}\n"
+        
+        if failed:
+            summary += "\nFailed bills:\n"
+            for bill, error in failed[:5]:
+                summary += f"• {bill['id']}: {error}\n"
+            if len(failed) > 5:
+                summary += f"... and {len(failed) - 5} more\n"
+        
+        if success_count > 0:
+            summary += f"\nBills are now POSTED.\nClick 'Pay Bills' to pay them."
+        
+        messagebox.showinfo("Post Bills Complete", summary)
+    
+    def _pay_bills(self):
+        """Step 3: Pay posted bills."""
+        logger.info("Pay Bills requested")
+        
+        # Check database lock
+        is_locked, hostname, pid = gnucash_db.is_locked_by_others()
+        if is_locked:
+            messagebox.showerror(
+                "Database is Locked",
+                f"Database locked by {hostname} (PID {pid}).\n\n"
+                "Please close GnuCash or other instances first."
+            )
+            return
+        
+        # Get checking account
+        checking_guid = self._get_selected_checking_guid()
+        if not checking_guid:
+            messagebox.showerror("Error", "Please select a checking account for payments.")
+            return
+        
+        # Get posted unpaid bills
+        try:
+            unpaid_bills = gnucash_db.get_bills_by_status('posted_unpaid')
+        except Exception as e:
+            messagebox.showerror("Error", f"Failed to get unpaid bills: {e}")
+            return
+        
+        if not unpaid_bills:
+            messagebox.showinfo("No Bills", "No posted unpaid bills to pay.")
+            return
+        
+        # Calculate total
+        total = sum(gnucash_db.get_bill_total(b['guid']) for b in unpaid_bills)
+        
+        # Confirm
+        checking_name = self.checking_combo.get()
+        if not messagebox.askyesno(
+            "Pay Bills",
+            f"Pay {len(unpaid_bills)} bill(s) totaling ${total:,.2f}?\n\n"
+            f"Payment from: {checking_name}\n\n"
+            "This will create payment transactions for each bill."
+        ):
+            return
+        
+        # Process each bill
+        success_count = 0
+        failed = []
+        
+        for bill in unpaid_bills:
+            try:
+                gnucash_db.pay_bill(bill['guid'], checking_guid)
+                success_count += 1
+                logger.info(f"Paid bill: {bill['id']}")
+            except Exception as e:
+                logger.error(f"Failed to pay bill {bill['id']}: {e}")
+                failed.append((bill, str(e)))
+        
+        self._update_bill_counts()
+        
+        summary = f"Bill Payment Complete!\n\n"
+        summary += f"✓ Paid: {success_count}\n"
+        summary += f"✗ Failed: {len(failed)}\n"
+        
+        if failed:
+            summary += "\nFailed bills:\n"
+            for bill, error in failed[:5]:
+                summary += f"• {bill['id']}: {error}\n"
+            if len(failed) > 5:
+                summary += f"... and {len(failed) - 5} more\n"
+        
+        if success_count > 0:
+            summary += f"\nTotal paid: ${total:,.2f}\n"
+            summary += f"Account: {checking_name}"
+        
+        messagebox.showinfo("Pay Bills Complete", summary)
     
     def _on_vendor_key(self, event):
         """Handle keypress in vendor entry - update fuzzy matches."""

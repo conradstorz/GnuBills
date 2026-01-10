@@ -31,7 +31,7 @@ This document describes the complete database workflow for creating and paying v
 GnuCash 4.14 SQLite3 databases contain 25 tables. The tables relevant to bill processing are:
 
 | Table | Purpose |
-|-------|---------|
+| ------- | --------- |
 | `vendors` | Vendor records (name, address, currency, etc.) |
 | `accounts` | Chart of accounts (AP, expenses, checking, etc.) |
 | `invoices` | Bill/invoice headers (links vendor to lot/transaction) |
@@ -45,6 +45,7 @@ GnuCash 4.14 SQLite3 databases contain 25 tables. The tables relevant to bill pr
 ### GUID Format
 
 All primary keys are 32-character hexadecimal GUIDs (no hyphens). Generate using:
+
 ```python
 import uuid
 guid = uuid.uuid4().hex  # e.g., "086ec14f1ec744a2a3614b699b3e8c1b"
@@ -53,7 +54,9 @@ guid = uuid.uuid4().hex  # e.g., "086ec14f1ec744a2a3614b699b3e8c1b"
 ### Amount Format
 
 All monetary amounts are stored as ratios: `value_num / value_denom`. For USD with 2 decimal places:
+
 - `$456.54` → `value_num=45654`, `value_denom=100`
+
 - Positive values = debits, Negative values = credits
 
 ---
@@ -101,7 +104,7 @@ All monetary amounts are stored as ratios: `value_num / value_denom`. For USD wi
 **Table**: `vendors`
 
 | Column | Type | Description |
-|--------|------|-------------|
+| -------- | ------ | ------------- |
 | guid | TEXT PK | Unique identifier |
 | name | TEXT | Vendor display name |
 | id | TEXT | Vendor ID (e.g., "V-001") |
@@ -122,6 +125,7 @@ All monetary amounts are stored as ratios: `value_num / value_denom`. For USD wi
 | tax_table | TEXT | GUID of tax table (NULL if none) |
 
 **Example**:
+
 ```sql
 INSERT INTO vendors (guid, name, id, notes, currency, active, tax_override,
                      addr_name, addr_addr1, addr_addr2, addr_addr3, addr_addr4,

@@ -1370,6 +1370,663 @@ def get_next_bill_id() -> str:
         return config.BILL_ID_FORMAT.format(prefix=config.BILL_ID_PREFIX, num=1)
 
 
+def get_checking_accounts() -> List[Dict]:
+    """
+    Get all checking/bank accounts suitable for bill payments.
+    
+    Returns list of dicts with: guid, name, description
+    """
+    with get_connection() as conn:
+        cursor = conn.execute("""
+            SELECT guid, name, description FROM accounts 
+            WHERE account_type = 'BANK' AND placeholder = 0
+            ORDER BY name
+        """)
+        return [dict(row) for row in cursor]
+
+
+def get_invoice_by_guid(invoice_guid: str) -> Optional[Dict]:
+    """Get an invoice/bill record by GUID."""
+    with get_connection() as conn:
+        cursor = conn.execute("""
+            SELECT i.*, v.name as vendor_name
+            FROM invoices i
+            LEFT JOIN vendors v ON i.owner_guid = v.guid
+            WHERE i.guid = ?
+        """, (invoice_guid,))
+        row = cursor.fetchone()
+        return dict(row) if row else None
+
+
+def get_bills_by_status(status: str = 'unposted') -> List[Dict]:
+    """
+    Get bills filtered by status.
+    
+    Args:
+        status: 'unposted', 'posted_unpaid', 'paid', or 'all'
+        
+    Returns list of bill dicts with vendor info.
+    """
+    with get_connection() as conn:
+        base_query = """
+            SELECT 
+                i.guid, i.id, i.date_opened, i.date_posted, i.notes,
+                i.owner_guid as vendor_guid, v.name as vendor_name,
+                i.post_lot, i.post_txn, i.post_acc,
+                l.is_closed as lot_closed
+            FROM invoices i
+            JOIN vendors v ON i.owner_guid = v.guid
+            LEFT JOIN lots l ON i.post_lot = l.guid
+            WHERE i.owner_type = 4
+        """
+        
+        if status == 'unposted':
+            # Bills that haven't been posted yet (no post_lot)
+            query = base_query + " AND (i.post_lot IS NULL OR i.post_lot = '')"
+        elif status == 'posted_unpaid':
+            # Posted but lot is still open (not paid)
+            query = base_query + " AND i.post_lot IS NOT NULL AND i.post_lot != '' AND (l.is_closed = 0 OR l.is_closed IS NULL)"
+        elif status == 'paid':
+            # Lot is closed (paid)
+            query = base_query + " AND l.is_closed = -1"
+        else:
+            query = base_query
+            
+        query += " ORDER BY i.date_opened"
+        
+        cursor = conn.execute(query)
+        return [dict(row) for row in cursor]
+
+
+def get_bill_total(invoice_guid: str) -> float:
+    """
+    Calculate the total amount of a bill from its entries.
+    
+    Returns the sum of all entry amounts for this bill.
+    """
+    with get_connection() as conn:
+        cursor = conn.execute("""
+            SELECT SUM(CAST(b_price_num AS REAL) / CAST(b_price_denom AS REAL)) as total
+            FROM entries
+            WHERE bill = ?
+        """, (invoice_guid,))
+        row = cursor.fetchone()
+        return row['total'] if row and row['total'] else 0.0
+
+
+# =============================================================================
+# THREE-STEP BILL WORKFLOW
+# =============================================================================
+# These functions implement the GnuCash bill workflow as three separate steps:
+# 1. create_bill() - Creates invoice record and entry (unposted)
+# 2. post_bill() - Creates lot, transaction, splits (posts the bill)
+# 3. pay_bill() - Creates payment transaction linking to bill's lot
+#
+# Each function can be called independently. All use rollback on error.
+# See docs/GNUCASH_SQLITE_BILL_WORKFLOW.md for complete documentation.
+# =============================================================================
+
+def create_bill(
+    vendor_guid: str,
+    expense_account_guid: str,
+    amount: float,
+    memo: str = "",
+    bill_date: date = None,
+    verify: bool = True
+) -> str:
+    """
+    Step 1: Create an unposted bill (invoice) with one entry line.
+    
+    This creates:
+    - An invoice record (unposted)
+    - An entry record linked to the invoice via the 'bill' column
+    
+    The bill must be posted separately using post_bill() before it can be paid.
+    
+    Args:
+        vendor_guid: GUID of the vendor
+        expense_account_guid: GUID of expense account for the entry
+        amount: Bill amount (positive number)
+        memo: Bill description/memo
+        bill_date: Date of bill (defaults to today)
+        verify: If True, verify the bill was created (default True)
+    
+    Returns:
+        The new bill GUID
+        
+    Raises:
+        WriteVerificationError: If verification fails
+        sqlite3.Error: If database operation fails (transaction rolled back)
+    """
+    if bill_date is None:
+        bill_date = date.today()
+    
+    bill_guid = generate_guid()
+    bill_id = get_next_bill_id()
+    entry_guid = generate_guid()
+    
+    usd_guid = get_usd_guid()
+    
+    # Convert amount to GnuCash format (integer numerator/denominator)
+    amount_num = int(amount * 100)
+    amount_denom = 100
+    
+    # Date formatting - GnuCash uses ISO format with time
+    date_opened = format_gnucash_date(bill_date)
+    date_entered = format_gnucash_timestamp()
+    
+    try:
+        with get_connection(readonly=False) as conn:
+            # Create the invoice/bill record (UNPOSTED - no post_lot, post_txn, post_acc)
+            conn.execute("""
+                INSERT INTO invoices (
+                    guid, id, date_opened, date_posted, notes, active,
+                    currency, owner_type, owner_guid, 
+                    post_lot, post_txn, post_acc,
+                    billto_type, billto_guid
+                ) VALUES (?, ?, ?, '', ?, 1, ?, 4, ?, '', '', '', 0, '')
+            """, (
+                bill_guid, bill_id, date_opened, memo,
+                usd_guid, vendor_guid
+            ))
+            
+            # Create the entry - CRITICAL: use 'bill' column, NOT 'invoice' column!
+            # See docs/GNUCASH_SQLITE_BILL_WORKFLOW.md for column documentation
+            entry_sql = """
+                INSERT INTO entries (
+                    guid, date, date_entered, description, action, notes,
+                    quantity_num, quantity_denom,
+                    i_acct, i_price_num, i_price_denom, 
+                    i_discount_num, i_discount_denom,
+                    invoice, i_disc_type, i_disc_how,
+                    i_taxable, i_taxincluded, i_taxtable,
+                    b_acct, b_price_num, b_price_denom, bill,
+                    b_taxable, b_taxincluded, b_taxtable, b_paytype,
+                    billable, billto_type, billto_guid, order_guid
+                ) VALUES (
+                    ?, ?, ?, ?, '', '',
+                    ?, ?,
+                    NULL, 0, 1, 0, 1,
+                    NULL, NULL, NULL,
+                    0, 0, NULL,
+                    ?, ?, ?, ?,
+                    0, 0, NULL, 0,
+                    0, 0, NULL, NULL
+                )
+            """
+            
+            conn.execute(entry_sql, (
+                entry_guid, date_opened, date_entered, memo,
+                amount_num, amount_denom,
+                expense_account_guid, amount_num, amount_denom, bill_guid
+            ))
+            
+            conn.commit()
+            
+    except sqlite3.Error as e:
+        logger.error(f"Failed to create bill - transaction rolled back: {e}")
+        raise
+    
+    logger.info(f"Created UNPOSTED bill: {bill_id} for ${amount:.2f} (GUID: {bill_guid})")
+    
+    # POST-WRITE VERIFICATION
+    if verify:
+        with get_connection() as conn:
+            cursor = conn.execute(
+                "SELECT guid, id FROM invoices WHERE guid = ?", (bill_guid,)
+            )
+            if not cursor.fetchone():
+                raise WriteVerificationError(f"Bill {bill_id} not found after creation")
+            
+            cursor = conn.execute(
+                "SELECT guid FROM entries WHERE bill = ?", (bill_guid,)
+            )
+            if not cursor.fetchone():
+                raise WriteVerificationError(f"Entry not found for bill {bill_id}")
+            
+        logger.info(f"POST-WRITE VERIFIED: Bill {bill_id} created with entry")
+    
+    return bill_guid
+
+
+def post_bill(
+    bill_guid: str,
+    post_date: date = None,
+    due_date: date = None,
+    ap_account_guid: str = None,
+    verify: bool = True
+) -> str:
+    """
+    Step 2: Post a bill, creating the accounting transaction.
+    
+    This creates:
+    - A lot linked to the bill
+    - Lot slots (title, gncInvoice frame)
+    - A transaction with trans-txn-type="I" slot
+    - Two splits: AP (credit, linked to lot) and Expense (debit)
+    - Updates the invoice record with post_lot, post_txn, post_acc
+    
+    Args:
+        bill_guid: GUID of the bill to post (from create_bill())
+        post_date: Posting date (defaults to today)
+        due_date: Due date (defaults to post_date)
+        ap_account_guid: AP account GUID (defaults to auto-find/create)
+        verify: If True, verify posting (default True)
+    
+    Returns:
+        The lot GUID
+        
+    Raises:
+        ValueError: If bill not found or already posted
+        WriteVerificationError: If verification fails
+        sqlite3.Error: If database operation fails (transaction rolled back)
+    """
+    if post_date is None:
+        post_date = date.today()
+    if due_date is None:
+        due_date = post_date
+        
+    # Get the AP account
+    if ap_account_guid is None:
+        ap_account_guid = ensure_ap_account_exists()
+    
+    # Look up the bill
+    bill = get_invoice_by_guid(bill_guid)
+    if not bill:
+        raise ValueError(f"Bill not found: {bill_guid}")
+    
+    if bill['post_lot'] and bill['post_lot'] != '':
+        raise ValueError(f"Bill {bill['id']} is already posted")
+    
+    # Get the bill total from entries
+    bill_amount = get_bill_total(bill_guid)
+    if bill_amount <= 0:
+        raise ValueError(f"Bill {bill['id']} has no entries or zero amount")
+    
+    amount_num = int(bill_amount * 100)
+    amount_denom = 100
+    
+    # Get expense account from the entry
+    with get_connection() as conn:
+        cursor = conn.execute(
+            "SELECT b_acct FROM entries WHERE bill = ? LIMIT 1", (bill_guid,)
+        )
+        entry_row = cursor.fetchone()
+        if not entry_row or not entry_row['b_acct']:
+            raise ValueError(f"Bill {bill['id']} has no expense account in entry")
+        expense_account_guid = entry_row['b_acct']
+    
+    # Generate GUIDs for new records
+    lot_guid = generate_guid()
+    txn_guid = generate_guid()
+    split_ap_guid = generate_guid()
+    split_expense_guid = generate_guid()
+    frame_guid = generate_guid()  # For gncInvoice slot frame
+    
+    usd_guid = get_usd_guid()
+    date_posted = format_gnucash_date(post_date)
+    date_entered = format_gnucash_timestamp()
+    
+    # Format due date for slot (type 10 = gdate uses YYYYMMDD format)
+    due_date_gdate = due_date.strftime('%Y%m%d')
+    
+    try:
+        with get_connection(readonly=False) as conn:
+            # 1. Create the lot (tracks amounts owed)
+            conn.execute("""
+                INSERT INTO lots (guid, account_guid, is_closed)
+                VALUES (?, ?, 0)
+            """, (lot_guid, ap_account_guid))
+            
+            # 2. Create lot slots
+            # Title slot
+            conn.execute("""
+                INSERT INTO slots (obj_guid, name, slot_type, string_val)
+                VALUES (?, 'title', 4, ?)
+            """, (lot_guid, f"Bill {bill['id']}"))
+            
+            # gncInvoice frame - first create the frame slot entry
+            conn.execute("""
+                INSERT INTO slots (obj_guid, name, slot_type, guid_val)
+                VALUES (?, 'gncInvoice/invoice-guid', 5, ?)
+            """, (frame_guid, bill_guid))
+            
+            # Then link frame to lot
+            conn.execute("""
+                INSERT INTO slots (obj_guid, name, slot_type, guid_val)
+                VALUES (?, 'gncInvoice', 9, ?)
+            """, (lot_guid, frame_guid))
+            
+            # 3. Create the transaction
+            conn.execute("""
+                INSERT INTO transactions (
+                    guid, currency_guid, num, post_date, enter_date, description
+                ) VALUES (?, ?, '', ?, ?, ?)
+            """, (txn_guid, usd_guid, date_posted, date_entered, bill['vendor_name']))
+            
+            # 4. Create transaction slots
+            # trans-txn-type = "I" for Invoice (CRITICAL!)
+            conn.execute("""
+                INSERT INTO slots (obj_guid, name, slot_type, string_val)
+                VALUES (?, 'trans-txn-type', 4, 'I')
+            """, (txn_guid,))
+            
+            # trans-read-only message
+            conn.execute("""
+                INSERT INTO slots (obj_guid, name, slot_type, string_val)
+                VALUES (?, 'trans-read-only', 4, 'Generated from an invoice. Try unposting the invoice.')
+            """, (txn_guid,))
+            
+            # date-posted (type 10 = gdate)
+            conn.execute("""
+                INSERT INTO slots (obj_guid, name, slot_type, gdate_val)
+                VALUES (?, 'date-posted', 10, ?)
+            """, (txn_guid, due_date_gdate))
+            
+            # gncInvoice link on transaction (same pattern as lot)
+            txn_frame_guid = generate_guid()
+            conn.execute("""
+                INSERT INTO slots (obj_guid, name, slot_type, guid_val)
+                VALUES (?, 'gncInvoice/invoice-guid', 5, ?)
+            """, (txn_frame_guid, bill_guid))
+            
+            conn.execute("""
+                INSERT INTO slots (obj_guid, name, slot_type, guid_val)
+                VALUES (?, 'gncInvoice', 9, ?)
+            """, (txn_guid, txn_frame_guid))
+            
+            # 5. Create splits
+            # AP split (credit - negative value, linked to lot)
+            conn.execute("""
+                INSERT INTO splits (
+                    guid, tx_guid, account_guid, memo, action,
+                    reconcile_state, reconcile_date,
+                    value_num, value_denom, quantity_num, quantity_denom,
+                    lot_guid
+                ) VALUES (?, ?, ?, '', 'Bill', 'n', '', ?, ?, ?, ?, ?)
+            """, (
+                split_ap_guid, txn_guid, ap_account_guid,
+                -amount_num, amount_denom, -amount_num, amount_denom,
+                lot_guid
+            ))
+            
+            # Expense split (debit - positive value, no lot)
+            conn.execute("""
+                INSERT INTO splits (
+                    guid, tx_guid, account_guid, memo, action,
+                    reconcile_state, reconcile_date,
+                    value_num, value_denom, quantity_num, quantity_denom,
+                    lot_guid
+                ) VALUES (?, ?, ?, '', 'Bill', 'n', '', ?, ?, ?, ?, NULL)
+            """, (
+                split_expense_guid, txn_guid, expense_account_guid,
+                amount_num, amount_denom, amount_num, amount_denom
+            ))
+            
+            # 6. Update the invoice record
+            conn.execute("""
+                UPDATE invoices SET
+                    date_posted = ?,
+                    post_txn = ?,
+                    post_lot = ?,
+                    post_acc = ?
+                WHERE guid = ?
+            """, (date_posted, txn_guid, lot_guid, ap_account_guid, bill_guid))
+            
+            # 7. Close the lot (is_closed = -1 means balanced/closed in GnuCash)
+            # Actually, leave it open (0) - it closes when paid
+            # The lot stays open until the bill is paid
+            
+            conn.commit()
+            
+    except sqlite3.Error as e:
+        logger.error(f"Failed to post bill - transaction rolled back: {e}")
+        raise
+    
+    logger.info(f"POSTED bill: {bill['id']} for ${bill_amount:.2f} (Lot: {lot_guid})")
+    
+    # POST-WRITE VERIFICATION
+    if verify:
+        with get_connection() as conn:
+            # Verify invoice was updated
+            cursor = conn.execute(
+                "SELECT post_lot, post_txn FROM invoices WHERE guid = ?", (bill_guid,)
+            )
+            row = cursor.fetchone()
+            if not row or row['post_lot'] != lot_guid:
+                raise WriteVerificationError(f"Bill {bill['id']} post_lot not updated correctly")
+            
+            # Verify lot exists
+            cursor = conn.execute("SELECT guid FROM lots WHERE guid = ?", (lot_guid,))
+            if not cursor.fetchone():
+                raise WriteVerificationError(f"Lot {lot_guid} not created")
+            
+            # Verify transaction and splits
+            cursor = conn.execute("SELECT COUNT(*) as cnt FROM splits WHERE tx_guid = ?", (txn_guid,))
+            if cursor.fetchone()['cnt'] != 2:
+                raise WriteVerificationError(f"Expected 2 splits for transaction, got different count")
+            
+        logger.info(f"POST-WRITE VERIFIED: Bill {bill['id']} posted successfully")
+    
+    return lot_guid
+
+
+def pay_bill(
+    bill_guid: str,
+    checking_account_guid: str,
+    payment_date: date = None,
+    memo: str = None,
+    verify: bool = True
+) -> str:
+    """
+    Step 3: Pay a posted bill.
+    
+    This creates:
+    - A payment lot with gncOwner slots (links to vendor)
+    - A payment transaction with trans-txn-type="P" slot
+    - Transaction notes slot with the memo
+    - Two splits: AP (debit, linked to BILL's lot) and Checking (credit)
+    
+    Args:
+        bill_guid: GUID of the posted bill to pay
+        checking_account_guid: GUID of checking/bank account to pay from
+        payment_date: Payment date (defaults to today)
+        memo: Payment memo (defaults to bill's notes)
+        verify: If True, verify payment (default True)
+    
+    Returns:
+        The payment transaction GUID
+        
+    Raises:
+        ValueError: If bill not found, not posted, or already paid
+        WriteVerificationError: If verification fails
+        sqlite3.Error: If database operation fails (transaction rolled back)
+    """
+    if payment_date is None:
+        payment_date = date.today()
+    
+    # Look up the bill
+    bill = get_invoice_by_guid(bill_guid)
+    if not bill:
+        raise ValueError(f"Bill not found: {bill_guid}")
+    
+    if not bill['post_lot'] or bill['post_lot'] == '':
+        raise ValueError(f"Bill {bill['id']} is not posted - post it first")
+    
+    # Check if lot is already closed (bill already paid)
+    with get_connection() as conn:
+        cursor = conn.execute(
+            "SELECT is_closed FROM lots WHERE guid = ?", (bill['post_lot'],)
+        )
+        lot_row = cursor.fetchone()
+        if lot_row and lot_row['is_closed'] == -1:
+            raise ValueError(f"Bill {bill['id']} is already paid")
+    
+    # Get bill amount
+    bill_amount = get_bill_total(bill_guid)
+    amount_num = int(bill_amount * 100)
+    amount_denom = 100
+    
+    # Use bill notes as memo if not provided
+    if memo is None:
+        memo = bill['notes'] or ''
+    
+    # Generate GUIDs
+    payment_lot_guid = generate_guid()
+    payment_txn_guid = generate_guid()
+    split_ap_guid = generate_guid()
+    split_checking_guid = generate_guid()
+    owner_frame_guid = generate_guid()
+    invoice_frame_guid = generate_guid()
+    
+    usd_guid = get_usd_guid()
+    date_posted = format_gnucash_date(payment_date)
+    date_entered = format_gnucash_timestamp()
+    
+    ap_account_guid = bill['post_acc']
+    vendor_guid = bill['owner_guid']
+    bill_lot_guid = bill['post_lot']  # The BILL's lot - we link payment to this!
+    
+    try:
+        with get_connection(readonly=False) as conn:
+            # 1. Create payment lot
+            conn.execute("""
+                INSERT INTO lots (guid, account_guid, is_closed)
+                VALUES (?, ?, -1)
+            """, (payment_lot_guid, ap_account_guid))
+            
+            # 2. Create payment lot slots
+            # Title
+            conn.execute("""
+                INSERT INTO slots (obj_guid, name, slot_type, string_val)
+                VALUES (?, 'title', 4, ?)
+            """, (payment_lot_guid, f"Bill {bill['id']}"))
+            
+            # gncInvoice frame
+            conn.execute("""
+                INSERT INTO slots (obj_guid, name, slot_type, guid_val)
+                VALUES (?, 'gncInvoice/invoice-guid', 5, ?)
+            """, (invoice_frame_guid, bill_guid))
+            
+            conn.execute("""
+                INSERT INTO slots (obj_guid, name, slot_type, guid_val)
+                VALUES (?, 'gncInvoice', 9, ?)
+            """, (payment_lot_guid, invoice_frame_guid))
+            
+            # gncOwner slots (CRITICAL for linking payment to vendor!)
+            conn.execute("""
+                INSERT INTO slots (obj_guid, name, slot_type, int64_val)
+                VALUES (?, 'gncOwner/owner-type', 1, 4)
+            """, (owner_frame_guid,))  # 4 = vendor
+            
+            conn.execute("""
+                INSERT INTO slots (obj_guid, name, slot_type, guid_val)
+                VALUES (?, 'gncOwner/owner-guid', 5, ?)
+            """, (owner_frame_guid, vendor_guid))
+            
+            conn.execute("""
+                INSERT INTO slots (obj_guid, name, slot_type, guid_val)
+                VALUES (?, 'gncOwner', 9, ?)
+            """, (payment_lot_guid, owner_frame_guid))
+            
+            # 3. Create payment transaction
+            conn.execute("""
+                INSERT INTO transactions (
+                    guid, currency_guid, num, post_date, enter_date, description
+                ) VALUES (?, ?, '', ?, ?, ?)
+            """, (payment_txn_guid, usd_guid, date_posted, date_entered, bill['vendor_name']))
+            
+            # 4. Create transaction slots
+            # trans-txn-type = "P" for Payment (CRITICAL!)
+            conn.execute("""
+                INSERT INTO slots (obj_guid, name, slot_type, string_val)
+                VALUES (?, 'trans-txn-type', 4, 'P')
+            """, (payment_txn_guid,))
+            
+            # notes slot with memo (if provided)
+            if memo:
+                conn.execute("""
+                    INSERT INTO slots (obj_guid, name, slot_type, string_val)
+                    VALUES (?, 'notes', 4, ?)
+                """, (payment_txn_guid, memo))
+            
+            # 5. Create payment splits
+            # AP split (debit - positive, linked to the BILL's lot!)
+            conn.execute("""
+                INSERT INTO splits (
+                    guid, tx_guid, account_guid, memo, action,
+                    reconcile_state, reconcile_date,
+                    value_num, value_denom, quantity_num, quantity_denom,
+                    lot_guid
+                ) VALUES (?, ?, ?, '', 'Payment', 'n', '', ?, ?, ?, ?, ?)
+            """, (
+                split_ap_guid, payment_txn_guid, ap_account_guid,
+                amount_num, amount_denom, amount_num, amount_denom,
+                bill_lot_guid  # Links to the BILL's lot, not payment lot!
+            ))
+            
+            # Checking split (credit - negative, no lot)
+            conn.execute("""
+                INSERT INTO splits (
+                    guid, tx_guid, account_guid, memo, action,
+                    reconcile_state, reconcile_date,
+                    value_num, value_denom, quantity_num, quantity_denom,
+                    lot_guid
+                ) VALUES (?, ?, ?, '', 'Payment', 'n', '', ?, ?, ?, ?, NULL)
+            """, (
+                split_checking_guid, payment_txn_guid, checking_account_guid,
+                -amount_num, amount_denom, -amount_num, amount_denom
+            ))
+            
+            # 6. Close the bill's lot (mark as paid)
+            conn.execute("""
+                UPDATE lots SET is_closed = -1 WHERE guid = ?
+            """, (bill_lot_guid,))
+            
+            conn.commit()
+            
+    except sqlite3.Error as e:
+        logger.error(f"Failed to pay bill - transaction rolled back: {e}")
+        raise
+    
+    logger.info(f"PAID bill: {bill['id']} for ${bill_amount:.2f} (Txn: {payment_txn_guid})")
+    
+    # POST-WRITE VERIFICATION
+    if verify:
+        with get_connection() as conn:
+            # Verify bill's lot is closed
+            cursor = conn.execute(
+                "SELECT is_closed FROM lots WHERE guid = ?", (bill_lot_guid,)
+            )
+            row = cursor.fetchone()
+            if not row or row['is_closed'] != -1:
+                raise WriteVerificationError(f"Bill lot {bill_lot_guid} not closed after payment")
+            
+            # Verify payment transaction exists with correct splits
+            cursor = conn.execute(
+                "SELECT COUNT(*) as cnt FROM splits WHERE tx_guid = ?", (payment_txn_guid,)
+            )
+            if cursor.fetchone()['cnt'] != 2:
+                raise WriteVerificationError(f"Expected 2 splits in payment transaction")
+            
+            # Verify trans-txn-type slot
+            cursor = conn.execute("""
+                SELECT string_val FROM slots 
+                WHERE obj_guid = ? AND name = 'trans-txn-type'
+            """, (payment_txn_guid,))
+            row = cursor.fetchone()
+            if not row or row['string_val'] != 'P':
+                raise WriteVerificationError(f"Payment transaction missing trans-txn-type='P' slot")
+            
+        logger.info(f"POST-WRITE VERIFIED: Bill {bill['id']} paid successfully")
+    
+    return payment_txn_guid
+
+
+# =============================================================================
+# LEGACY FUNCTION (kept for backwards compatibility, but deprecated)
+# =============================================================================
+
 def create_posted_bill(
     vendor_guid: str,
     expense_account_guid: str,
