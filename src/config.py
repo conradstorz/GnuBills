@@ -64,8 +64,8 @@ EXPENSE_ACCOUNT_PREFIX = "cmsnpd_"
 ACCOUNTS_PAYABLE_PATH = "Liabilities:Accounts Payable"
 
 # Vendor ID prefix and format
-VENDOR_ID_PREFIX = "V"
-VENDOR_ID_FORMAT = "{prefix}{num:04d}"  # V0001, V0002, etc.
+VENDOR_ID_PREFIX = ""
+VENDOR_ID_FORMAT = "{prefix}{num:06d}"  # 000001, 000002, etc.
 
 # Bill ID prefix and format  
 BILL_ID_PREFIX = "B-"

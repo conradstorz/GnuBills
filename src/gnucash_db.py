@@ -674,24 +674,26 @@ def find_vendor_by_guid(guid: str) -> Optional[Dict]:
 def get_next_vendor_id() -> str:
     """
     Get the next available vendor ID.
-    Queries MAX(id) and increments.
+    Extracts numeric portion from all existing IDs and finds the true maximum.
     """
+    import re
+    
     with get_connection() as conn:
-        cursor = conn.execute("""
-            SELECT id FROM vendors ORDER BY id DESC LIMIT 1
-        """)
-        row = cursor.fetchone()
+        cursor = conn.execute("SELECT id FROM vendors")
+        rows = cursor.fetchall()
         
-        if row and row['id']:
-            # Parse existing ID format (e.g., "000001" or "V0001")
-            current_id = row['id']
-            # Extract numeric portion
-            import re
-            match = re.search(r'(\d+)', current_id)
-            if match:
-                num = int(match.group(1))
-                # Use same format as config
-                return config.VENDOR_ID_FORMAT.format(prefix=config.VENDOR_ID_PREFIX, num=num + 1)
+        if rows:
+            # Extract numeric portion from all IDs and find the maximum
+            max_num = 0
+            for row in rows:
+                if row['id']:
+                    match = re.search(r'(\d+)', row['id'])
+                    if match:
+                        num = int(match.group(1))
+                        max_num = max(max_num, num)
+            
+            # Return next ID
+            return config.VENDOR_ID_FORMAT.format(prefix=config.VENDOR_ID_PREFIX, num=max_num + 1)
         
         # First vendor
         return config.VENDOR_ID_FORMAT.format(prefix=config.VENDOR_ID_PREFIX, num=1)
@@ -753,6 +755,9 @@ def create_vendor(
         if 'tax_included' in columns:
             base_columns.append('tax_included')
             base_values.append(1)
+        if 'tax_inc' in columns:
+            base_columns.append('tax_inc')
+            base_values.append('USEGLOBAL')  # Required for GnuCash to display vendor properly
         
         placeholders = ', '.join(['?'] * len(base_columns))
         column_names = ', '.join(base_columns)
