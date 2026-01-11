@@ -1,0 +1,103 @@
+{
+  "manual_vendor": "POC Vendor Name",
+  "auto_vendor": "The Slice Restaurant",
+  "manual_guid": "9b60c66712ab46a9be025d7f652dac4c",
+  "auto_guid": "d270be6435e8402cb51e80c9a9e170b6",
+  "differences": [
+    {
+      "table": "invoices",
+      "issue": "row_count_mismatch",
+      "manual_count": 0,
+      "auto_count": 1,
+      "manual_rows": [],
+      "auto_rows": [
+        {
+          "guid": "2c4d5c8509fc4f859b84654e5ef59bc2",
+          "id": "B-0001",
+          "date_opened": "2026-01-11 00:00:00",
+          "date_posted": "2026-01-11 00:00:00",
+          "notes": "Jukebox Commissions 4/28/2025 - 1/6/2026",
+          "active": 1,
+          "currency": "03bfaf79396b4b9cb163547c1556fc7c",
+          "owner_type": 4,
+          "owner_guid": "d270be6435e8402cb51e80c9a9e170b6",
+          "terms": null,
+          "billing_id": null,
+          "post_txn": "7277f2595f274ed09d51dfbab215484a",
+          "post_lot": "02335f43291c4777bea4f4ba38eae461",
+          "post_acc": "ff971387a6f942aaa997ec94bf223219",
+          "billto_type": 0,
+          "billto_guid": "",
+          "charge_amt_num": null,
+          "charge_amt_denom": null
+        }
+      ]
+    },
+    {
+      "table": "slots",
+      "issue": "row_count_mismatch",
+      "manual_count": 0,
+      "auto_count": 1,
+      "manual_rows": [],
+      "auto_rows": [
+        {
+          "id": 12256,
+          "obj_guid": "aeb8fedff6514a4a9d108abf0e2d4ba6",
+          "name": "gncOwner/owner-guid",
+          "slot_type": 5,
+          "int64_val": null,
+          "string_val": null,
+          "double_val": null,
+          "timespec_val": null,
+          "guid_val": "d270be6435e8402cb51e80c9a9e170b6",
+          "numeric_val_num": null,
+          "numeric_val_denom": null,
+          "gdate_val": null
+        }
+      ]
+    },
+    {
+      "table": "vendors",
+      "issue": "field_value_mismatch",
+      "row_index": 0,
+      "differences": {
+        "guid": {
+          "manual": "9b60c66712ab46a9be025d7f652dac4c",
+          "auto": "d270be6435e8402cb51e80c9a9e170b6"
+        },
+        "name": {
+          "manual": "POC Vendor Name",
+          "auto": "The Slice Restaurant"
+        },
+        "id": {
+          "manual": "000003",
+          "auto": "V0005"
+        },
+        "addr_name": {
+          "manual": "POC Vendor Name",
+          "auto": "The Slice"
+        },
+        "addr_addr1": {
+          "manual": "123 any street",
+          "auto": "1027 N. Luther Rd."
+        },
+        "addr_addr2": {
+          "manual": "hometown, KY 40202",
+          "auto": "Georgetown, KY 47122"
+        },
+        "addr_phone": {
+          "manual": "",
+          "auto": "812-903-0003"
+        },
+        "addr_fax": {
+          "manual": "",
+          "auto": null
+        },
+        "tax_inc": {
+          "manual": "USEGLOBAL",
+          "auto": null
+        }
+      }
+    }
+  ]
+}

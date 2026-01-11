@@ -1,0 +1,87 @@
+{
+  "manual_vendor": "Vic's Cafe",
+  "auto_vendor": "Versailles Brewing Company",
+  "manual_guid": "4e64a09255f64b55a5fb6e6f162ff33d",
+  "auto_guid": "75648496eba545249fb42080678932ac",
+  "differences": [
+    {
+      "table": "invoices",
+      "issue": "row_count_mismatch",
+      "manual_count": 0,
+      "auto_count": 1,
+      "manual_rows": [],
+      "auto_rows": [
+        {
+          "guid": "2a4f84cd7a954449bd21f2eb223f4880",
+          "id": "B-0002",
+          "date_opened": "2026-01-11 00:00:00",
+          "date_posted": "2026-01-11 00:00:00",
+          "notes": "Jukebox Commissions 4/28/2025 - 1/6/2026",
+          "active": 1,
+          "currency": "03bfaf79396b4b9cb163547c1556fc7c",
+          "owner_type": 4,
+          "owner_guid": "75648496eba545249fb42080678932ac",
+          "terms": null,
+          "billing_id": null,
+          "post_txn": "c3e6bea5445f489fac3fb505d9440806",
+          "post_lot": "d0a7d255a4b74bdeae0ca9703499f20b",
+          "post_acc": "ff971387a6f942aaa997ec94bf223219",
+          "billto_type": 0,
+          "billto_guid": "",
+          "charge_amt_num": null,
+          "charge_amt_denom": null
+        }
+      ]
+    },
+    {
+      "table": "slots",
+      "issue": "row_count_mismatch",
+      "manual_count": 0,
+      "auto_count": 1,
+      "manual_rows": [],
+      "auto_rows": [
+        {
+          "id": 12264,
+          "obj_guid": "b56087636d8845b69f07526df6032461",
+          "name": "gncOwner/owner-guid",
+          "slot_type": 5,
+          "int64_val": null,
+          "string_val": null,
+          "double_val": null,
+          "timespec_val": null,
+          "guid_val": "75648496eba545249fb42080678932ac",
+          "numeric_val_num": null,
+          "numeric_val_denom": null,
+          "gdate_val": null
+        }
+      ]
+    },
+    {
+      "table": "vendors",
+      "issue": "field_value_mismatch",
+      "row_index": 0,
+      "differences": {
+        "guid": {
+          "manual": "4e64a09255f64b55a5fb6e6f162ff33d",
+          "auto": "75648496eba545249fb42080678932ac"
+        },
+        "name": {
+          "manual": "Vic's Cafe",
+          "auto": "Versailles Brewing Company"
+        },
+        "id": {
+          "manual": "000001",
+          "auto": "000006"
+        },
+        "addr_addr1": {
+          "manual": "addr01",
+          "auto": ""
+        },
+        "addr_addr2": {
+          "manual": "addr02",
+          "auto": ""
+        }
+      }
+    }
+  ]
+}
