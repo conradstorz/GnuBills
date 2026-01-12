@@ -26,8 +26,20 @@ def test_db_path():
     
     yield test_db
     
-    # Cleanup
-    shutil.rmtree(temp_dir)
+    # Cleanup with Windows-safe approach
+    try:
+        # Close any potential open connections first
+        import gc
+        gc.collect()
+        
+        # Try to remove with error handling
+        if test_db.exists():
+            test_db.unlink()
+        if temp_dir.exists():
+            shutil.rmtree(temp_dir, ignore_errors=True)
+    except Exception:
+        # On Windows, sometimes files are locked - ignore cleanup errors in tests
+        pass
 
 @pytest.fixture(scope="class") 
 def db_connection(test_db_path):
