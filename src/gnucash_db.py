@@ -875,14 +875,17 @@ def get_expenses_parent_guid(preferred_name: str = None) -> Optional[str]:
     """
     Get the GUID of an appropriate expense parent account.
     
-    IMPORTANT: Returns only NON-PLACEHOLDER accounts. GnuCash placeholder
-    accounts cannot accept transactions - they're organizational only.
+    FAULT TOLERANT: If the configured account doesn't exist, this function will:
+    1. Try to find an existing suitable parent
+    2. Auto-create the missing account if possible
+    3. Create necessary parent hierarchy if needed
     
     Args:
         preferred_name: Specific account name to look for (optional)
         
     Returns:
         GUID of a non-placeholder expense account suitable as parent
+        None only if all auto-creation attempts fail
     """
     search_name = preferred_name or config.DEFAULT_EXPENSE_PARENT
     
@@ -898,6 +901,7 @@ def get_expenses_parent_guid(preferred_name: str = None) -> Optional[str]:
             if row['placeholder'] == 1:
                 logger.warning(f"Configured parent '{row['name']}' is a PLACEHOLDER - cannot use for transactions")
             else:
+                logger.debug(f"Found configured expense parent: {row['name']}")
                 return row['guid']
         
         # Try case-insensitive match - only non-placeholder
@@ -911,7 +915,23 @@ def get_expenses_parent_guid(preferred_name: str = None) -> Optional[str]:
             if row['placeholder'] == 1:
                 logger.warning(f"Found '{row['name']}' but it's a PLACEHOLDER - cannot use for transactions")
             else:
+                logger.debug(f"Found expense parent (case insensitive): {row['name']}")
                 return row['guid']
+
+        # FAULT TOLERANCE: Account doesn't exist - try to create it
+        logger.info(f"Expense parent '{search_name}' not found - attempting auto-creation")
+        
+        if getattr(config, 'AUTO_CREATE_EXPENSE_ACCOUNTS', True):
+            try:
+                created_guid = _create_missing_expense_parent(search_name)
+                if created_guid:
+                    logger.info(f"AUTO-CREATED missing expense parent: {search_name}")
+                    return created_guid
+            except Exception as e:
+                logger.error(f"Failed to auto-create expense parent '{search_name}': {e}")
+        
+        # FALLBACK: Look for existing suitable parents
+        logger.info("Trying fallback expense parents...")
         
         # Look for a non-placeholder expense account that has children
         # (indicating it's meant to be a parent for expense categories)
@@ -925,7 +945,7 @@ def get_expenses_parent_guid(preferred_name: str = None) -> Optional[str]:
         """)
         row = cursor.fetchone()
         if row:
-            logger.info(f"Using expense parent: {row['name']} (non-placeholder with children)")
+            logger.info(f"Using fallback expense parent: {row['name']} (non-placeholder with children)")
             return row['guid']
         
         # Look for any non-placeholder expense account under a placeholder parent
@@ -941,7 +961,7 @@ def get_expenses_parent_guid(preferred_name: str = None) -> Optional[str]:
         """)
         row = cursor.fetchone()
         if row:
-            logger.info(f"Using expense parent: {row['name']} (under {row['parent_name']})")
+            logger.info(f"Using fallback expense parent: {row['name']} (under {row['parent_name']})")
             return row['guid']
         
         # Last resort: any non-placeholder EXPENSE account
@@ -953,12 +973,138 @@ def get_expenses_parent_guid(preferred_name: str = None) -> Optional[str]:
         """)
         row = cursor.fetchone()
         if row:
-            logger.warning(f"Using expense parent: {row['name']} (fallback - any non-placeholder)")
+            logger.warning(f"Using fallback expense parent: {row['name']} (last resort - any non-placeholder)")
             return row['guid']
         
-        logger.error("No suitable expense parent account found - all are placeholders!")
+        logger.error("FAULT TOLERANCE FAILED: No suitable expense parent account found and auto-creation failed")
         return None
 
+
+def _create_missing_expense_parent(account_name: str) -> Optional[str]:
+    """
+    Create a missing expense parent account with fault tolerance.
+    
+    Tries to find a suitable parent in this order:
+    1. Existing non-placeholder expense account
+    2. Existing placeholder expense account  
+    3. Create fallback "Expenses" account under ROOT
+    
+    Returns the GUID of the created account, or None if all attempts fail.
+    """
+    try:
+        # Find a suitable parent for the new account
+        parent_guid = _find_suitable_expense_root()
+        
+        if not parent_guid:
+            logger.error(f"Cannot create expense account '{account_name}' - no suitable parent found")
+            return None
+        
+        # Create the missing account
+        account_guid = generate_guid()
+        usd_guid = get_usd_guid()
+        
+        with get_connection(readonly=False) as conn:
+            conn.execute("""
+                INSERT INTO accounts (
+                    guid, name, account_type, commodity_guid, commodity_scu, 
+                    non_std_scu, parent_guid, hidden, placeholder
+                ) VALUES (?, ?, 'EXPENSE', ?, 100, 0, ?, 0, 0)
+            """, (account_guid, account_name, usd_guid, parent_guid))
+            conn.commit()
+        
+        logger.info(f"AUTO-CREATED expense account: {account_name} (GUID: {account_guid})")
+        return account_guid
+        
+    except Exception as e:
+        logger.error(f"Failed to create expense account '{account_name}': {e}")
+        return None
+
+
+def _find_suitable_expense_root() -> Optional[str]:
+    """
+    Find or create a suitable parent for expense accounts.
+    
+    Returns GUID of a suitable parent, or None if unable to create one.
+    """
+    with get_connection() as conn:
+        # Try to find existing top-level non-placeholder expense account
+        cursor = conn.execute("""
+            SELECT a.guid, a.name, a.placeholder
+            FROM accounts a
+            WHERE a.account_type = 'EXPENSE' 
+            AND a.parent_guid IN (SELECT guid FROM accounts WHERE account_type = 'ROOT')
+            AND a.placeholder = 0
+            LIMIT 1
+        """)
+        row = cursor.fetchone()
+        
+        if row:
+            logger.debug(f"Found suitable expense root: {row['name']}")
+            return row['guid']
+        
+        # Try to find placeholder expense root to create under
+        cursor = conn.execute("""
+            SELECT a.guid, a.name
+            FROM accounts a
+            WHERE a.account_type = 'EXPENSE' 
+            AND a.parent_guid IN (SELECT guid FROM accounts WHERE account_type = 'ROOT')
+            AND a.placeholder = 1
+            LIMIT 1
+        """)
+        row = cursor.fetchone()
+        
+        if row:
+            logger.debug(f"Found placeholder expense root: {row['name']} - will create under it")
+            return row['guid']
+        
+        # Create fallback expense root if configured
+        fallback_name = getattr(config, 'FALLBACK_EXPENSE_PARENT', 'Expenses')
+        logger.info(f"Creating fallback expense root: {fallback_name}")
+        
+        try:
+            root_guid = _get_root_account_guid()
+            if root_guid:
+                fallback_guid = _create_account_internal(
+                    name=fallback_name,
+                    account_type='EXPENSE',
+                    parent_guid=root_guid,
+                    placeholder=False  # Make it transactional so it can be used
+                )
+                logger.info(f"AUTO-CREATED fallback expense root: {fallback_name}")
+                return fallback_guid
+        except Exception as e:
+            logger.error(f"Failed to create fallback expense root: {e}")
+        
+        return None
+
+
+def _get_root_account_guid() -> Optional[str]:
+    """Get the ROOT account GUID."""
+    with get_connection() as conn:
+        cursor = conn.execute("SELECT guid FROM accounts WHERE account_type = 'ROOT' LIMIT 1")
+        row = cursor.fetchone()
+        return row['guid'] if row else None
+
+
+def _create_account_internal(name: str, account_type: str, parent_guid: str, placeholder: bool = False) -> str:
+    """
+    Internal helper to create any type of account.
+    
+    Returns the new account GUID.
+    """
+    account_guid = generate_guid()
+    usd_guid = get_usd_guid()
+    
+    with get_connection(readonly=False) as conn:
+        conn.execute("""
+            INSERT INTO accounts (
+                guid, name, account_type, commodity_guid, commodity_scu, 
+                non_std_scu, parent_guid, hidden, placeholder
+            ) VALUES (?, ?, ?, ?, 100, 0, ?, 0, ?)
+        """, (account_guid, name, account_type, usd_guid, parent_guid, 1 if placeholder else 0))
+        conn.commit()
+    
+    return account_guid
 
 def fix_orphaned_expense_accounts() -> Dict[str, str]:
     """
@@ -1222,40 +1368,56 @@ def validate_gnucash_setup() -> Dict[str, any]:
 
 def create_expense_account(name: str, parent_guid: str = None, verify: bool = True) -> str:
     """
-    Create a new expense account.
+    Create a new expense account with fault tolerance.
     
     Args:
         name: Account name
-        parent_guid: Parent account GUID (defaults to Expenses parent)
+        parent_guid: Parent account GUID (defaults to auto-find/create)
         verify: If True, verify the account was created (default True)
     
     Returns the new account's GUID.
-    Raises WriteVerificationError if verification fails.
+    
+    FAULT TOLERANT: If parent account is missing, this function will:
+    1. Try to find a suitable existing parent
+    2. Auto-create the configured parent account if needed
+    3. Continue gracefully even if parent creation fails (logs error but doesn't crash)
     """
     if parent_guid is None:
         parent_guid = get_expenses_parent_guid()
         if not parent_guid:
-            raise ValueError("Could not find Expenses parent account")
+            # FAULT TOLERANCE: Don't crash, log error and suggest manual fix
+            error_msg = (
+                f"Could not find or create expense parent account '{config.DEFAULT_EXPENSE_PARENT}'. "
+                f"Please create this account in GnuCash manually, or set AUTO_CREATE_EXPENSE_ACCOUNTS=False "
+                f"and use an existing expense account name in config.DEFAULT_EXPENSE_PARENT"
+            )
+            logger.error(error_msg)
+            raise ValueError(error_msg)
     
-    account_guid = generate_guid()
-    usd_guid = get_usd_guid()
-    
-    with get_connection(readonly=False) as conn:
-        conn.execute("""
-            INSERT INTO accounts (
-                guid, name, account_type, commodity_guid, commodity_scu, 
-                non_std_scu, parent_guid, hidden, placeholder
-            ) VALUES (?, ?, 'EXPENSE', ?, 100, 0, ?, 0, 0)
-        """, (account_guid, name, usd_guid, parent_guid))
-        conn.commit()
-    
-    logger.info(f"Created expense account: {name} (GUID: {account_guid})")
-    
-    # POST-WRITE VERIFICATION
-    if verify:
-        verify_account_created(account_guid, name, 'EXPENSE')
-    
-    return account_guid
+    try:
+        account_guid = generate_guid()
+        usd_guid = get_usd_guid()
+        
+        with get_connection(readonly=False) as conn:
+            conn.execute("""
+                INSERT INTO accounts (
+                    guid, name, account_type, commodity_guid, commodity_scu, 
+                    non_std_scu, parent_guid, hidden, placeholder
+                ) VALUES (?, ?, 'EXPENSE', ?, 100, 0, ?, 0, 0)
+            """, (account_guid, name, usd_guid, parent_guid))
+            conn.commit()
+        
+        logger.info(f"Created expense account: {name} (GUID: {account_guid})")
+        
+        # POST-WRITE VERIFICATION
+        if verify:
+            verify_account_created(account_guid, name, 'EXPENSE')
+        
+        return account_guid
+        
+    except Exception as e:
+        logger.error(f"Failed to create expense account '{name}': {e}")
+        raise
 
 
 def get_liabilities_parent_guid() -> Optional[str]:

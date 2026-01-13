@@ -57,6 +57,9 @@ DEFAULT_LOCALITY = f"{LOCALITY_CITY}, {LOCALITY_STATE}"
 # Example: "SAMUSE_Gameroom_Commissions_Paid" - not "Expenses root" (placeholder)
 DEFAULT_EXPENSE_PARENT = "SAMUSE_Gameroom_Commissions_Paid"
 
+# Fallback expense parent name (created at top level if nothing else works)
+FALLBACK_EXPENSE_PARENT = "Expenses"
+
 # Expense account prefix
 EXPENSE_ACCOUNT_PREFIX = "cmsnpd_"
 

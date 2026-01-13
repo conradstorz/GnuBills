@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "last_validated": "2026-01-11T14:07:35.001541",
+  "last_validated": "2026-01-12T18:05:07.453675",
   "database_path": "D:\\Users\\Conrad\\Documents\\GnuCash\\gnuCash414\\CFSIV_Sqlite3_database.gnucash",
   "tables": {
     "vendors": {
@@ -606,7 +606,7 @@
   },
   "required_accounts": {
     "accounts_payable": {
-      "guid": "ff971387a6f942aaa997ec94bf223219",
+      "guid": "5ac94bcf2c434c39a90a51236513aacf",
       "name": "Accounts Payable",
       "account_type": "PAYABLE",
       "can_create": true
@@ -626,7 +626,7 @@
   },
   "required_commodities": {
     "usd": {
-      "guid": "03bfaf79396b4b9cb163547c1556fc7c",
+      "guid": "ba2343cfce024968aedb0c606ac457e1",
       "mnemonic": "USD",
       "namespace": "CURRENCY"
     }
@@ -19026,6 +19026,3311 @@
           "passed": true,
           "details": "2833/2833 transactions use iso format",
           "timestamp": "2026-01-11T14:07:35.044114"
+        }
+      ],
+      "errors": [],
+      "warnings": []
+    },
+    {
+      "run_id": "VR-20260112-180004-7d3934",
+      "timestamp": "2026-01-12T18:00:04.879740",
+      "database_path": "D:\\Users\\Conrad\\Documents\\GnuCash\\gnuCash414\\CFSIV_Sqlite3_database.gnucash",
+      "total_checks": 81,
+      "passed_checks": 81,
+      "failed_checks": 0,
+      "all_passed": true,
+      "checks": [
+        {
+          "check_name": "DB_CONNECTION",
+          "table": "database",
+          "description": "Database connection established",
+          "passed": true,
+          "details": "Connected to D:\\Users\\Conrad\\Documents\\GnuCash\\gnuCash414\\CFSIV_Sqlite3_database.gnucash",
+          "timestamp": "2026-01-12T18:00:04.881821"
+        },
+        {
+          "check_name": "TABLE_EXISTS",
+          "table": "vendors",
+          "description": "Table 'vendors' exists with 18 columns",
+          "passed": true,
+          "details": "Columns: guid, name, id, notes, currency, active, tax_override, addr_name, addr_addr1, addr_addr2, addr_addr3, addr_addr4, addr_phone, addr_fax, addr_email, terms, tax_inc, tax_table",
+          "timestamp": "2026-01-12T18:00:04.884989"
+        },
+        {
+          "check_name": "TABLE_EXISTS",
+          "table": "accounts",
+          "description": "Table 'accounts' exists with 11 columns",
+          "passed": true,
+          "details": "Columns: guid, name, account_type, commodity_guid, commodity_scu, non_std_scu, parent_guid, code, description, hidden, placeholder",
+          "timestamp": "2026-01-12T18:00:04.885859"
+        },
+        {
+          "check_name": "TABLE_EXISTS",
+          "table": "invoices",
+          "description": "Table 'invoices' exists with 18 columns",
+          "passed": true,
+          "details": "Columns: guid, id, date_opened, date_posted, notes, active, currency, owner_type, owner_guid, terms, billing_id, post_txn, post_lot, post_acc, billto_type, billto_guid, charge_amt_num, charge_amt_denom",
+          "timestamp": "2026-01-12T18:00:04.886574"
+        },
+        {
+          "check_name": "TABLE_EXISTS",
+          "table": "entries",
+          "description": "Table 'entries' exists with 31 columns",
+          "passed": true,
+          "details": "Columns: guid, date, date_entered, description, action, notes, quantity_num, quantity_denom, i_acct, i_price_num, i_price_denom, i_discount_num, i_discount_denom, invoice, i_disc_type, i_disc_how, i_taxable, i_taxincluded, i_taxtable, b_acct, b_price_num, b_price_denom, bill, b_taxable, b_taxincluded, b_taxtable, b_paytype, billable, billto_type, billto_guid, order_guid",
+          "timestamp": "2026-01-12T18:00:04.887345"
+        },
+        {
+          "check_name": "TABLE_EXISTS",
+          "table": "transactions",
+          "description": "Table 'transactions' exists with 6 columns",
+          "passed": true,
+          "details": "Columns: guid, currency_guid, num, post_date, enter_date, description",
+          "timestamp": "2026-01-12T18:00:04.890413"
+        },
+        {
+          "check_name": "TABLE_EXISTS",
+          "table": "splits",
+          "description": "Table 'splits' exists with 12 columns",
+          "passed": true,
+          "details": "Columns: guid, tx_guid, account_guid, memo, action, reconcile_state, reconcile_date, value_num, value_denom, quantity_num, quantity_denom, lot_guid",
+          "timestamp": "2026-01-12T18:00:04.895246"
+        },
+        {
+          "check_name": "TABLE_EXISTS",
+          "table": "lots",
+          "description": "Table 'lots' exists with 3 columns",
+          "passed": true,
+          "details": "Columns: guid, account_guid, is_closed",
+          "timestamp": "2026-01-12T18:00:04.895886"
+        },
+        {
+          "check_name": "TABLE_EXISTS",
+          "table": "commodities",
+          "description": "Table 'commodities' exists with 9 columns",
+          "passed": true,
+          "details": "Columns: guid, namespace, mnemonic, fullname, cusip, fraction, quote_flag, quote_source, quote_tz",
+          "timestamp": "2026-01-12T18:00:04.896561"
+        },
+        {
+          "check_name": "TABLE_EXISTS",
+          "table": "books",
+          "description": "Table 'books' exists with 3 columns",
+          "passed": true,
+          "details": "Columns: guid, root_account_guid, root_template_guid",
+          "timestamp": "2026-01-12T18:00:04.897250"
+        },
+        {
+          "check_name": "COLUMN_EXISTS",
+          "table": "vendors",
+          "description": "Column 'guid' exists in 'vendors'",
+          "passed": true,
+          "details": "Mapped to: guid",
+          "timestamp": "2026-01-12T18:00:04.897587"
+        },
+        {
+          "check_name": "COLUMN_EXISTS",
+          "table": "vendors",
+          "description": "Column 'id' exists in 'vendors'",
+          "passed": true,
+          "details": "Mapped to: id",
+          "timestamp": "2026-01-12T18:00:04.897773"
+        },
+        {
+          "check_name": "COLUMN_EXISTS",
+          "table": "vendors",
+          "description": "Column 'name' exists in 'vendors'",
+          "passed": true,
+          "details": "Mapped to: name",
+          "timestamp": "2026-01-12T18:00:04.897947"
+        },
+        {
+          "check_name": "COLUMN_EXISTS",
+          "table": "vendors",
+          "description": "Column 'currency' exists in 'vendors'",
+          "passed": true,
+          "details": "Mapped to: currency",
+          "timestamp": "2026-01-12T18:00:04.898229"
+        },
+        {
+          "check_name": "COLUMN_EXISTS",
+          "table": "vendors",
+          "description": "Column 'active' exists in 'vendors'",
+          "passed": true,
+          "details": "Mapped to: active",
+          "timestamp": "2026-01-12T18:00:04.898467"
+        },
+        {
+          "check_name": "COLUMN_EXISTS",
+          "table": "vendors",
+          "description": "Column 'notes' exists in 'vendors'",
+          "passed": true,
+          "details": "Mapped to: notes",
+          "timestamp": "2026-01-12T18:00:04.898636"
+        },
+        {
+          "check_name": "COLUMN_EXISTS",
+          "table": "vendors",
+          "description": "Column 'addr_name' exists in 'vendors'",
+          "passed": true,
+          "details": "Mapped to: addr_name",
+          "timestamp": "2026-01-12T18:00:04.898794"
+        },
+        {
+          "check_name": "COLUMN_EXISTS",
+          "table": "vendors",
+          "description": "Column 'addr_addr1' exists in 'vendors'",
+          "passed": true,
+          "details": "Mapped to: addr_addr1",
+          "timestamp": "2026-01-12T18:00:04.898953"
+        },
+        {
+          "check_name": "COLUMN_EXISTS",
+          "table": "vendors",
+          "description": "Column 'addr_addr2' exists in 'vendors'",
+          "passed": true,
+          "details": "Mapped to: addr_addr2",
+          "timestamp": "2026-01-12T18:00:04.899091"
+        },
+        {
+          "check_name": "COLUMN_EXISTS",
+          "table": "vendors",
+          "description": "Column 'addr_addr3' exists in 'vendors'",
+          "passed": true,
+          "details": "Mapped to: addr_addr3",
+          "timestamp": "2026-01-12T18:00:04.899242"
+        },
+        {
+          "check_name": "COLUMN_EXISTS",
+          "table": "vendors",
+          "description": "Column 'addr_addr4' exists in 'vendors'",
+          "passed": true,
+          "details": "Mapped to: addr_addr4",
+          "timestamp": "2026-01-12T18:00:04.899679"
+        },
+        {
+          "check_name": "COLUMN_EXISTS",
+          "table": "vendors",
+          "description": "Column 'addr_phone' exists in 'vendors'",
+          "passed": true,
+          "details": "Mapped to: addr_phone",
+          "timestamp": "2026-01-12T18:00:04.899948"
+        },
+        {
+          "check_name": "COLUMN_EXISTS",
+          "table": "vendors",
+          "description": "Column 'addr_email' exists in 'vendors'",
+          "passed": true,
+          "details": "Mapped to: addr_email",
+          "timestamp": "2026-01-12T18:00:04.900201"
+        },
+        {
+          "check_name": "COLUMN_EXISTS",
+          "table": "accounts",
+          "description": "Column 'guid' exists in 'accounts'",
+          "passed": true,
+          "details": "Mapped to: guid",
+          "timestamp": "2026-01-12T18:00:04.900584"
+        },
+        {
+          "check_name": "COLUMN_EXISTS",
+          "table": "accounts",
+          "description": "Column 'name' exists in 'accounts'",
+          "passed": true,
+          "details": "Mapped to: name",
+          "timestamp": "2026-01-12T18:00:04.900827"
+        },
+        {
+          "check_name": "COLUMN_EXISTS",
+          "table": "accounts",
+          "description": "Column 'account_type' exists in 'accounts'",
+          "passed": true,
+          "details": "Mapped to: account_type",
+          "timestamp": "2026-01-12T18:00:04.900995"
+        },
+        {
+          "check_name": "COLUMN_EXISTS",
+          "table": "accounts",
+          "description": "Column 'parent_guid' exists in 'accounts'",
+          "passed": true,
+          "details": "Mapped to: parent_guid",
+          "timestamp": "2026-01-12T18:00:04.901177"
+        },
+        {
+          "check_name": "COLUMN_EXISTS",
+          "table": "accounts",
+          "description": "Column 'commodity_guid' exists in 'accounts'",
+          "passed": true,
+          "details": "Mapped to: commodity_guid",
+          "timestamp": "2026-01-12T18:00:04.901343"
+        },
+        {
+          "check_name": "COLUMN_EXISTS",
+          "table": "accounts",
+          "description": "Column 'commodity_scu' exists in 'accounts'",
+          "passed": true,
+          "details": "Mapped to: commodity_scu",
+          "timestamp": "2026-01-12T18:00:04.901530"
+        },
+        {
+          "check_name": "COLUMN_EXISTS",
+          "table": "invoices",
+          "description": "Column 'guid' exists in 'invoices'",
+          "passed": true,
+          "details": "Mapped to: guid",
+          "timestamp": "2026-01-12T18:00:04.901689"
+        },
+        {
+          "check_name": "COLUMN_EXISTS",
+          "table": "invoices",
+          "description": "Column 'id' exists in 'invoices'",
+          "passed": true,
+          "details": "Mapped to: id",
+          "timestamp": "2026-01-12T18:00:04.901861"
+        },
+        {
+          "check_name": "COLUMN_EXISTS",
+          "table": "invoices",
+          "description": "Column 'date_opened' exists in 'invoices'",
+          "passed": true,
+          "details": "Mapped to: date_opened",
+          "timestamp": "2026-01-12T18:00:04.902049"
+        },
+        {
+          "check_name": "COLUMN_EXISTS",
+          "table": "invoices",
+          "description": "Column 'date_posted' exists in 'invoices'",
+          "passed": true,
+          "details": "Mapped to: date_posted",
+          "timestamp": "2026-01-12T18:00:04.902238"
+        },
+        {
+          "check_name": "COLUMN_EXISTS",
+          "table": "invoices",
+          "description": "Column 'notes' exists in 'invoices'",
+          "passed": true,
+          "details": "Mapped to: notes",
+          "timestamp": "2026-01-12T18:00:04.902402"
+        },
+        {
+          "check_name": "COLUMN_EXISTS",
+          "table": "invoices",
+          "description": "Column 'active' exists in 'invoices'",
+          "passed": true,
+          "details": "Mapped to: active",
+          "timestamp": "2026-01-12T18:00:04.902565"
+        },
+        {
+          "check_name": "COLUMN_EXISTS",
+          "table": "invoices",
+          "description": "Column 'currency' exists in 'invoices'",
+          "passed": true,
+          "details": "Mapped to: currency",
+          "timestamp": "2026-01-12T18:00:04.902732"
+        },
+        {
+          "check_name": "COLUMN_EXISTS",
+          "table": "invoices",
+          "description": "Column 'owner_type' exists in 'invoices'",
+          "passed": true,
+          "details": "Mapped to: owner_type",
+          "timestamp": "2026-01-12T18:00:04.902886"
+        },
+        {
+          "check_name": "COLUMN_EXISTS",
+          "table": "invoices",
+          "description": "Column 'owner_guid' exists in 'invoices'",
+          "passed": true,
+          "details": "Mapped to: owner_guid",
+          "timestamp": "2026-01-12T18:00:04.903050"
+        },
+        {
+          "check_name": "COLUMN_EXISTS",
+          "table": "invoices",
+          "description": "Column 'post_lot' exists in 'invoices'",
+          "passed": true,
+          "details": "Mapped to: post_lot",
+          "timestamp": "2026-01-12T18:00:04.903231"
+        },
+        {
+          "check_name": "COLUMN_EXISTS",
+          "table": "invoices",
+          "description": "Column 'post_txn' exists in 'invoices'",
+          "passed": true,
+          "details": "Mapped to: post_txn",
+          "timestamp": "2026-01-12T18:00:04.903439"
+        },
+        {
+          "check_name": "COLUMN_EXISTS",
+          "table": "invoices",
+          "description": "Column 'post_acc' exists in 'invoices'",
+          "passed": true,
+          "details": "Mapped to: post_acc",
+          "timestamp": "2026-01-12T18:00:04.903608"
+        },
+        {
+          "check_name": "COLUMN_EXISTS",
+          "table": "entries",
+          "description": "Column 'guid' exists in 'entries'",
+          "passed": true,
+          "details": "Mapped to: guid",
+          "timestamp": "2026-01-12T18:00:04.903764"
+        },
+        {
+          "check_name": "COLUMN_EXISTS",
+          "table": "entries",
+          "description": "Column 'date' exists in 'entries'",
+          "passed": true,
+          "details": "Mapped to: date",
+          "timestamp": "2026-01-12T18:00:04.903909"
+        },
+        {
+          "check_name": "COLUMN_EXISTS",
+          "table": "entries",
+          "description": "Column 'date_entered' exists in 'entries'",
+          "passed": true,
+          "details": "Mapped to: date_entered",
+          "timestamp": "2026-01-12T18:00:04.904023"
+        },
+        {
+          "check_name": "COLUMN_EXISTS",
+          "table": "entries",
+          "description": "Column 'description' exists in 'entries'",
+          "passed": true,
+          "details": "Mapped to: description",
+          "timestamp": "2026-01-12T18:00:04.904239"
+        },
+        {
+          "check_name": "COLUMN_EXISTS",
+          "table": "entries",
+          "description": "Column 'action' exists in 'entries'",
+          "passed": true,
+          "details": "Mapped to: action",
+          "timestamp": "2026-01-12T18:00:04.904584"
+        },
+        {
+          "check_name": "COLUMN_EXISTS",
+          "table": "entries",
+          "description": "Column 'quantity_num' exists in 'entries'",
+          "passed": true,
+          "details": "Mapped to: quantity_num",
+          "timestamp": "2026-01-12T18:00:04.904811"
+        },
+        {
+          "check_name": "COLUMN_EXISTS",
+          "table": "entries",
+          "description": "Column 'quantity_denom' exists in 'entries'",
+          "passed": true,
+          "details": "Mapped to: quantity_denom",
+          "timestamp": "2026-01-12T18:00:04.906171"
+        },
+        {
+          "check_name": "COLUMN_EXISTS",
+          "table": "entries",
+          "description": "Column 'i_acct' exists in 'entries'",
+          "passed": true,
+          "details": "Mapped to: i_acct",
+          "timestamp": "2026-01-12T18:00:04.906465"
+        },
+        {
+          "check_name": "COLUMN_EXISTS",
+          "table": "entries",
+          "description": "Column 'invoice' exists in 'entries'",
+          "passed": true,
+          "details": "Mapped to: invoice",
+          "timestamp": "2026-01-12T18:00:04.907123"
+        },
+        {
+          "check_name": "COLUMN_EXISTS",
+          "table": "entries",
+          "description": "Column 'i_price_num' exists in 'entries'",
+          "passed": true,
+          "details": "Mapped to: i_price_num",
+          "timestamp": "2026-01-12T18:00:04.907411"
+        },
+        {
+          "check_name": "COLUMN_EXISTS",
+          "table": "entries",
+          "description": "Column 'i_price_denom' exists in 'entries'",
+          "passed": true,
+          "details": "Mapped to: i_price_denom",
+          "timestamp": "2026-01-12T18:00:04.907701"
+        },
+        {
+          "check_name": "COLUMN_EXISTS",
+          "table": "transactions",
+          "description": "Column 'guid' exists in 'transactions'",
+          "passed": true,
+          "details": "Mapped to: guid",
+          "timestamp": "2026-01-12T18:00:04.907938"
+        },
+        {
+          "check_name": "COLUMN_EXISTS",
+          "table": "transactions",
+          "description": "Column 'currency_guid' exists in 'transactions'",
+          "passed": true,
+          "details": "Mapped to: currency_guid",
+          "timestamp": "2026-01-12T18:00:04.908074"
+        },
+        {
+          "check_name": "COLUMN_EXISTS",
+          "table": "transactions",
+          "description": "Column 'num' exists in 'transactions'",
+          "passed": true,
+          "details": "Mapped to: num",
+          "timestamp": "2026-01-12T18:00:04.908228"
+        },
+        {
+          "check_name": "COLUMN_EXISTS",
+          "table": "transactions",
+          "description": "Column 'post_date' exists in 'transactions'",
+          "passed": true,
+          "details": "Mapped to: post_date",
+          "timestamp": "2026-01-12T18:00:04.908370"
+        },
+        {
+          "check_name": "COLUMN_EXISTS",
+          "table": "transactions",
+          "description": "Column 'enter_date' exists in 'transactions'",
+          "passed": true,
+          "details": "Mapped to: enter_date",
+          "timestamp": "2026-01-12T18:00:04.908556"
+        },
+        {
+          "check_name": "COLUMN_EXISTS",
+          "table": "transactions",
+          "description": "Column 'description' exists in 'transactions'",
+          "passed": true,
+          "details": "Mapped to: description",
+          "timestamp": "2026-01-12T18:00:04.908716"
+        },
+        {
+          "check_name": "COLUMN_EXISTS",
+          "table": "splits",
+          "description": "Column 'guid' exists in 'splits'",
+          "passed": true,
+          "details": "Mapped to: guid",
+          "timestamp": "2026-01-12T18:00:04.908862"
+        },
+        {
+          "check_name": "COLUMN_EXISTS",
+          "table": "splits",
+          "description": "Column 'tx_guid' exists in 'splits'",
+          "passed": true,
+          "details": "Mapped to: tx_guid",
+          "timestamp": "2026-01-12T18:00:04.908992"
+        },
+        {
+          "check_name": "COLUMN_EXISTS",
+          "table": "splits",
+          "description": "Column 'account_guid' exists in 'splits'",
+          "passed": true,
+          "details": "Mapped to: account_guid",
+          "timestamp": "2026-01-12T18:00:04.909131"
+        },
+        {
+          "check_name": "COLUMN_EXISTS",
+          "table": "splits",
+          "description": "Column 'memo' exists in 'splits'",
+          "passed": true,
+          "details": "Mapped to: memo",
+          "timestamp": "2026-01-12T18:00:04.909575"
+        },
+        {
+          "check_name": "COLUMN_EXISTS",
+          "table": "splits",
+          "description": "Column 'action' exists in 'splits'",
+          "passed": true,
+          "details": "Mapped to: action",
+          "timestamp": "2026-01-12T18:00:04.910889"
+        },
+        {
+          "check_name": "COLUMN_EXISTS",
+          "table": "splits",
+          "description": "Column 'reconcile_state' exists in 'splits'",
+          "passed": true,
+          "details": "Mapped to: reconcile_state",
+          "timestamp": "2026-01-12T18:00:04.911309"
+        },
+        {
+          "check_name": "COLUMN_EXISTS",
+          "table": "splits",
+          "description": "Column 'value_num' exists in 'splits'",
+          "passed": true,
+          "details": "Mapped to: value_num",
+          "timestamp": "2026-01-12T18:00:04.911706"
+        },
+        {
+          "check_name": "COLUMN_EXISTS",
+          "table": "splits",
+          "description": "Column 'value_denom' exists in 'splits'",
+          "passed": true,
+          "details": "Mapped to: value_denom",
+          "timestamp": "2026-01-12T18:00:04.911875"
+        },
+        {
+          "check_name": "COLUMN_EXISTS",
+          "table": "splits",
+          "description": "Column 'quantity_num' exists in 'splits'",
+          "passed": true,
+          "details": "Mapped to: quantity_num",
+          "timestamp": "2026-01-12T18:00:04.912003"
+        },
+        {
+          "check_name": "COLUMN_EXISTS",
+          "table": "splits",
+          "description": "Column 'quantity_denom' exists in 'splits'",
+          "passed": true,
+          "details": "Mapped to: quantity_denom",
+          "timestamp": "2026-01-12T18:00:04.912115"
+        },
+        {
+          "check_name": "COLUMN_EXISTS",
+          "table": "lots",
+          "description": "Column 'guid' exists in 'lots'",
+          "passed": true,
+          "details": "Mapped to: guid",
+          "timestamp": "2026-01-12T18:00:04.912346"
+        },
+        {
+          "check_name": "COLUMN_EXISTS",
+          "table": "lots",
+          "description": "Column 'account_guid' exists in 'lots'",
+          "passed": true,
+          "details": "Mapped to: account_guid",
+          "timestamp": "2026-01-12T18:00:04.912516"
+        },
+        {
+          "check_name": "COLUMN_EXISTS",
+          "table": "lots",
+          "description": "Column 'is_closed' exists in 'lots'",
+          "passed": true,
+          "details": "Mapped to: is_closed",
+          "timestamp": "2026-01-12T18:00:04.912646"
+        },
+        {
+          "check_name": "COLUMN_EXISTS",
+          "table": "commodities",
+          "description": "Column 'guid' exists in 'commodities'",
+          "passed": true,
+          "details": "Mapped to: guid",
+          "timestamp": "2026-01-12T18:00:04.912787"
+        },
+        {
+          "check_name": "COLUMN_EXISTS",
+          "table": "commodities",
+          "description": "Column 'mnemonic' exists in 'commodities'",
+          "passed": true,
+          "details": "Mapped to: mnemonic",
+          "timestamp": "2026-01-12T18:00:04.912917"
+        },
+        {
+          "check_name": "COLUMN_EXISTS",
+          "table": "commodities",
+          "description": "Column 'namespace' exists in 'commodities'",
+          "passed": true,
+          "details": "Mapped to: namespace",
+          "timestamp": "2026-01-12T18:00:04.913055"
+        },
+        {
+          "check_name": "COLUMN_EXISTS",
+          "table": "books",
+          "description": "Column 'guid' exists in 'books'",
+          "passed": true,
+          "details": "Mapped to: guid",
+          "timestamp": "2026-01-12T18:00:04.913200"
+        },
+        {
+          "check_name": "AP_ACCOUNT",
+          "table": "accounts",
+          "description": "Accounts Payable account exists",
+          "passed": true,
+          "details": "Name: Accounts Payable, GUID: 5ac94bcf2c43...",
+          "timestamp": "2026-01-12T18:00:04.913777"
+        },
+        {
+          "check_name": "EXPENSE_PARENT",
+          "table": "accounts",
+          "description": "Top-level Expense account exists",
+          "passed": true,
+          "details": "Name: Expenses root, GUID: 6b7f7b71f0a7...",
+          "timestamp": "2026-01-12T18:00:04.915527"
+        },
+        {
+          "check_name": "LIABILITY_PARENT",
+          "table": "accounts",
+          "description": "Top-level Liabilities account exists",
+          "passed": true,
+          "details": "Name: Liabilities root, GUID: 171683286aa9...",
+          "timestamp": "2026-01-12T18:00:04.916117"
+        },
+        {
+          "check_name": "USD_CURRENCY",
+          "table": "commodities",
+          "description": "USD currency exists",
+          "passed": true,
+          "details": "GUID: ba2343cfce024968aedb0c606ac457e1",
+          "timestamp": "2026-01-12T18:00:04.916687"
+        },
+        {
+          "check_name": "BOOK_GUID",
+          "table": "books",
+          "description": "Book GUID exists",
+          "passed": true,
+          "details": "GUID: 023fe1583f01448d97514ab72a873685",
+          "timestamp": "2026-01-12T18:00:04.917455"
+        },
+        {
+          "check_name": "DATE_FORMAT",
+          "table": "transactions",
+          "description": "Date format detected: iso",
+          "passed": true,
+          "details": "2831/2831 transactions use iso format",
+          "timestamp": "2026-01-12T18:00:04.922673"
+        }
+      ],
+      "errors": [],
+      "warnings": []
+    },
+    {
+      "run_id": "VR-20260112-180104-076050",
+      "timestamp": "2026-01-12T18:01:04.383923",
+      "database_path": "D:\\Users\\Conrad\\Documents\\GnuCash\\gnuCash414\\CFSIV_Sqlite3_database.gnucash",
+      "total_checks": 81,
+      "passed_checks": 81,
+      "failed_checks": 0,
+      "all_passed": true,
+      "checks": [
+        {
+          "check_name": "DB_CONNECTION",
+          "table": "database",
+          "description": "Database connection established",
+          "passed": true,
+          "details": "Connected to D:\\Users\\Conrad\\Documents\\GnuCash\\gnuCash414\\CFSIV_Sqlite3_database.gnucash",
+          "timestamp": "2026-01-12T18:01:04.385993"
+        },
+        {
+          "check_name": "TABLE_EXISTS",
+          "table": "vendors",
+          "description": "Table 'vendors' exists with 18 columns",
+          "passed": true,
+          "details": "Columns: guid, name, id, notes, currency, active, tax_override, addr_name, addr_addr1, addr_addr2, addr_addr3, addr_addr4, addr_phone, addr_fax, addr_email, terms, tax_inc, tax_table",
+          "timestamp": "2026-01-12T18:01:04.388297"
+        },
+        {
+          "check_name": "TABLE_EXISTS",
+          "table": "accounts",
+          "description": "Table 'accounts' exists with 11 columns",
+          "passed": true,
+          "details": "Columns: guid, name, account_type, commodity_guid, commodity_scu, non_std_scu, parent_guid, code, description, hidden, placeholder",
+          "timestamp": "2026-01-12T18:01:04.389113"
+        },
+        {
+          "check_name": "TABLE_EXISTS",
+          "table": "invoices",
+          "description": "Table 'invoices' exists with 18 columns",
+          "passed": true,
+          "details": "Columns: guid, id, date_opened, date_posted, notes, active, currency, owner_type, owner_guid, terms, billing_id, post_txn, post_lot, post_acc, billto_type, billto_guid, charge_amt_num, charge_amt_denom",
+          "timestamp": "2026-01-12T18:01:04.390479"
+        },
+        {
+          "check_name": "TABLE_EXISTS",
+          "table": "entries",
+          "description": "Table 'entries' exists with 31 columns",
+          "passed": true,
+          "details": "Columns: guid, date, date_entered, description, action, notes, quantity_num, quantity_denom, i_acct, i_price_num, i_price_denom, i_discount_num, i_discount_denom, invoice, i_disc_type, i_disc_how, i_taxable, i_taxincluded, i_taxtable, b_acct, b_price_num, b_price_denom, bill, b_taxable, b_taxincluded, b_taxtable, b_paytype, billable, billto_type, billto_guid, order_guid",
+          "timestamp": "2026-01-12T18:01:04.391880"
+        },
+        {
+          "check_name": "TABLE_EXISTS",
+          "table": "transactions",
+          "description": "Table 'transactions' exists with 6 columns",
+          "passed": true,
+          "details": "Columns: guid, currency_guid, num, post_date, enter_date, description",
+          "timestamp": "2026-01-12T18:01:04.392811"
+        },
+        {
+          "check_name": "TABLE_EXISTS",
+          "table": "splits",
+          "description": "Table 'splits' exists with 12 columns",
+          "passed": true,
+          "details": "Columns: guid, tx_guid, account_guid, memo, action, reconcile_state, reconcile_date, value_num, value_denom, quantity_num, quantity_denom, lot_guid",
+          "timestamp": "2026-01-12T18:01:04.393610"
+        },
+        {
+          "check_name": "TABLE_EXISTS",
+          "table": "lots",
+          "description": "Table 'lots' exists with 3 columns",
+          "passed": true,
+          "details": "Columns: guid, account_guid, is_closed",
+          "timestamp": "2026-01-12T18:01:04.394517"
+        },
+        {
+          "check_name": "TABLE_EXISTS",
+          "table": "commodities",
+          "description": "Table 'commodities' exists with 9 columns",
+          "passed": true,
+          "details": "Columns: guid, namespace, mnemonic, fullname, cusip, fraction, quote_flag, quote_source, quote_tz",
+          "timestamp": "2026-01-12T18:01:04.395558"
+        },
+        {
+          "check_name": "TABLE_EXISTS",
+          "table": "books",
+          "description": "Table 'books' exists with 3 columns",
+          "passed": true,
+          "details": "Columns: guid, root_account_guid, root_template_guid",
+          "timestamp": "2026-01-12T18:01:04.396448"
+        },
+        {
+          "check_name": "COLUMN_EXISTS",
+          "table": "vendors",
+          "description": "Column 'guid' exists in 'vendors'",
+          "passed": true,
+          "details": "Mapped to: guid",
+          "timestamp": "2026-01-12T18:01:04.397007"
+        },
+        {
+          "check_name": "COLUMN_EXISTS",
+          "table": "vendors",
+          "description": "Column 'id' exists in 'vendors'",
+          "passed": true,
+          "details": "Mapped to: id",
+          "timestamp": "2026-01-12T18:01:04.397306"
+        },
+        {
+          "check_name": "COLUMN_EXISTS",
+          "table": "vendors",
+          "description": "Column 'name' exists in 'vendors'",
+          "passed": true,
+          "details": "Mapped to: name",
+          "timestamp": "2026-01-12T18:01:04.397557"
+        },
+        {
+          "check_name": "COLUMN_EXISTS",
+          "table": "vendors",
+          "description": "Column 'currency' exists in 'vendors'",
+          "passed": true,
+          "details": "Mapped to: currency",
+          "timestamp": "2026-01-12T18:01:04.397742"
+        },
+        {
+          "check_name": "COLUMN_EXISTS",
+          "table": "vendors",
+          "description": "Column 'active' exists in 'vendors'",
+          "passed": true,
+          "details": "Mapped to: active",
+          "timestamp": "2026-01-12T18:01:04.397907"
+        },
+        {
+          "check_name": "COLUMN_EXISTS",
+          "table": "vendors",
+          "description": "Column 'notes' exists in 'vendors'",
+          "passed": true,
+          "details": "Mapped to: notes",
+          "timestamp": "2026-01-12T18:01:04.398095"
+        },
+        {
+          "check_name": "COLUMN_EXISTS",
+          "table": "vendors",
+          "description": "Column 'addr_name' exists in 'vendors'",
+          "passed": true,
+          "details": "Mapped to: addr_name",
+          "timestamp": "2026-01-12T18:01:04.398268"
+        },
+        {
+          "check_name": "COLUMN_EXISTS",
+          "table": "vendors",
+          "description": "Column 'addr_addr1' exists in 'vendors'",
+          "passed": true,
+          "details": "Mapped to: addr_addr1",
+          "timestamp": "2026-01-12T18:01:04.398576"
+        },
+        {
+          "check_name": "COLUMN_EXISTS",
+          "table": "vendors",
+          "description": "Column 'addr_addr2' exists in 'vendors'",
+          "passed": true,
+          "details": "Mapped to: addr_addr2",
+          "timestamp": "2026-01-12T18:01:04.398856"
+        },
+        {
+          "check_name": "COLUMN_EXISTS",
+          "table": "vendors",
+          "description": "Column 'addr_addr3' exists in 'vendors'",
+          "passed": true,
+          "details": "Mapped to: addr_addr3",
+          "timestamp": "2026-01-12T18:01:04.399077"
+        },
+        {
+          "check_name": "COLUMN_EXISTS",
+          "table": "vendors",
+          "description": "Column 'addr_addr4' exists in 'vendors'",
+          "passed": true,
+          "details": "Mapped to: addr_addr4",
+          "timestamp": "2026-01-12T18:01:04.399492"
+        },
+        {
+          "check_name": "COLUMN_EXISTS",
+          "table": "vendors",
+          "description": "Column 'addr_phone' exists in 'vendors'",
+          "passed": true,
+          "details": "Mapped to: addr_phone",
+          "timestamp": "2026-01-12T18:01:04.399761"
+        },
+        {
+          "check_name": "COLUMN_EXISTS",
+          "table": "vendors",
+          "description": "Column 'addr_email' exists in 'vendors'",
+          "passed": true,
+          "details": "Mapped to: addr_email",
+          "timestamp": "2026-01-12T18:01:04.399916"
+        },
+        {
+          "check_name": "COLUMN_EXISTS",
+          "table": "accounts",
+          "description": "Column 'guid' exists in 'accounts'",
+          "passed": true,
+          "details": "Mapped to: guid",
+          "timestamp": "2026-01-12T18:01:04.400063"
+        },
+        {
+          "check_name": "COLUMN_EXISTS",
+          "table": "accounts",
+          "description": "Column 'name' exists in 'accounts'",
+          "passed": true,
+          "details": "Mapped to: name",
+          "timestamp": "2026-01-12T18:01:04.400265"
+        },
+        {
+          "check_name": "COLUMN_EXISTS",
+          "table": "accounts",
+          "description": "Column 'account_type' exists in 'accounts'",
+          "passed": true,
+          "details": "Mapped to: account_type",
+          "timestamp": "2026-01-12T18:01:04.400443"
+        },
+        {
+          "check_name": "COLUMN_EXISTS",
+          "table": "accounts",
+          "description": "Column 'parent_guid' exists in 'accounts'",
+          "passed": true,
+          "details": "Mapped to: parent_guid",
+          "timestamp": "2026-01-12T18:01:04.400613"
+        },
+        {
+          "check_name": "COLUMN_EXISTS",
+          "table": "accounts",
+          "description": "Column 'commodity_guid' exists in 'accounts'",
+          "passed": true,
+          "details": "Mapped to: commodity_guid",
+          "timestamp": "2026-01-12T18:01:04.400787"
+        },
+        {
+          "check_name": "COLUMN_EXISTS",
+          "table": "accounts",
+          "description": "Column 'commodity_scu' exists in 'accounts'",
+          "passed": true,
+          "details": "Mapped to: commodity_scu",
+          "timestamp": "2026-01-12T18:01:04.400975"
+        },
+        {
+          "check_name": "COLUMN_EXISTS",
+          "table": "invoices",
+          "description": "Column 'guid' exists in 'invoices'",
+          "passed": true,
+          "details": "Mapped to: guid",
+          "timestamp": "2026-01-12T18:01:04.401163"
+        },
+        {
+          "check_name": "COLUMN_EXISTS",
+          "table": "invoices",
+          "description": "Column 'id' exists in 'invoices'",
+          "passed": true,
+          "details": "Mapped to: id",
+          "timestamp": "2026-01-12T18:01:04.401359"
+        },
+        {
+          "check_name": "COLUMN_EXISTS",
+          "table": "invoices",
+          "description": "Column 'date_opened' exists in 'invoices'",
+          "passed": true,
+          "details": "Mapped to: date_opened",
+          "timestamp": "2026-01-12T18:01:04.401528"
+        },
+        {
+          "check_name": "COLUMN_EXISTS",
+          "table": "invoices",
+          "description": "Column 'date_posted' exists in 'invoices'",
+          "passed": true,
+          "details": "Mapped to: date_posted",
+          "timestamp": "2026-01-12T18:01:04.401708"
+        },
+        {
+          "check_name": "COLUMN_EXISTS",
+          "table": "invoices",
+          "description": "Column 'notes' exists in 'invoices'",
+          "passed": true,
+          "details": "Mapped to: notes",
+          "timestamp": "2026-01-12T18:01:04.401877"
+        },
+        {
+          "check_name": "COLUMN_EXISTS",
+          "table": "invoices",
+          "description": "Column 'active' exists in 'invoices'",
+          "passed": true,
+          "details": "Mapped to: active",
+          "timestamp": "2026-01-12T18:01:04.402038"
+        },
+        {
+          "check_name": "COLUMN_EXISTS",
+          "table": "invoices",
+          "description": "Column 'currency' exists in 'invoices'",
+          "passed": true,
+          "details": "Mapped to: currency",
+          "timestamp": "2026-01-12T18:01:04.402210"
+        },
+        {
+          "check_name": "COLUMN_EXISTS",
+          "table": "invoices",
+          "description": "Column 'owner_type' exists in 'invoices'",
+          "passed": true,
+          "details": "Mapped to: owner_type",
+          "timestamp": "2026-01-12T18:01:04.402392"
+        },
+        {
+          "check_name": "COLUMN_EXISTS",
+          "table": "invoices",
+          "description": "Column 'owner_guid' exists in 'invoices'",
+          "passed": true,
+          "details": "Mapped to: owner_guid",
+          "timestamp": "2026-01-12T18:01:04.402557"
+        },
+        {
+          "check_name": "COLUMN_EXISTS",
+          "table": "invoices",
+          "description": "Column 'post_lot' exists in 'invoices'",
+          "passed": true,
+          "details": "Mapped to: post_lot",
+          "timestamp": "2026-01-12T18:01:04.402716"
+        },
+        {
+          "check_name": "COLUMN_EXISTS",
+          "table": "invoices",
+          "description": "Column 'post_txn' exists in 'invoices'",
+          "passed": true,
+          "details": "Mapped to: post_txn",
+          "timestamp": "2026-01-12T18:01:04.402866"
+        },
+        {
+          "check_name": "COLUMN_EXISTS",
+          "table": "invoices",
+          "description": "Column 'post_acc' exists in 'invoices'",
+          "passed": true,
+          "details": "Mapped to: post_acc",
+          "timestamp": "2026-01-12T18:01:04.403014"
+        },
+        {
+          "check_name": "COLUMN_EXISTS",
+          "table": "entries",
+          "description": "Column 'guid' exists in 'entries'",
+          "passed": true,
+          "details": "Mapped to: guid",
+          "timestamp": "2026-01-12T18:01:04.403160"
+        },
+        {
+          "check_name": "COLUMN_EXISTS",
+          "table": "entries",
+          "description": "Column 'date' exists in 'entries'",
+          "passed": true,
+          "details": "Mapped to: date",
+          "timestamp": "2026-01-12T18:01:04.403308"
+        },
+        {
+          "check_name": "COLUMN_EXISTS",
+          "table": "entries",
+          "description": "Column 'date_entered' exists in 'entries'",
+          "passed": true,
+          "details": "Mapped to: date_entered",
+          "timestamp": "2026-01-12T18:01:04.403449"
+        },
+        {
+          "check_name": "COLUMN_EXISTS",
+          "table": "entries",
+          "description": "Column 'description' exists in 'entries'",
+          "passed": true,
+          "details": "Mapped to: description",
+          "timestamp": "2026-01-12T18:01:04.403596"
+        },
+        {
+          "check_name": "COLUMN_EXISTS",
+          "table": "entries",
+          "description": "Column 'action' exists in 'entries'",
+          "passed": true,
+          "details": "Mapped to: action",
+          "timestamp": "2026-01-12T18:01:04.403752"
+        },
+        {
+          "check_name": "COLUMN_EXISTS",
+          "table": "entries",
+          "description": "Column 'quantity_num' exists in 'entries'",
+          "passed": true,
+          "details": "Mapped to: quantity_num",
+          "timestamp": "2026-01-12T18:01:04.403900"
+        },
+        {
+          "check_name": "COLUMN_EXISTS",
+          "table": "entries",
+          "description": "Column 'quantity_denom' exists in 'entries'",
+          "passed": true,
+          "details": "Mapped to: quantity_denom",
+          "timestamp": "2026-01-12T18:01:04.404109"
+        },
+        {
+          "check_name": "COLUMN_EXISTS",
+          "table": "entries",
+          "description": "Column 'i_acct' exists in 'entries'",
+          "passed": true,
+          "details": "Mapped to: i_acct",
+          "timestamp": "2026-01-12T18:01:04.404652"
+        },
+        {
+          "check_name": "COLUMN_EXISTS",
+          "table": "entries",
+          "description": "Column 'invoice' exists in 'entries'",
+          "passed": true,
+          "details": "Mapped to: invoice",
+          "timestamp": "2026-01-12T18:01:04.404917"
+        },
+        {
+          "check_name": "COLUMN_EXISTS",
+          "table": "entries",
+          "description": "Column 'i_price_num' exists in 'entries'",
+          "passed": true,
+          "details": "Mapped to: i_price_num",
+          "timestamp": "2026-01-12T18:01:04.405058"
+        },
+        {
+          "check_name": "COLUMN_EXISTS",
+          "table": "entries",
+          "description": "Column 'i_price_denom' exists in 'entries'",
+          "passed": true,
+          "details": "Mapped to: i_price_denom",
+          "timestamp": "2026-01-12T18:01:04.406192"
+        },
+        {
+          "check_name": "COLUMN_EXISTS",
+          "table": "transactions",
+          "description": "Column 'guid' exists in 'transactions'",
+          "passed": true,
+          "details": "Mapped to: guid",
+          "timestamp": "2026-01-12T18:01:04.406935"
+        },
+        {
+          "check_name": "COLUMN_EXISTS",
+          "table": "transactions",
+          "description": "Column 'currency_guid' exists in 'transactions'",
+          "passed": true,
+          "details": "Mapped to: currency_guid",
+          "timestamp": "2026-01-12T18:01:04.407868"
+        },
+        {
+          "check_name": "COLUMN_EXISTS",
+          "table": "transactions",
+          "description": "Column 'num' exists in 'transactions'",
+          "passed": true,
+          "details": "Mapped to: num",
+          "timestamp": "2026-01-12T18:01:04.408228"
+        },
+        {
+          "check_name": "COLUMN_EXISTS",
+          "table": "transactions",
+          "description": "Column 'post_date' exists in 'transactions'",
+          "passed": true,
+          "details": "Mapped to: post_date",
+          "timestamp": "2026-01-12T18:01:04.408368"
+        },
+        {
+          "check_name": "COLUMN_EXISTS",
+          "table": "transactions",
+          "description": "Column 'enter_date' exists in 'transactions'",
+          "passed": true,
+          "details": "Mapped to: enter_date",
+          "timestamp": "2026-01-12T18:01:04.408510"
+        },
+        {
+          "check_name": "COLUMN_EXISTS",
+          "table": "transactions",
+          "description": "Column 'description' exists in 'transactions'",
+          "passed": true,
+          "details": "Mapped to: description",
+          "timestamp": "2026-01-12T18:01:04.408734"
+        },
+        {
+          "check_name": "COLUMN_EXISTS",
+          "table": "splits",
+          "description": "Column 'guid' exists in 'splits'",
+          "passed": true,
+          "details": "Mapped to: guid",
+          "timestamp": "2026-01-12T18:01:04.408943"
+        },
+        {
+          "check_name": "COLUMN_EXISTS",
+          "table": "splits",
+          "description": "Column 'tx_guid' exists in 'splits'",
+          "passed": true,
+          "details": "Mapped to: tx_guid",
+          "timestamp": "2026-01-12T18:01:04.409084"
+        },
+        {
+          "check_name": "COLUMN_EXISTS",
+          "table": "splits",
+          "description": "Column 'account_guid' exists in 'splits'",
+          "passed": true,
+          "details": "Mapped to: account_guid",
+          "timestamp": "2026-01-12T18:01:04.409213"
+        },
+        {
+          "check_name": "COLUMN_EXISTS",
+          "table": "splits",
+          "description": "Column 'memo' exists in 'splits'",
+          "passed": true,
+          "details": "Mapped to: memo",
+          "timestamp": "2026-01-12T18:01:04.409359"
+        },
+        {
+          "check_name": "COLUMN_EXISTS",
+          "table": "splits",
+          "description": "Column 'action' exists in 'splits'",
+          "passed": true,
+          "details": "Mapped to: action",
+          "timestamp": "2026-01-12T18:01:04.409807"
+        },
+        {
+          "check_name": "COLUMN_EXISTS",
+          "table": "splits",
+          "description": "Column 'reconcile_state' exists in 'splits'",
+          "passed": true,
+          "details": "Mapped to: reconcile_state",
+          "timestamp": "2026-01-12T18:01:04.410063"
+        },
+        {
+          "check_name": "COLUMN_EXISTS",
+          "table": "splits",
+          "description": "Column 'value_num' exists in 'splits'",
+          "passed": true,
+          "details": "Mapped to: value_num",
+          "timestamp": "2026-01-12T18:01:04.410379"
+        },
+        {
+          "check_name": "COLUMN_EXISTS",
+          "table": "splits",
+          "description": "Column 'value_denom' exists in 'splits'",
+          "passed": true,
+          "details": "Mapped to: value_denom",
+          "timestamp": "2026-01-12T18:01:04.410606"
+        },
+        {
+          "check_name": "COLUMN_EXISTS",
+          "table": "splits",
+          "description": "Column 'quantity_num' exists in 'splits'",
+          "passed": true,
+          "details": "Mapped to: quantity_num",
+          "timestamp": "2026-01-12T18:01:04.410917"
+        },
+        {
+          "check_name": "COLUMN_EXISTS",
+          "table": "splits",
+          "description": "Column 'quantity_denom' exists in 'splits'",
+          "passed": true,
+          "details": "Mapped to: quantity_denom",
+          "timestamp": "2026-01-12T18:01:04.411223"
+        },
+        {
+          "check_name": "COLUMN_EXISTS",
+          "table": "lots",
+          "description": "Column 'guid' exists in 'lots'",
+          "passed": true,
+          "details": "Mapped to: guid",
+          "timestamp": "2026-01-12T18:01:04.411499"
+        },
+        {
+          "check_name": "COLUMN_EXISTS",
+          "table": "lots",
+          "description": "Column 'account_guid' exists in 'lots'",
+          "passed": true,
+          "details": "Mapped to: account_guid",
+          "timestamp": "2026-01-12T18:01:04.411669"
+        },
+        {
+          "check_name": "COLUMN_EXISTS",
+          "table": "lots",
+          "description": "Column 'is_closed' exists in 'lots'",
+          "passed": true,
+          "details": "Mapped to: is_closed",
+          "timestamp": "2026-01-12T18:01:04.412022"
+        },
+        {
+          "check_name": "COLUMN_EXISTS",
+          "table": "commodities",
+          "description": "Column 'guid' exists in 'commodities'",
+          "passed": true,
+          "details": "Mapped to: guid",
+          "timestamp": "2026-01-12T18:01:04.412308"
+        },
+        {
+          "check_name": "COLUMN_EXISTS",
+          "table": "commodities",
+          "description": "Column 'mnemonic' exists in 'commodities'",
+          "passed": true,
+          "details": "Mapped to: mnemonic",
+          "timestamp": "2026-01-12T18:01:04.412536"
+        },
+        {
+          "check_name": "COLUMN_EXISTS",
+          "table": "commodities",
+          "description": "Column 'namespace' exists in 'commodities'",
+          "passed": true,
+          "details": "Mapped to: namespace",
+          "timestamp": "2026-01-12T18:01:04.412799"
+        },
+        {
+          "check_name": "COLUMN_EXISTS",
+          "table": "books",
+          "description": "Column 'guid' exists in 'books'",
+          "passed": true,
+          "details": "Mapped to: guid",
+          "timestamp": "2026-01-12T18:01:04.412989"
+        },
+        {
+          "check_name": "AP_ACCOUNT",
+          "table": "accounts",
+          "description": "Accounts Payable account exists",
+          "passed": true,
+          "details": "Name: Accounts Payable, GUID: 5ac94bcf2c43...",
+          "timestamp": "2026-01-12T18:01:04.413724"
+        },
+        {
+          "check_name": "EXPENSE_PARENT",
+          "table": "accounts",
+          "description": "Top-level Expense account exists",
+          "passed": true,
+          "details": "Name: Expenses root, GUID: 6b7f7b71f0a7...",
+          "timestamp": "2026-01-12T18:01:04.414484"
+        },
+        {
+          "check_name": "LIABILITY_PARENT",
+          "table": "accounts",
+          "description": "Top-level Liabilities account exists",
+          "passed": true,
+          "details": "Name: Liabilities root, GUID: 171683286aa9...",
+          "timestamp": "2026-01-12T18:01:04.415329"
+        },
+        {
+          "check_name": "USD_CURRENCY",
+          "table": "commodities",
+          "description": "USD currency exists",
+          "passed": true,
+          "details": "GUID: ba2343cfce024968aedb0c606ac457e1",
+          "timestamp": "2026-01-12T18:01:04.416070"
+        },
+        {
+          "check_name": "BOOK_GUID",
+          "table": "books",
+          "description": "Book GUID exists",
+          "passed": true,
+          "details": "GUID: 023fe1583f01448d97514ab72a873685",
+          "timestamp": "2026-01-12T18:01:04.416569"
+        },
+        {
+          "check_name": "DATE_FORMAT",
+          "table": "transactions",
+          "description": "Date format detected: iso",
+          "passed": true,
+          "details": "2831/2831 transactions use iso format",
+          "timestamp": "2026-01-12T18:01:04.418116"
+        }
+      ],
+      "errors": [],
+      "warnings": []
+    },
+    {
+      "run_id": "VR-20260112-180138-aed4d2",
+      "timestamp": "2026-01-12T18:01:38.742207",
+      "database_path": "D:\\Users\\Conrad\\Documents\\GnuCash\\gnuCash414\\CFSIV_Sqlite3_database.gnucash",
+      "total_checks": 81,
+      "passed_checks": 81,
+      "failed_checks": 0,
+      "all_passed": true,
+      "checks": [
+        {
+          "check_name": "DB_CONNECTION",
+          "table": "database",
+          "description": "Database connection established",
+          "passed": true,
+          "details": "Connected to D:\\Users\\Conrad\\Documents\\GnuCash\\gnuCash414\\CFSIV_Sqlite3_database.gnucash",
+          "timestamp": "2026-01-12T18:01:38.744069"
+        },
+        {
+          "check_name": "TABLE_EXISTS",
+          "table": "vendors",
+          "description": "Table 'vendors' exists with 18 columns",
+          "passed": true,
+          "details": "Columns: guid, name, id, notes, currency, active, tax_override, addr_name, addr_addr1, addr_addr2, addr_addr3, addr_addr4, addr_phone, addr_fax, addr_email, terms, tax_inc, tax_table",
+          "timestamp": "2026-01-12T18:01:38.745414"
+        },
+        {
+          "check_name": "TABLE_EXISTS",
+          "table": "accounts",
+          "description": "Table 'accounts' exists with 11 columns",
+          "passed": true,
+          "details": "Columns: guid, name, account_type, commodity_guid, commodity_scu, non_std_scu, parent_guid, code, description, hidden, placeholder",
+          "timestamp": "2026-01-12T18:01:38.746927"
+        },
+        {
+          "check_name": "TABLE_EXISTS",
+          "table": "invoices",
+          "description": "Table 'invoices' exists with 18 columns",
+          "passed": true,
+          "details": "Columns: guid, id, date_opened, date_posted, notes, active, currency, owner_type, owner_guid, terms, billing_id, post_txn, post_lot, post_acc, billto_type, billto_guid, charge_amt_num, charge_amt_denom",
+          "timestamp": "2026-01-12T18:01:38.748276"
+        },
+        {
+          "check_name": "TABLE_EXISTS",
+          "table": "entries",
+          "description": "Table 'entries' exists with 31 columns",
+          "passed": true,
+          "details": "Columns: guid, date, date_entered, description, action, notes, quantity_num, quantity_denom, i_acct, i_price_num, i_price_denom, i_discount_num, i_discount_denom, invoice, i_disc_type, i_disc_how, i_taxable, i_taxincluded, i_taxtable, b_acct, b_price_num, b_price_denom, bill, b_taxable, b_taxincluded, b_taxtable, b_paytype, billable, billto_type, billto_guid, order_guid",
+          "timestamp": "2026-01-12T18:01:38.750101"
+        },
+        {
+          "check_name": "TABLE_EXISTS",
+          "table": "transactions",
+          "description": "Table 'transactions' exists with 6 columns",
+          "passed": true,
+          "details": "Columns: guid, currency_guid, num, post_date, enter_date, description",
+          "timestamp": "2026-01-12T18:01:38.751028"
+        },
+        {
+          "check_name": "TABLE_EXISTS",
+          "table": "splits",
+          "description": "Table 'splits' exists with 12 columns",
+          "passed": true,
+          "details": "Columns: guid, tx_guid, account_guid, memo, action, reconcile_state, reconcile_date, value_num, value_denom, quantity_num, quantity_denom, lot_guid",
+          "timestamp": "2026-01-12T18:01:38.752343"
+        },
+        {
+          "check_name": "TABLE_EXISTS",
+          "table": "lots",
+          "description": "Table 'lots' exists with 3 columns",
+          "passed": true,
+          "details": "Columns: guid, account_guid, is_closed",
+          "timestamp": "2026-01-12T18:01:38.753211"
+        },
+        {
+          "check_name": "TABLE_EXISTS",
+          "table": "commodities",
+          "description": "Table 'commodities' exists with 9 columns",
+          "passed": true,
+          "details": "Columns: guid, namespace, mnemonic, fullname, cusip, fraction, quote_flag, quote_source, quote_tz",
+          "timestamp": "2026-01-12T18:01:38.754346"
+        },
+        {
+          "check_name": "TABLE_EXISTS",
+          "table": "books",
+          "description": "Table 'books' exists with 3 columns",
+          "passed": true,
+          "details": "Columns: guid, root_account_guid, root_template_guid",
+          "timestamp": "2026-01-12T18:01:38.755013"
+        },
+        {
+          "check_name": "COLUMN_EXISTS",
+          "table": "vendors",
+          "description": "Column 'guid' exists in 'vendors'",
+          "passed": true,
+          "details": "Mapped to: guid",
+          "timestamp": "2026-01-12T18:01:38.755329"
+        },
+        {
+          "check_name": "COLUMN_EXISTS",
+          "table": "vendors",
+          "description": "Column 'id' exists in 'vendors'",
+          "passed": true,
+          "details": "Mapped to: id",
+          "timestamp": "2026-01-12T18:01:38.755453"
+        },
+        {
+          "check_name": "COLUMN_EXISTS",
+          "table": "vendors",
+          "description": "Column 'name' exists in 'vendors'",
+          "passed": true,
+          "details": "Mapped to: name",
+          "timestamp": "2026-01-12T18:01:38.755558"
+        },
+        {
+          "check_name": "COLUMN_EXISTS",
+          "table": "vendors",
+          "description": "Column 'currency' exists in 'vendors'",
+          "passed": true,
+          "details": "Mapped to: currency",
+          "timestamp": "2026-01-12T18:01:38.755724"
+        },
+        {
+          "check_name": "COLUMN_EXISTS",
+          "table": "vendors",
+          "description": "Column 'active' exists in 'vendors'",
+          "passed": true,
+          "details": "Mapped to: active",
+          "timestamp": "2026-01-12T18:01:38.755855"
+        },
+        {
+          "check_name": "COLUMN_EXISTS",
+          "table": "vendors",
+          "description": "Column 'notes' exists in 'vendors'",
+          "passed": true,
+          "details": "Mapped to: notes",
+          "timestamp": "2026-01-12T18:01:38.755983"
+        },
+        {
+          "check_name": "COLUMN_EXISTS",
+          "table": "vendors",
+          "description": "Column 'addr_name' exists in 'vendors'",
+          "passed": true,
+          "details": "Mapped to: addr_name",
+          "timestamp": "2026-01-12T18:01:38.756111"
+        },
+        {
+          "check_name": "COLUMN_EXISTS",
+          "table": "vendors",
+          "description": "Column 'addr_addr1' exists in 'vendors'",
+          "passed": true,
+          "details": "Mapped to: addr_addr1",
+          "timestamp": "2026-01-12T18:01:38.756228"
+        },
+        {
+          "check_name": "COLUMN_EXISTS",
+          "table": "vendors",
+          "description": "Column 'addr_addr2' exists in 'vendors'",
+          "passed": true,
+          "details": "Mapped to: addr_addr2",
+          "timestamp": "2026-01-12T18:01:38.756364"
+        },
+        {
+          "check_name": "COLUMN_EXISTS",
+          "table": "vendors",
+          "description": "Column 'addr_addr3' exists in 'vendors'",
+          "passed": true,
+          "details": "Mapped to: addr_addr3",
+          "timestamp": "2026-01-12T18:01:38.756468"
+        },
+        {
+          "check_name": "COLUMN_EXISTS",
+          "table": "vendors",
+          "description": "Column 'addr_addr4' exists in 'vendors'",
+          "passed": true,
+          "details": "Mapped to: addr_addr4",
+          "timestamp": "2026-01-12T18:01:38.756575"
+        },
+        {
+          "check_name": "COLUMN_EXISTS",
+          "table": "vendors",
+          "description": "Column 'addr_phone' exists in 'vendors'",
+          "passed": true,
+          "details": "Mapped to: addr_phone",
+          "timestamp": "2026-01-12T18:01:38.756672"
+        },
+        {
+          "check_name": "COLUMN_EXISTS",
+          "table": "vendors",
+          "description": "Column 'addr_email' exists in 'vendors'",
+          "passed": true,
+          "details": "Mapped to: addr_email",
+          "timestamp": "2026-01-12T18:01:38.756793"
+        },
+        {
+          "check_name": "COLUMN_EXISTS",
+          "table": "accounts",
+          "description": "Column 'guid' exists in 'accounts'",
+          "passed": true,
+          "details": "Mapped to: guid",
+          "timestamp": "2026-01-12T18:01:38.756908"
+        },
+        {
+          "check_name": "COLUMN_EXISTS",
+          "table": "accounts",
+          "description": "Column 'name' exists in 'accounts'",
+          "passed": true,
+          "details": "Mapped to: name",
+          "timestamp": "2026-01-12T18:01:38.757060"
+        },
+        {
+          "check_name": "COLUMN_EXISTS",
+          "table": "accounts",
+          "description": "Column 'account_type' exists in 'accounts'",
+          "passed": true,
+          "details": "Mapped to: account_type",
+          "timestamp": "2026-01-12T18:01:38.757344"
+        },
+        {
+          "check_name": "COLUMN_EXISTS",
+          "table": "accounts",
+          "description": "Column 'parent_guid' exists in 'accounts'",
+          "passed": true,
+          "details": "Mapped to: parent_guid",
+          "timestamp": "2026-01-12T18:01:38.757564"
+        },
+        {
+          "check_name": "COLUMN_EXISTS",
+          "table": "accounts",
+          "description": "Column 'commodity_guid' exists in 'accounts'",
+          "passed": true,
+          "details": "Mapped to: commodity_guid",
+          "timestamp": "2026-01-12T18:01:38.757734"
+        },
+        {
+          "check_name": "COLUMN_EXISTS",
+          "table": "accounts",
+          "description": "Column 'commodity_scu' exists in 'accounts'",
+          "passed": true,
+          "details": "Mapped to: commodity_scu",
+          "timestamp": "2026-01-12T18:01:38.757902"
+        },
+        {
+          "check_name": "COLUMN_EXISTS",
+          "table": "invoices",
+          "description": "Column 'guid' exists in 'invoices'",
+          "passed": true,
+          "details": "Mapped to: guid",
+          "timestamp": "2026-01-12T18:01:38.758067"
+        },
+        {
+          "check_name": "COLUMN_EXISTS",
+          "table": "invoices",
+          "description": "Column 'id' exists in 'invoices'",
+          "passed": true,
+          "details": "Mapped to: id",
+          "timestamp": "2026-01-12T18:01:38.758221"
+        },
+        {
+          "check_name": "COLUMN_EXISTS",
+          "table": "invoices",
+          "description": "Column 'date_opened' exists in 'invoices'",
+          "passed": true,
+          "details": "Mapped to: date_opened",
+          "timestamp": "2026-01-12T18:01:38.758401"
+        },
+        {
+          "check_name": "COLUMN_EXISTS",
+          "table": "invoices",
+          "description": "Column 'date_posted' exists in 'invoices'",
+          "passed": true,
+          "details": "Mapped to: date_posted",
+          "timestamp": "2026-01-12T18:01:38.758566"
+        },
+        {
+          "check_name": "COLUMN_EXISTS",
+          "table": "invoices",
+          "description": "Column 'notes' exists in 'invoices'",
+          "passed": true,
+          "details": "Mapped to: notes",
+          "timestamp": "2026-01-12T18:01:38.758736"
+        },
+        {
+          "check_name": "COLUMN_EXISTS",
+          "table": "invoices",
+          "description": "Column 'active' exists in 'invoices'",
+          "passed": true,
+          "details": "Mapped to: active",
+          "timestamp": "2026-01-12T18:01:38.758917"
+        },
+        {
+          "check_name": "COLUMN_EXISTS",
+          "table": "invoices",
+          "description": "Column 'currency' exists in 'invoices'",
+          "passed": true,
+          "details": "Mapped to: currency",
+          "timestamp": "2026-01-12T18:01:38.759161"
+        },
+        {
+          "check_name": "COLUMN_EXISTS",
+          "table": "invoices",
+          "description": "Column 'owner_type' exists in 'invoices'",
+          "passed": true,
+          "details": "Mapped to: owner_type",
+          "timestamp": "2026-01-12T18:01:38.759481"
+        },
+        {
+          "check_name": "COLUMN_EXISTS",
+          "table": "invoices",
+          "description": "Column 'owner_guid' exists in 'invoices'",
+          "passed": true,
+          "details": "Mapped to: owner_guid",
+          "timestamp": "2026-01-12T18:01:38.759644"
+        },
+        {
+          "check_name": "COLUMN_EXISTS",
+          "table": "invoices",
+          "description": "Column 'post_lot' exists in 'invoices'",
+          "passed": true,
+          "details": "Mapped to: post_lot",
+          "timestamp": "2026-01-12T18:01:38.759776"
+        },
+        {
+          "check_name": "COLUMN_EXISTS",
+          "table": "invoices",
+          "description": "Column 'post_txn' exists in 'invoices'",
+          "passed": true,
+          "details": "Mapped to: post_txn",
+          "timestamp": "2026-01-12T18:01:38.759890"
+        },
+        {
+          "check_name": "COLUMN_EXISTS",
+          "table": "invoices",
+          "description": "Column 'post_acc' exists in 'invoices'",
+          "passed": true,
+          "details": "Mapped to: post_acc",
+          "timestamp": "2026-01-12T18:01:38.760017"
+        },
+        {
+          "check_name": "COLUMN_EXISTS",
+          "table": "entries",
+          "description": "Column 'guid' exists in 'entries'",
+          "passed": true,
+          "details": "Mapped to: guid",
+          "timestamp": "2026-01-12T18:01:38.760148"
+        },
+        {
+          "check_name": "COLUMN_EXISTS",
+          "table": "entries",
+          "description": "Column 'date' exists in 'entries'",
+          "passed": true,
+          "details": "Mapped to: date",
+          "timestamp": "2026-01-12T18:01:38.760254"
+        },
+        {
+          "check_name": "COLUMN_EXISTS",
+          "table": "entries",
+          "description": "Column 'date_entered' exists in 'entries'",
+          "passed": true,
+          "details": "Mapped to: date_entered",
+          "timestamp": "2026-01-12T18:01:38.760360"
+        },
+        {
+          "check_name": "COLUMN_EXISTS",
+          "table": "entries",
+          "description": "Column 'description' exists in 'entries'",
+          "passed": true,
+          "details": "Mapped to: description",
+          "timestamp": "2026-01-12T18:01:38.760483"
+        },
+        {
+          "check_name": "COLUMN_EXISTS",
+          "table": "entries",
+          "description": "Column 'action' exists in 'entries'",
+          "passed": true,
+          "details": "Mapped to: action",
+          "timestamp": "2026-01-12T18:01:38.760597"
+        },
+        {
+          "check_name": "COLUMN_EXISTS",
+          "table": "entries",
+          "description": "Column 'quantity_num' exists in 'entries'",
+          "passed": true,
+          "details": "Mapped to: quantity_num",
+          "timestamp": "2026-01-12T18:01:38.760697"
+        },
+        {
+          "check_name": "COLUMN_EXISTS",
+          "table": "entries",
+          "description": "Column 'quantity_denom' exists in 'entries'",
+          "passed": true,
+          "details": "Mapped to: quantity_denom",
+          "timestamp": "2026-01-12T18:01:38.760794"
+        },
+        {
+          "check_name": "COLUMN_EXISTS",
+          "table": "entries",
+          "description": "Column 'i_acct' exists in 'entries'",
+          "passed": true,
+          "details": "Mapped to: i_acct",
+          "timestamp": "2026-01-12T18:01:38.760898"
+        },
+        {
+          "check_name": "COLUMN_EXISTS",
+          "table": "entries",
+          "description": "Column 'invoice' exists in 'entries'",
+          "passed": true,
+          "details": "Mapped to: invoice",
+          "timestamp": "2026-01-12T18:01:38.760995"
+        },
+        {
+          "check_name": "COLUMN_EXISTS",
+          "table": "entries",
+          "description": "Column 'i_price_num' exists in 'entries'",
+          "passed": true,
+          "details": "Mapped to: i_price_num",
+          "timestamp": "2026-01-12T18:01:38.761094"
+        },
+        {
+          "check_name": "COLUMN_EXISTS",
+          "table": "entries",
+          "description": "Column 'i_price_denom' exists in 'entries'",
+          "passed": true,
+          "details": "Mapped to: i_price_denom",
+          "timestamp": "2026-01-12T18:01:38.761193"
+        },
+        {
+          "check_name": "COLUMN_EXISTS",
+          "table": "transactions",
+          "description": "Column 'guid' exists in 'transactions'",
+          "passed": true,
+          "details": "Mapped to: guid",
+          "timestamp": "2026-01-12T18:01:38.761289"
+        },
+        {
+          "check_name": "COLUMN_EXISTS",
+          "table": "transactions",
+          "description": "Column 'currency_guid' exists in 'transactions'",
+          "passed": true,
+          "details": "Mapped to: currency_guid",
+          "timestamp": "2026-01-12T18:01:38.761383"
+        },
+        {
+          "check_name": "COLUMN_EXISTS",
+          "table": "transactions",
+          "description": "Column 'num' exists in 'transactions'",
+          "passed": true,
+          "details": "Mapped to: num",
+          "timestamp": "2026-01-12T18:01:38.761492"
+        },
+        {
+          "check_name": "COLUMN_EXISTS",
+          "table": "transactions",
+          "description": "Column 'post_date' exists in 'transactions'",
+          "passed": true,
+          "details": "Mapped to: post_date",
+          "timestamp": "2026-01-12T18:01:38.761585"
+        },
+        {
+          "check_name": "COLUMN_EXISTS",
+          "table": "transactions",
+          "description": "Column 'enter_date' exists in 'transactions'",
+          "passed": true,
+          "details": "Mapped to: enter_date",
+          "timestamp": "2026-01-12T18:01:38.761683"
+        },
+        {
+          "check_name": "COLUMN_EXISTS",
+          "table": "transactions",
+          "description": "Column 'description' exists in 'transactions'",
+          "passed": true,
+          "details": "Mapped to: description",
+          "timestamp": "2026-01-12T18:01:38.761802"
+        },
+        {
+          "check_name": "COLUMN_EXISTS",
+          "table": "splits",
+          "description": "Column 'guid' exists in 'splits'",
+          "passed": true,
+          "details": "Mapped to: guid",
+          "timestamp": "2026-01-12T18:01:38.761908"
+        },
+        {
+          "check_name": "COLUMN_EXISTS",
+          "table": "splits",
+          "description": "Column 'tx_guid' exists in 'splits'",
+          "passed": true,
+          "details": "Mapped to: tx_guid",
+          "timestamp": "2026-01-12T18:01:38.762008"
+        },
+        {
+          "check_name": "COLUMN_EXISTS",
+          "table": "splits",
+          "description": "Column 'account_guid' exists in 'splits'",
+          "passed": true,
+          "details": "Mapped to: account_guid",
+          "timestamp": "2026-01-12T18:01:38.762110"
+        },
+        {
+          "check_name": "COLUMN_EXISTS",
+          "table": "splits",
+          "description": "Column 'memo' exists in 'splits'",
+          "passed": true,
+          "details": "Mapped to: memo",
+          "timestamp": "2026-01-12T18:01:38.762477"
+        },
+        {
+          "check_name": "COLUMN_EXISTS",
+          "table": "splits",
+          "description": "Column 'action' exists in 'splits'",
+          "passed": true,
+          "details": "Mapped to: action",
+          "timestamp": "2026-01-12T18:01:38.762699"
+        },
+        {
+          "check_name": "COLUMN_EXISTS",
+          "table": "splits",
+          "description": "Column 'reconcile_state' exists in 'splits'",
+          "passed": true,
+          "details": "Mapped to: reconcile_state",
+          "timestamp": "2026-01-12T18:01:38.762876"
+        },
+        {
+          "check_name": "COLUMN_EXISTS",
+          "table": "splits",
+          "description": "Column 'value_num' exists in 'splits'",
+          "passed": true,
+          "details": "Mapped to: value_num",
+          "timestamp": "2026-01-12T18:01:38.763146"
+        },
+        {
+          "check_name": "COLUMN_EXISTS",
+          "table": "splits",
+          "description": "Column 'value_denom' exists in 'splits'",
+          "passed": true,
+          "details": "Mapped to: value_denom",
+          "timestamp": "2026-01-12T18:01:38.763550"
+        },
+        {
+          "check_name": "COLUMN_EXISTS",
+          "table": "splits",
+          "description": "Column 'quantity_num' exists in 'splits'",
+          "passed": true,
+          "details": "Mapped to: quantity_num",
+          "timestamp": "2026-01-12T18:01:38.763733"
+        },
+        {
+          "check_name": "COLUMN_EXISTS",
+          "table": "splits",
+          "description": "Column 'quantity_denom' exists in 'splits'",
+          "passed": true,
+          "details": "Mapped to: quantity_denom",
+          "timestamp": "2026-01-12T18:01:38.763904"
+        },
+        {
+          "check_name": "COLUMN_EXISTS",
+          "table": "lots",
+          "description": "Column 'guid' exists in 'lots'",
+          "passed": true,
+          "details": "Mapped to: guid",
+          "timestamp": "2026-01-12T18:01:38.764138"
+        },
+        {
+          "check_name": "COLUMN_EXISTS",
+          "table": "lots",
+          "description": "Column 'account_guid' exists in 'lots'",
+          "passed": true,
+          "details": "Mapped to: account_guid",
+          "timestamp": "2026-01-12T18:01:38.764422"
+        },
+        {
+          "check_name": "COLUMN_EXISTS",
+          "table": "lots",
+          "description": "Column 'is_closed' exists in 'lots'",
+          "passed": true,
+          "details": "Mapped to: is_closed",
+          "timestamp": "2026-01-12T18:01:38.764674"
+        },
+        {
+          "check_name": "COLUMN_EXISTS",
+          "table": "commodities",
+          "description": "Column 'guid' exists in 'commodities'",
+          "passed": true,
+          "details": "Mapped to: guid",
+          "timestamp": "2026-01-12T18:01:38.764890"
+        },
+        {
+          "check_name": "COLUMN_EXISTS",
+          "table": "commodities",
+          "description": "Column 'mnemonic' exists in 'commodities'",
+          "passed": true,
+          "details": "Mapped to: mnemonic",
+          "timestamp": "2026-01-12T18:01:38.765017"
+        },
+        {
+          "check_name": "COLUMN_EXISTS",
+          "table": "commodities",
+          "description": "Column 'namespace' exists in 'commodities'",
+          "passed": true,
+          "details": "Mapped to: namespace",
+          "timestamp": "2026-01-12T18:01:38.765155"
+        },
+        {
+          "check_name": "COLUMN_EXISTS",
+          "table": "books",
+          "description": "Column 'guid' exists in 'books'",
+          "passed": true,
+          "details": "Mapped to: guid",
+          "timestamp": "2026-01-12T18:01:38.765317"
+        },
+        {
+          "check_name": "AP_ACCOUNT",
+          "table": "accounts",
+          "description": "Accounts Payable account exists",
+          "passed": true,
+          "details": "Name: Accounts Payable, GUID: 5ac94bcf2c43...",
+          "timestamp": "2026-01-12T18:01:38.765926"
+        },
+        {
+          "check_name": "EXPENSE_PARENT",
+          "table": "accounts",
+          "description": "Top-level Expense account exists",
+          "passed": true,
+          "details": "Name: Expenses root, GUID: 6b7f7b71f0a7...",
+          "timestamp": "2026-01-12T18:01:38.766724"
+        },
+        {
+          "check_name": "LIABILITY_PARENT",
+          "table": "accounts",
+          "description": "Top-level Liabilities account exists",
+          "passed": true,
+          "details": "Name: Liabilities root, GUID: 171683286aa9...",
+          "timestamp": "2026-01-12T18:01:38.767604"
+        },
+        {
+          "check_name": "USD_CURRENCY",
+          "table": "commodities",
+          "description": "USD currency exists",
+          "passed": true,
+          "details": "GUID: ba2343cfce024968aedb0c606ac457e1",
+          "timestamp": "2026-01-12T18:01:38.768398"
+        },
+        {
+          "check_name": "BOOK_GUID",
+          "table": "books",
+          "description": "Book GUID exists",
+          "passed": true,
+          "details": "GUID: 023fe1583f01448d97514ab72a873685",
+          "timestamp": "2026-01-12T18:01:38.768875"
+        },
+        {
+          "check_name": "DATE_FORMAT",
+          "table": "transactions",
+          "description": "Date format detected: iso",
+          "passed": true,
+          "details": "2831/2831 transactions use iso format",
+          "timestamp": "2026-01-12T18:01:38.770459"
+        }
+      ],
+      "errors": [],
+      "warnings": []
+    },
+    {
+      "run_id": "VR-20260112-180335-6777db",
+      "timestamp": "2026-01-12T18:03:35.963642",
+      "database_path": "D:\\Users\\Conrad\\Documents\\GnuCash\\gnuCash414\\CFSIV_Sqlite3_database.gnucash",
+      "total_checks": 81,
+      "passed_checks": 81,
+      "failed_checks": 0,
+      "all_passed": true,
+      "checks": [
+        {
+          "check_name": "DB_CONNECTION",
+          "table": "database",
+          "description": "Database connection established",
+          "passed": true,
+          "details": "Connected to D:\\Users\\Conrad\\Documents\\GnuCash\\gnuCash414\\CFSIV_Sqlite3_database.gnucash",
+          "timestamp": "2026-01-12T18:03:35.965624"
+        },
+        {
+          "check_name": "TABLE_EXISTS",
+          "table": "vendors",
+          "description": "Table 'vendors' exists with 18 columns",
+          "passed": true,
+          "details": "Columns: guid, name, id, notes, currency, active, tax_override, addr_name, addr_addr1, addr_addr2, addr_addr3, addr_addr4, addr_phone, addr_fax, addr_email, terms, tax_inc, tax_table",
+          "timestamp": "2026-01-12T18:03:35.966828"
+        },
+        {
+          "check_name": "TABLE_EXISTS",
+          "table": "accounts",
+          "description": "Table 'accounts' exists with 11 columns",
+          "passed": true,
+          "details": "Columns: guid, name, account_type, commodity_guid, commodity_scu, non_std_scu, parent_guid, code, description, hidden, placeholder",
+          "timestamp": "2026-01-12T18:03:35.967833"
+        },
+        {
+          "check_name": "TABLE_EXISTS",
+          "table": "invoices",
+          "description": "Table 'invoices' exists with 18 columns",
+          "passed": true,
+          "details": "Columns: guid, id, date_opened, date_posted, notes, active, currency, owner_type, owner_guid, terms, billing_id, post_txn, post_lot, post_acc, billto_type, billto_guid, charge_amt_num, charge_amt_denom",
+          "timestamp": "2026-01-12T18:03:35.968838"
+        },
+        {
+          "check_name": "TABLE_EXISTS",
+          "table": "entries",
+          "description": "Table 'entries' exists with 31 columns",
+          "passed": true,
+          "details": "Columns: guid, date, date_entered, description, action, notes, quantity_num, quantity_denom, i_acct, i_price_num, i_price_denom, i_discount_num, i_discount_denom, invoice, i_disc_type, i_disc_how, i_taxable, i_taxincluded, i_taxtable, b_acct, b_price_num, b_price_denom, bill, b_taxable, b_taxincluded, b_taxtable, b_paytype, billable, billto_type, billto_guid, order_guid",
+          "timestamp": "2026-01-12T18:03:35.971094"
+        },
+        {
+          "check_name": "TABLE_EXISTS",
+          "table": "transactions",
+          "description": "Table 'transactions' exists with 6 columns",
+          "passed": true,
+          "details": "Columns: guid, currency_guid, num, post_date, enter_date, description",
+          "timestamp": "2026-01-12T18:03:35.972016"
+        },
+        {
+          "check_name": "TABLE_EXISTS",
+          "table": "splits",
+          "description": "Table 'splits' exists with 12 columns",
+          "passed": true,
+          "details": "Columns: guid, tx_guid, account_guid, memo, action, reconcile_state, reconcile_date, value_num, value_denom, quantity_num, quantity_denom, lot_guid",
+          "timestamp": "2026-01-12T18:03:35.972929"
+        },
+        {
+          "check_name": "TABLE_EXISTS",
+          "table": "lots",
+          "description": "Table 'lots' exists with 3 columns",
+          "passed": true,
+          "details": "Columns: guid, account_guid, is_closed",
+          "timestamp": "2026-01-12T18:03:35.973944"
+        },
+        {
+          "check_name": "TABLE_EXISTS",
+          "table": "commodities",
+          "description": "Table 'commodities' exists with 9 columns",
+          "passed": true,
+          "details": "Columns: guid, namespace, mnemonic, fullname, cusip, fraction, quote_flag, quote_source, quote_tz",
+          "timestamp": "2026-01-12T18:03:35.974654"
+        },
+        {
+          "check_name": "TABLE_EXISTS",
+          "table": "books",
+          "description": "Table 'books' exists with 3 columns",
+          "passed": true,
+          "details": "Columns: guid, root_account_guid, root_template_guid",
+          "timestamp": "2026-01-12T18:03:35.975256"
+        },
+        {
+          "check_name": "COLUMN_EXISTS",
+          "table": "vendors",
+          "description": "Column 'guid' exists in 'vendors'",
+          "passed": true,
+          "details": "Mapped to: guid",
+          "timestamp": "2026-01-12T18:03:35.975598"
+        },
+        {
+          "check_name": "COLUMN_EXISTS",
+          "table": "vendors",
+          "description": "Column 'id' exists in 'vendors'",
+          "passed": true,
+          "details": "Mapped to: id",
+          "timestamp": "2026-01-12T18:03:35.975753"
+        },
+        {
+          "check_name": "COLUMN_EXISTS",
+          "table": "vendors",
+          "description": "Column 'name' exists in 'vendors'",
+          "passed": true,
+          "details": "Mapped to: name",
+          "timestamp": "2026-01-12T18:03:35.975896"
+        },
+        {
+          "check_name": "COLUMN_EXISTS",
+          "table": "vendors",
+          "description": "Column 'currency' exists in 'vendors'",
+          "passed": true,
+          "details": "Mapped to: currency",
+          "timestamp": "2026-01-12T18:03:35.976054"
+        },
+        {
+          "check_name": "COLUMN_EXISTS",
+          "table": "vendors",
+          "description": "Column 'active' exists in 'vendors'",
+          "passed": true,
+          "details": "Mapped to: active",
+          "timestamp": "2026-01-12T18:03:35.976206"
+        },
+        {
+          "check_name": "COLUMN_EXISTS",
+          "table": "vendors",
+          "description": "Column 'notes' exists in 'vendors'",
+          "passed": true,
+          "details": "Mapped to: notes",
+          "timestamp": "2026-01-12T18:03:35.976354"
+        },
+        {
+          "check_name": "COLUMN_EXISTS",
+          "table": "vendors",
+          "description": "Column 'addr_name' exists in 'vendors'",
+          "passed": true,
+          "details": "Mapped to: addr_name",
+          "timestamp": "2026-01-12T18:03:35.976513"
+        },
+        {
+          "check_name": "COLUMN_EXISTS",
+          "table": "vendors",
+          "description": "Column 'addr_addr1' exists in 'vendors'",
+          "passed": true,
+          "details": "Mapped to: addr_addr1",
+          "timestamp": "2026-01-12T18:03:35.976672"
+        },
+        {
+          "check_name": "COLUMN_EXISTS",
+          "table": "vendors",
+          "description": "Column 'addr_addr2' exists in 'vendors'",
+          "passed": true,
+          "details": "Mapped to: addr_addr2",
+          "timestamp": "2026-01-12T18:03:35.976850"
+        },
+        {
+          "check_name": "COLUMN_EXISTS",
+          "table": "vendors",
+          "description": "Column 'addr_addr3' exists in 'vendors'",
+          "passed": true,
+          "details": "Mapped to: addr_addr3",
+          "timestamp": "2026-01-12T18:03:35.977015"
+        },
+        {
+          "check_name": "COLUMN_EXISTS",
+          "table": "vendors",
+          "description": "Column 'addr_addr4' exists in 'vendors'",
+          "passed": true,
+          "details": "Mapped to: addr_addr4",
+          "timestamp": "2026-01-12T18:03:35.977165"
+        },
+        {
+          "check_name": "COLUMN_EXISTS",
+          "table": "vendors",
+          "description": "Column 'addr_phone' exists in 'vendors'",
+          "passed": true,
+          "details": "Mapped to: addr_phone",
+          "timestamp": "2026-01-12T18:03:35.977327"
+        },
+        {
+          "check_name": "COLUMN_EXISTS",
+          "table": "vendors",
+          "description": "Column 'addr_email' exists in 'vendors'",
+          "passed": true,
+          "details": "Mapped to: addr_email",
+          "timestamp": "2026-01-12T18:03:35.977517"
+        },
+        {
+          "check_name": "COLUMN_EXISTS",
+          "table": "accounts",
+          "description": "Column 'guid' exists in 'accounts'",
+          "passed": true,
+          "details": "Mapped to: guid",
+          "timestamp": "2026-01-12T18:03:35.977742"
+        },
+        {
+          "check_name": "COLUMN_EXISTS",
+          "table": "accounts",
+          "description": "Column 'name' exists in 'accounts'",
+          "passed": true,
+          "details": "Mapped to: name",
+          "timestamp": "2026-01-12T18:03:35.978882"
+        },
+        {
+          "check_name": "COLUMN_EXISTS",
+          "table": "accounts",
+          "description": "Column 'account_type' exists in 'accounts'",
+          "passed": true,
+          "details": "Mapped to: account_type",
+          "timestamp": "2026-01-12T18:03:35.979150"
+        },
+        {
+          "check_name": "COLUMN_EXISTS",
+          "table": "accounts",
+          "description": "Column 'parent_guid' exists in 'accounts'",
+          "passed": true,
+          "details": "Mapped to: parent_guid",
+          "timestamp": "2026-01-12T18:03:35.979297"
+        },
+        {
+          "check_name": "COLUMN_EXISTS",
+          "table": "accounts",
+          "description": "Column 'commodity_guid' exists in 'accounts'",
+          "passed": true,
+          "details": "Mapped to: commodity_guid",
+          "timestamp": "2026-01-12T18:03:35.979480"
+        },
+        {
+          "check_name": "COLUMN_EXISTS",
+          "table": "accounts",
+          "description": "Column 'commodity_scu' exists in 'accounts'",
+          "passed": true,
+          "details": "Mapped to: commodity_scu",
+          "timestamp": "2026-01-12T18:03:35.979675"
+        },
+        {
+          "check_name": "COLUMN_EXISTS",
+          "table": "invoices",
+          "description": "Column 'guid' exists in 'invoices'",
+          "passed": true,
+          "details": "Mapped to: guid",
+          "timestamp": "2026-01-12T18:03:35.979898"
+        },
+        {
+          "check_name": "COLUMN_EXISTS",
+          "table": "invoices",
+          "description": "Column 'id' exists in 'invoices'",
+          "passed": true,
+          "details": "Mapped to: id",
+          "timestamp": "2026-01-12T18:03:35.980101"
+        },
+        {
+          "check_name": "COLUMN_EXISTS",
+          "table": "invoices",
+          "description": "Column 'date_opened' exists in 'invoices'",
+          "passed": true,
+          "details": "Mapped to: date_opened",
+          "timestamp": "2026-01-12T18:03:35.980290"
+        },
+        {
+          "check_name": "COLUMN_EXISTS",
+          "table": "invoices",
+          "description": "Column 'date_posted' exists in 'invoices'",
+          "passed": true,
+          "details": "Mapped to: date_posted",
+          "timestamp": "2026-01-12T18:03:35.980472"
+        },
+        {
+          "check_name": "COLUMN_EXISTS",
+          "table": "invoices",
+          "description": "Column 'notes' exists in 'invoices'",
+          "passed": true,
+          "details": "Mapped to: notes",
+          "timestamp": "2026-01-12T18:03:35.980702"
+        },
+        {
+          "check_name": "COLUMN_EXISTS",
+          "table": "invoices",
+          "description": "Column 'active' exists in 'invoices'",
+          "passed": true,
+          "details": "Mapped to: active",
+          "timestamp": "2026-01-12T18:03:35.981036"
+        },
+        {
+          "check_name": "COLUMN_EXISTS",
+          "table": "invoices",
+          "description": "Column 'currency' exists in 'invoices'",
+          "passed": true,
+          "details": "Mapped to: currency",
+          "timestamp": "2026-01-12T18:03:35.981275"
+        },
+        {
+          "check_name": "COLUMN_EXISTS",
+          "table": "invoices",
+          "description": "Column 'owner_type' exists in 'invoices'",
+          "passed": true,
+          "details": "Mapped to: owner_type",
+          "timestamp": "2026-01-12T18:03:35.981436"
+        },
+        {
+          "check_name": "COLUMN_EXISTS",
+          "table": "invoices",
+          "description": "Column 'owner_guid' exists in 'invoices'",
+          "passed": true,
+          "details": "Mapped to: owner_guid",
+          "timestamp": "2026-01-12T18:03:35.981575"
+        },
+        {
+          "check_name": "COLUMN_EXISTS",
+          "table": "invoices",
+          "description": "Column 'post_lot' exists in 'invoices'",
+          "passed": true,
+          "details": "Mapped to: post_lot",
+          "timestamp": "2026-01-12T18:03:35.981760"
+        },
+        {
+          "check_name": "COLUMN_EXISTS",
+          "table": "invoices",
+          "description": "Column 'post_txn' exists in 'invoices'",
+          "passed": true,
+          "details": "Mapped to: post_txn",
+          "timestamp": "2026-01-12T18:03:35.981928"
+        },
+        {
+          "check_name": "COLUMN_EXISTS",
+          "table": "invoices",
+          "description": "Column 'post_acc' exists in 'invoices'",
+          "passed": true,
+          "details": "Mapped to: post_acc",
+          "timestamp": "2026-01-12T18:03:35.982084"
+        },
+        {
+          "check_name": "COLUMN_EXISTS",
+          "table": "entries",
+          "description": "Column 'guid' exists in 'entries'",
+          "passed": true,
+          "details": "Mapped to: guid",
+          "timestamp": "2026-01-12T18:03:35.982240"
+        },
+        {
+          "check_name": "COLUMN_EXISTS",
+          "table": "entries",
+          "description": "Column 'date' exists in 'entries'",
+          "passed": true,
+          "details": "Mapped to: date",
+          "timestamp": "2026-01-12T18:03:35.982393"
+        },
+        {
+          "check_name": "COLUMN_EXISTS",
+          "table": "entries",
+          "description": "Column 'date_entered' exists in 'entries'",
+          "passed": true,
+          "details": "Mapped to: date_entered",
+          "timestamp": "2026-01-12T18:03:35.982524"
+        },
+        {
+          "check_name": "COLUMN_EXISTS",
+          "table": "entries",
+          "description": "Column 'description' exists in 'entries'",
+          "passed": true,
+          "details": "Mapped to: description",
+          "timestamp": "2026-01-12T18:03:35.982685"
+        },
+        {
+          "check_name": "COLUMN_EXISTS",
+          "table": "entries",
+          "description": "Column 'action' exists in 'entries'",
+          "passed": true,
+          "details": "Mapped to: action",
+          "timestamp": "2026-01-12T18:03:35.982828"
+        },
+        {
+          "check_name": "COLUMN_EXISTS",
+          "table": "entries",
+          "description": "Column 'quantity_num' exists in 'entries'",
+          "passed": true,
+          "details": "Mapped to: quantity_num",
+          "timestamp": "2026-01-12T18:03:35.982982"
+        },
+        {
+          "check_name": "COLUMN_EXISTS",
+          "table": "entries",
+          "description": "Column 'quantity_denom' exists in 'entries'",
+          "passed": true,
+          "details": "Mapped to: quantity_denom",
+          "timestamp": "2026-01-12T18:03:35.983314"
+        },
+        {
+          "check_name": "COLUMN_EXISTS",
+          "table": "entries",
+          "description": "Column 'i_acct' exists in 'entries'",
+          "passed": true,
+          "details": "Mapped to: i_acct",
+          "timestamp": "2026-01-12T18:03:35.983667"
+        },
+        {
+          "check_name": "COLUMN_EXISTS",
+          "table": "entries",
+          "description": "Column 'invoice' exists in 'entries'",
+          "passed": true,
+          "details": "Mapped to: invoice",
+          "timestamp": "2026-01-12T18:03:35.983868"
+        },
+        {
+          "check_name": "COLUMN_EXISTS",
+          "table": "entries",
+          "description": "Column 'i_price_num' exists in 'entries'",
+          "passed": true,
+          "details": "Mapped to: i_price_num",
+          "timestamp": "2026-01-12T18:03:35.983993"
+        },
+        {
+          "check_name": "COLUMN_EXISTS",
+          "table": "entries",
+          "description": "Column 'i_price_denom' exists in 'entries'",
+          "passed": true,
+          "details": "Mapped to: i_price_denom",
+          "timestamp": "2026-01-12T18:03:35.984127"
+        },
+        {
+          "check_name": "COLUMN_EXISTS",
+          "table": "transactions",
+          "description": "Column 'guid' exists in 'transactions'",
+          "passed": true,
+          "details": "Mapped to: guid",
+          "timestamp": "2026-01-12T18:03:35.985358"
+        },
+        {
+          "check_name": "COLUMN_EXISTS",
+          "table": "transactions",
+          "description": "Column 'currency_guid' exists in 'transactions'",
+          "passed": true,
+          "details": "Mapped to: currency_guid",
+          "timestamp": "2026-01-12T18:03:35.985859"
+        },
+        {
+          "check_name": "COLUMN_EXISTS",
+          "table": "transactions",
+          "description": "Column 'num' exists in 'transactions'",
+          "passed": true,
+          "details": "Mapped to: num",
+          "timestamp": "2026-01-12T18:03:35.986512"
+        },
+        {
+          "check_name": "COLUMN_EXISTS",
+          "table": "transactions",
+          "description": "Column 'post_date' exists in 'transactions'",
+          "passed": true,
+          "details": "Mapped to: post_date",
+          "timestamp": "2026-01-12T18:03:35.986740"
+        },
+        {
+          "check_name": "COLUMN_EXISTS",
+          "table": "transactions",
+          "description": "Column 'enter_date' exists in 'transactions'",
+          "passed": true,
+          "details": "Mapped to: enter_date",
+          "timestamp": "2026-01-12T18:03:35.986889"
+        },
+        {
+          "check_name": "COLUMN_EXISTS",
+          "table": "transactions",
+          "description": "Column 'description' exists in 'transactions'",
+          "passed": true,
+          "details": "Mapped to: description",
+          "timestamp": "2026-01-12T18:03:35.987045"
+        },
+        {
+          "check_name": "COLUMN_EXISTS",
+          "table": "splits",
+          "description": "Column 'guid' exists in 'splits'",
+          "passed": true,
+          "details": "Mapped to: guid",
+          "timestamp": "2026-01-12T18:03:35.987319"
+        },
+        {
+          "check_name": "COLUMN_EXISTS",
+          "table": "splits",
+          "description": "Column 'tx_guid' exists in 'splits'",
+          "passed": true,
+          "details": "Mapped to: tx_guid",
+          "timestamp": "2026-01-12T18:03:35.987542"
+        },
+        {
+          "check_name": "COLUMN_EXISTS",
+          "table": "splits",
+          "description": "Column 'account_guid' exists in 'splits'",
+          "passed": true,
+          "details": "Mapped to: account_guid",
+          "timestamp": "2026-01-12T18:03:35.987810"
+        },
+        {
+          "check_name": "COLUMN_EXISTS",
+          "table": "splits",
+          "description": "Column 'memo' exists in 'splits'",
+          "passed": true,
+          "details": "Mapped to: memo",
+          "timestamp": "2026-01-12T18:03:35.987989"
+        },
+        {
+          "check_name": "COLUMN_EXISTS",
+          "table": "splits",
+          "description": "Column 'action' exists in 'splits'",
+          "passed": true,
+          "details": "Mapped to: action",
+          "timestamp": "2026-01-12T18:03:35.989763"
+        },
+        {
+          "check_name": "COLUMN_EXISTS",
+          "table": "splits",
+          "description": "Column 'reconcile_state' exists in 'splits'",
+          "passed": true,
+          "details": "Mapped to: reconcile_state",
+          "timestamp": "2026-01-12T18:03:35.990668"
+        },
+        {
+          "check_name": "COLUMN_EXISTS",
+          "table": "splits",
+          "description": "Column 'value_num' exists in 'splits'",
+          "passed": true,
+          "details": "Mapped to: value_num",
+          "timestamp": "2026-01-12T18:03:35.990973"
+        },
+        {
+          "check_name": "COLUMN_EXISTS",
+          "table": "splits",
+          "description": "Column 'value_denom' exists in 'splits'",
+          "passed": true,
+          "details": "Mapped to: value_denom",
+          "timestamp": "2026-01-12T18:03:35.991173"
+        },
+        {
+          "check_name": "COLUMN_EXISTS",
+          "table": "splits",
+          "description": "Column 'quantity_num' exists in 'splits'",
+          "passed": true,
+          "details": "Mapped to: quantity_num",
+          "timestamp": "2026-01-12T18:03:35.991379"
+        },
+        {
+          "check_name": "COLUMN_EXISTS",
+          "table": "splits",
+          "description": "Column 'quantity_denom' exists in 'splits'",
+          "passed": true,
+          "details": "Mapped to: quantity_denom",
+          "timestamp": "2026-01-12T18:03:35.991551"
+        },
+        {
+          "check_name": "COLUMN_EXISTS",
+          "table": "lots",
+          "description": "Column 'guid' exists in 'lots'",
+          "passed": true,
+          "details": "Mapped to: guid",
+          "timestamp": "2026-01-12T18:03:35.991737"
+        },
+        {
+          "check_name": "COLUMN_EXISTS",
+          "table": "lots",
+          "description": "Column 'account_guid' exists in 'lots'",
+          "passed": true,
+          "details": "Mapped to: account_guid",
+          "timestamp": "2026-01-12T18:03:35.991913"
+        },
+        {
+          "check_name": "COLUMN_EXISTS",
+          "table": "lots",
+          "description": "Column 'is_closed' exists in 'lots'",
+          "passed": true,
+          "details": "Mapped to: is_closed",
+          "timestamp": "2026-01-12T18:03:35.992094"
+        },
+        {
+          "check_name": "COLUMN_EXISTS",
+          "table": "commodities",
+          "description": "Column 'guid' exists in 'commodities'",
+          "passed": true,
+          "details": "Mapped to: guid",
+          "timestamp": "2026-01-12T18:03:35.992252"
+        },
+        {
+          "check_name": "COLUMN_EXISTS",
+          "table": "commodities",
+          "description": "Column 'mnemonic' exists in 'commodities'",
+          "passed": true,
+          "details": "Mapped to: mnemonic",
+          "timestamp": "2026-01-12T18:03:35.992456"
+        },
+        {
+          "check_name": "COLUMN_EXISTS",
+          "table": "commodities",
+          "description": "Column 'namespace' exists in 'commodities'",
+          "passed": true,
+          "details": "Mapped to: namespace",
+          "timestamp": "2026-01-12T18:03:35.992645"
+        },
+        {
+          "check_name": "COLUMN_EXISTS",
+          "table": "books",
+          "description": "Column 'guid' exists in 'books'",
+          "passed": true,
+          "details": "Mapped to: guid",
+          "timestamp": "2026-01-12T18:03:35.992839"
+        },
+        {
+          "check_name": "AP_ACCOUNT",
+          "table": "accounts",
+          "description": "Accounts Payable account exists",
+          "passed": true,
+          "details": "Name: Accounts Payable, GUID: 5ac94bcf2c43...",
+          "timestamp": "2026-01-12T18:03:35.993864"
+        },
+        {
+          "check_name": "EXPENSE_PARENT",
+          "table": "accounts",
+          "description": "Top-level Expense account exists",
+          "passed": true,
+          "details": "Name: Expenses root, GUID: 6b7f7b71f0a7...",
+          "timestamp": "2026-01-12T18:03:35.995391"
+        },
+        {
+          "check_name": "LIABILITY_PARENT",
+          "table": "accounts",
+          "description": "Top-level Liabilities account exists",
+          "passed": true,
+          "details": "Name: Liabilities root, GUID: 171683286aa9...",
+          "timestamp": "2026-01-12T18:03:35.996025"
+        },
+        {
+          "check_name": "USD_CURRENCY",
+          "table": "commodities",
+          "description": "USD currency exists",
+          "passed": true,
+          "details": "GUID: ba2343cfce024968aedb0c606ac457e1",
+          "timestamp": "2026-01-12T18:03:35.996539"
+        },
+        {
+          "check_name": "BOOK_GUID",
+          "table": "books",
+          "description": "Book GUID exists",
+          "passed": true,
+          "details": "GUID: 023fe1583f01448d97514ab72a873685",
+          "timestamp": "2026-01-12T18:03:35.996925"
+        },
+        {
+          "check_name": "DATE_FORMAT",
+          "table": "transactions",
+          "description": "Date format detected: iso",
+          "passed": true,
+          "details": "2831/2831 transactions use iso format",
+          "timestamp": "2026-01-12T18:03:35.998373"
+        }
+      ],
+      "errors": [],
+      "warnings": []
+    },
+    {
+      "run_id": "VR-20260112-180507-b2356c",
+      "timestamp": "2026-01-12T18:05:07.453010",
+      "database_path": "D:\\Users\\Conrad\\Documents\\GnuCash\\gnuCash414\\CFSIV_Sqlite3_database.gnucash",
+      "total_checks": 81,
+      "passed_checks": 81,
+      "failed_checks": 0,
+      "all_passed": true,
+      "checks": [
+        {
+          "check_name": "DB_CONNECTION",
+          "table": "database",
+          "description": "Database connection established",
+          "passed": true,
+          "details": "Connected to D:\\Users\\Conrad\\Documents\\GnuCash\\gnuCash414\\CFSIV_Sqlite3_database.gnucash",
+          "timestamp": "2026-01-12T18:05:07.455896"
+        },
+        {
+          "check_name": "TABLE_EXISTS",
+          "table": "vendors",
+          "description": "Table 'vendors' exists with 18 columns",
+          "passed": true,
+          "details": "Columns: guid, name, id, notes, currency, active, tax_override, addr_name, addr_addr1, addr_addr2, addr_addr3, addr_addr4, addr_phone, addr_fax, addr_email, terms, tax_inc, tax_table",
+          "timestamp": "2026-01-12T18:05:07.457848"
+        },
+        {
+          "check_name": "TABLE_EXISTS",
+          "table": "accounts",
+          "description": "Table 'accounts' exists with 11 columns",
+          "passed": true,
+          "details": "Columns: guid, name, account_type, commodity_guid, commodity_scu, non_std_scu, parent_guid, code, description, hidden, placeholder",
+          "timestamp": "2026-01-12T18:05:07.458868"
+        },
+        {
+          "check_name": "TABLE_EXISTS",
+          "table": "invoices",
+          "description": "Table 'invoices' exists with 18 columns",
+          "passed": true,
+          "details": "Columns: guid, id, date_opened, date_posted, notes, active, currency, owner_type, owner_guid, terms, billing_id, post_txn, post_lot, post_acc, billto_type, billto_guid, charge_amt_num, charge_amt_denom",
+          "timestamp": "2026-01-12T18:05:07.459827"
+        },
+        {
+          "check_name": "TABLE_EXISTS",
+          "table": "entries",
+          "description": "Table 'entries' exists with 31 columns",
+          "passed": true,
+          "details": "Columns: guid, date, date_entered, description, action, notes, quantity_num, quantity_denom, i_acct, i_price_num, i_price_denom, i_discount_num, i_discount_denom, invoice, i_disc_type, i_disc_how, i_taxable, i_taxincluded, i_taxtable, b_acct, b_price_num, b_price_denom, bill, b_taxable, b_taxincluded, b_taxtable, b_paytype, billable, billto_type, billto_guid, order_guid",
+          "timestamp": "2026-01-12T18:05:07.460742"
+        },
+        {
+          "check_name": "TABLE_EXISTS",
+          "table": "transactions",
+          "description": "Table 'transactions' exists with 6 columns",
+          "passed": true,
+          "details": "Columns: guid, currency_guid, num, post_date, enter_date, description",
+          "timestamp": "2026-01-12T18:05:07.461489"
+        },
+        {
+          "check_name": "TABLE_EXISTS",
+          "table": "splits",
+          "description": "Table 'splits' exists with 12 columns",
+          "passed": true,
+          "details": "Columns: guid, tx_guid, account_guid, memo, action, reconcile_state, reconcile_date, value_num, value_denom, quantity_num, quantity_denom, lot_guid",
+          "timestamp": "2026-01-12T18:05:07.462362"
+        },
+        {
+          "check_name": "TABLE_EXISTS",
+          "table": "lots",
+          "description": "Table 'lots' exists with 3 columns",
+          "passed": true,
+          "details": "Columns: guid, account_guid, is_closed",
+          "timestamp": "2026-01-12T18:05:07.467629"
+        },
+        {
+          "check_name": "TABLE_EXISTS",
+          "table": "commodities",
+          "description": "Table 'commodities' exists with 9 columns",
+          "passed": true,
+          "details": "Columns: guid, namespace, mnemonic, fullname, cusip, fraction, quote_flag, quote_source, quote_tz",
+          "timestamp": "2026-01-12T18:05:07.468565"
+        },
+        {
+          "check_name": "TABLE_EXISTS",
+          "table": "books",
+          "description": "Table 'books' exists with 3 columns",
+          "passed": true,
+          "details": "Columns: guid, root_account_guid, root_template_guid",
+          "timestamp": "2026-01-12T18:05:07.469546"
+        },
+        {
+          "check_name": "COLUMN_EXISTS",
+          "table": "vendors",
+          "description": "Column 'guid' exists in 'vendors'",
+          "passed": true,
+          "details": "Mapped to: guid",
+          "timestamp": "2026-01-12T18:05:07.470096"
+        },
+        {
+          "check_name": "COLUMN_EXISTS",
+          "table": "vendors",
+          "description": "Column 'id' exists in 'vendors'",
+          "passed": true,
+          "details": "Mapped to: id",
+          "timestamp": "2026-01-12T18:05:07.470307"
+        },
+        {
+          "check_name": "COLUMN_EXISTS",
+          "table": "vendors",
+          "description": "Column 'name' exists in 'vendors'",
+          "passed": true,
+          "details": "Mapped to: name",
+          "timestamp": "2026-01-12T18:05:07.470481"
+        },
+        {
+          "check_name": "COLUMN_EXISTS",
+          "table": "vendors",
+          "description": "Column 'currency' exists in 'vendors'",
+          "passed": true,
+          "details": "Mapped to: currency",
+          "timestamp": "2026-01-12T18:05:07.470632"
+        },
+        {
+          "check_name": "COLUMN_EXISTS",
+          "table": "vendors",
+          "description": "Column 'active' exists in 'vendors'",
+          "passed": true,
+          "details": "Mapped to: active",
+          "timestamp": "2026-01-12T18:05:07.470784"
+        },
+        {
+          "check_name": "COLUMN_EXISTS",
+          "table": "vendors",
+          "description": "Column 'notes' exists in 'vendors'",
+          "passed": true,
+          "details": "Mapped to: notes",
+          "timestamp": "2026-01-12T18:05:07.470950"
+        },
+        {
+          "check_name": "COLUMN_EXISTS",
+          "table": "vendors",
+          "description": "Column 'addr_name' exists in 'vendors'",
+          "passed": true,
+          "details": "Mapped to: addr_name",
+          "timestamp": "2026-01-12T18:05:07.471413"
+        },
+        {
+          "check_name": "COLUMN_EXISTS",
+          "table": "vendors",
+          "description": "Column 'addr_addr1' exists in 'vendors'",
+          "passed": true,
+          "details": "Mapped to: addr_addr1",
+          "timestamp": "2026-01-12T18:05:07.473345"
+        },
+        {
+          "check_name": "COLUMN_EXISTS",
+          "table": "vendors",
+          "description": "Column 'addr_addr2' exists in 'vendors'",
+          "passed": true,
+          "details": "Mapped to: addr_addr2",
+          "timestamp": "2026-01-12T18:05:07.473952"
+        },
+        {
+          "check_name": "COLUMN_EXISTS",
+          "table": "vendors",
+          "description": "Column 'addr_addr3' exists in 'vendors'",
+          "passed": true,
+          "details": "Mapped to: addr_addr3",
+          "timestamp": "2026-01-12T18:05:07.474370"
+        },
+        {
+          "check_name": "COLUMN_EXISTS",
+          "table": "vendors",
+          "description": "Column 'addr_addr4' exists in 'vendors'",
+          "passed": true,
+          "details": "Mapped to: addr_addr4",
+          "timestamp": "2026-01-12T18:05:07.474684"
+        },
+        {
+          "check_name": "COLUMN_EXISTS",
+          "table": "vendors",
+          "description": "Column 'addr_phone' exists in 'vendors'",
+          "passed": true,
+          "details": "Mapped to: addr_phone",
+          "timestamp": "2026-01-12T18:05:07.474862"
+        },
+        {
+          "check_name": "COLUMN_EXISTS",
+          "table": "vendors",
+          "description": "Column 'addr_email' exists in 'vendors'",
+          "passed": true,
+          "details": "Mapped to: addr_email",
+          "timestamp": "2026-01-12T18:05:07.475025"
+        },
+        {
+          "check_name": "COLUMN_EXISTS",
+          "table": "accounts",
+          "description": "Column 'guid' exists in 'accounts'",
+          "passed": true,
+          "details": "Mapped to: guid",
+          "timestamp": "2026-01-12T18:05:07.475193"
+        },
+        {
+          "check_name": "COLUMN_EXISTS",
+          "table": "accounts",
+          "description": "Column 'name' exists in 'accounts'",
+          "passed": true,
+          "details": "Mapped to: name",
+          "timestamp": "2026-01-12T18:05:07.475354"
+        },
+        {
+          "check_name": "COLUMN_EXISTS",
+          "table": "accounts",
+          "description": "Column 'account_type' exists in 'accounts'",
+          "passed": true,
+          "details": "Mapped to: account_type",
+          "timestamp": "2026-01-12T18:05:07.475472"
+        },
+        {
+          "check_name": "COLUMN_EXISTS",
+          "table": "accounts",
+          "description": "Column 'parent_guid' exists in 'accounts'",
+          "passed": true,
+          "details": "Mapped to: parent_guid",
+          "timestamp": "2026-01-12T18:05:07.475644"
+        },
+        {
+          "check_name": "COLUMN_EXISTS",
+          "table": "accounts",
+          "description": "Column 'commodity_guid' exists in 'accounts'",
+          "passed": true,
+          "details": "Mapped to: commodity_guid",
+          "timestamp": "2026-01-12T18:05:07.475805"
+        },
+        {
+          "check_name": "COLUMN_EXISTS",
+          "table": "accounts",
+          "description": "Column 'commodity_scu' exists in 'accounts'",
+          "passed": true,
+          "details": "Mapped to: commodity_scu",
+          "timestamp": "2026-01-12T18:05:07.476001"
+        },
+        {
+          "check_name": "COLUMN_EXISTS",
+          "table": "invoices",
+          "description": "Column 'guid' exists in 'invoices'",
+          "passed": true,
+          "details": "Mapped to: guid",
+          "timestamp": "2026-01-12T18:05:07.476185"
+        },
+        {
+          "check_name": "COLUMN_EXISTS",
+          "table": "invoices",
+          "description": "Column 'id' exists in 'invoices'",
+          "passed": true,
+          "details": "Mapped to: id",
+          "timestamp": "2026-01-12T18:05:07.476358"
+        },
+        {
+          "check_name": "COLUMN_EXISTS",
+          "table": "invoices",
+          "description": "Column 'date_opened' exists in 'invoices'",
+          "passed": true,
+          "details": "Mapped to: date_opened",
+          "timestamp": "2026-01-12T18:05:07.476536"
+        },
+        {
+          "check_name": "COLUMN_EXISTS",
+          "table": "invoices",
+          "description": "Column 'date_posted' exists in 'invoices'",
+          "passed": true,
+          "details": "Mapped to: date_posted",
+          "timestamp": "2026-01-12T18:05:07.476696"
+        },
+        {
+          "check_name": "COLUMN_EXISTS",
+          "table": "invoices",
+          "description": "Column 'notes' exists in 'invoices'",
+          "passed": true,
+          "details": "Mapped to: notes",
+          "timestamp": "2026-01-12T18:05:07.476865"
+        },
+        {
+          "check_name": "COLUMN_EXISTS",
+          "table": "invoices",
+          "description": "Column 'active' exists in 'invoices'",
+          "passed": true,
+          "details": "Mapped to: active",
+          "timestamp": "2026-01-12T18:05:07.477007"
+        },
+        {
+          "check_name": "COLUMN_EXISTS",
+          "table": "invoices",
+          "description": "Column 'currency' exists in 'invoices'",
+          "passed": true,
+          "details": "Mapped to: currency",
+          "timestamp": "2026-01-12T18:05:07.477130"
+        },
+        {
+          "check_name": "COLUMN_EXISTS",
+          "table": "invoices",
+          "description": "Column 'owner_type' exists in 'invoices'",
+          "passed": true,
+          "details": "Mapped to: owner_type",
+          "timestamp": "2026-01-12T18:05:07.477248"
+        },
+        {
+          "check_name": "COLUMN_EXISTS",
+          "table": "invoices",
+          "description": "Column 'owner_guid' exists in 'invoices'",
+          "passed": true,
+          "details": "Mapped to: owner_guid",
+          "timestamp": "2026-01-12T18:05:07.477371"
+        },
+        {
+          "check_name": "COLUMN_EXISTS",
+          "table": "invoices",
+          "description": "Column 'post_lot' exists in 'invoices'",
+          "passed": true,
+          "details": "Mapped to: post_lot",
+          "timestamp": "2026-01-12T18:05:07.477500"
+        },
+        {
+          "check_name": "COLUMN_EXISTS",
+          "table": "invoices",
+          "description": "Column 'post_txn' exists in 'invoices'",
+          "passed": true,
+          "details": "Mapped to: post_txn",
+          "timestamp": "2026-01-12T18:05:07.477651"
+        },
+        {
+          "check_name": "COLUMN_EXISTS",
+          "table": "invoices",
+          "description": "Column 'post_acc' exists in 'invoices'",
+          "passed": true,
+          "details": "Mapped to: post_acc",
+          "timestamp": "2026-01-12T18:05:07.477771"
+        },
+        {
+          "check_name": "COLUMN_EXISTS",
+          "table": "entries",
+          "description": "Column 'guid' exists in 'entries'",
+          "passed": true,
+          "details": "Mapped to: guid",
+          "timestamp": "2026-01-12T18:05:07.477884"
+        },
+        {
+          "check_name": "COLUMN_EXISTS",
+          "table": "entries",
+          "description": "Column 'date' exists in 'entries'",
+          "passed": true,
+          "details": "Mapped to: date",
+          "timestamp": "2026-01-12T18:05:07.478066"
+        },
+        {
+          "check_name": "COLUMN_EXISTS",
+          "table": "entries",
+          "description": "Column 'date_entered' exists in 'entries'",
+          "passed": true,
+          "details": "Mapped to: date_entered",
+          "timestamp": "2026-01-12T18:05:07.478271"
+        },
+        {
+          "check_name": "COLUMN_EXISTS",
+          "table": "entries",
+          "description": "Column 'description' exists in 'entries'",
+          "passed": true,
+          "details": "Mapped to: description",
+          "timestamp": "2026-01-12T18:05:07.478413"
+        },
+        {
+          "check_name": "COLUMN_EXISTS",
+          "table": "entries",
+          "description": "Column 'action' exists in 'entries'",
+          "passed": true,
+          "details": "Mapped to: action",
+          "timestamp": "2026-01-12T18:05:07.478551"
+        },
+        {
+          "check_name": "COLUMN_EXISTS",
+          "table": "entries",
+          "description": "Column 'quantity_num' exists in 'entries'",
+          "passed": true,
+          "details": "Mapped to: quantity_num",
+          "timestamp": "2026-01-12T18:05:07.478697"
+        },
+        {
+          "check_name": "COLUMN_EXISTS",
+          "table": "entries",
+          "description": "Column 'quantity_denom' exists in 'entries'",
+          "passed": true,
+          "details": "Mapped to: quantity_denom",
+          "timestamp": "2026-01-12T18:05:07.478840"
+        },
+        {
+          "check_name": "COLUMN_EXISTS",
+          "table": "entries",
+          "description": "Column 'i_acct' exists in 'entries'",
+          "passed": true,
+          "details": "Mapped to: i_acct",
+          "timestamp": "2026-01-12T18:05:07.478971"
+        },
+        {
+          "check_name": "COLUMN_EXISTS",
+          "table": "entries",
+          "description": "Column 'invoice' exists in 'entries'",
+          "passed": true,
+          "details": "Mapped to: invoice",
+          "timestamp": "2026-01-12T18:05:07.479121"
+        },
+        {
+          "check_name": "COLUMN_EXISTS",
+          "table": "entries",
+          "description": "Column 'i_price_num' exists in 'entries'",
+          "passed": true,
+          "details": "Mapped to: i_price_num",
+          "timestamp": "2026-01-12T18:05:07.479364"
+        },
+        {
+          "check_name": "COLUMN_EXISTS",
+          "table": "entries",
+          "description": "Column 'i_price_denom' exists in 'entries'",
+          "passed": true,
+          "details": "Mapped to: i_price_denom",
+          "timestamp": "2026-01-12T18:05:07.479727"
+        },
+        {
+          "check_name": "COLUMN_EXISTS",
+          "table": "transactions",
+          "description": "Column 'guid' exists in 'transactions'",
+          "passed": true,
+          "details": "Mapped to: guid",
+          "timestamp": "2026-01-12T18:05:07.480716"
+        },
+        {
+          "check_name": "COLUMN_EXISTS",
+          "table": "transactions",
+          "description": "Column 'currency_guid' exists in 'transactions'",
+          "passed": true,
+          "details": "Mapped to: currency_guid",
+          "timestamp": "2026-01-12T18:05:07.481189"
+        },
+        {
+          "check_name": "COLUMN_EXISTS",
+          "table": "transactions",
+          "description": "Column 'num' exists in 'transactions'",
+          "passed": true,
+          "details": "Mapped to: num",
+          "timestamp": "2026-01-12T18:05:07.481409"
+        },
+        {
+          "check_name": "COLUMN_EXISTS",
+          "table": "transactions",
+          "description": "Column 'post_date' exists in 'transactions'",
+          "passed": true,
+          "details": "Mapped to: post_date",
+          "timestamp": "2026-01-12T18:05:07.481597"
+        },
+        {
+          "check_name": "COLUMN_EXISTS",
+          "table": "transactions",
+          "description": "Column 'enter_date' exists in 'transactions'",
+          "passed": true,
+          "details": "Mapped to: enter_date",
+          "timestamp": "2026-01-12T18:05:07.481792"
+        },
+        {
+          "check_name": "COLUMN_EXISTS",
+          "table": "transactions",
+          "description": "Column 'description' exists in 'transactions'",
+          "passed": true,
+          "details": "Mapped to: description",
+          "timestamp": "2026-01-12T18:05:07.481940"
+        },
+        {
+          "check_name": "COLUMN_EXISTS",
+          "table": "splits",
+          "description": "Column 'guid' exists in 'splits'",
+          "passed": true,
+          "details": "Mapped to: guid",
+          "timestamp": "2026-01-12T18:05:07.482102"
+        },
+        {
+          "check_name": "COLUMN_EXISTS",
+          "table": "splits",
+          "description": "Column 'tx_guid' exists in 'splits'",
+          "passed": true,
+          "details": "Mapped to: tx_guid",
+          "timestamp": "2026-01-12T18:05:07.482228"
+        },
+        {
+          "check_name": "COLUMN_EXISTS",
+          "table": "splits",
+          "description": "Column 'account_guid' exists in 'splits'",
+          "passed": true,
+          "details": "Mapped to: account_guid",
+          "timestamp": "2026-01-12T18:05:07.482410"
+        },
+        {
+          "check_name": "COLUMN_EXISTS",
+          "table": "splits",
+          "description": "Column 'memo' exists in 'splits'",
+          "passed": true,
+          "details": "Mapped to: memo",
+          "timestamp": "2026-01-12T18:05:07.482569"
+        },
+        {
+          "check_name": "COLUMN_EXISTS",
+          "table": "splits",
+          "description": "Column 'action' exists in 'splits'",
+          "passed": true,
+          "details": "Mapped to: action",
+          "timestamp": "2026-01-12T18:05:07.482826"
+        },
+        {
+          "check_name": "COLUMN_EXISTS",
+          "table": "splits",
+          "description": "Column 'reconcile_state' exists in 'splits'",
+          "passed": true,
+          "details": "Mapped to: reconcile_state",
+          "timestamp": "2026-01-12T18:05:07.483119"
+        },
+        {
+          "check_name": "COLUMN_EXISTS",
+          "table": "splits",
+          "description": "Column 'value_num' exists in 'splits'",
+          "passed": true,
+          "details": "Mapped to: value_num",
+          "timestamp": "2026-01-12T18:05:07.483288"
+        },
+        {
+          "check_name": "COLUMN_EXISTS",
+          "table": "splits",
+          "description": "Column 'value_denom' exists in 'splits'",
+          "passed": true,
+          "details": "Mapped to: value_denom",
+          "timestamp": "2026-01-12T18:05:07.483396"
+        },
+        {
+          "check_name": "COLUMN_EXISTS",
+          "table": "splits",
+          "description": "Column 'quantity_num' exists in 'splits'",
+          "passed": true,
+          "details": "Mapped to: quantity_num",
+          "timestamp": "2026-01-12T18:05:07.483519"
+        },
+        {
+          "check_name": "COLUMN_EXISTS",
+          "table": "splits",
+          "description": "Column 'quantity_denom' exists in 'splits'",
+          "passed": true,
+          "details": "Mapped to: quantity_denom",
+          "timestamp": "2026-01-12T18:05:07.483642"
+        },
+        {
+          "check_name": "COLUMN_EXISTS",
+          "table": "lots",
+          "description": "Column 'guid' exists in 'lots'",
+          "passed": true,
+          "details": "Mapped to: guid",
+          "timestamp": "2026-01-12T18:05:07.483804"
+        },
+        {
+          "check_name": "COLUMN_EXISTS",
+          "table": "lots",
+          "description": "Column 'account_guid' exists in 'lots'",
+          "passed": true,
+          "details": "Mapped to: account_guid",
+          "timestamp": "2026-01-12T18:05:07.483965"
+        },
+        {
+          "check_name": "COLUMN_EXISTS",
+          "table": "lots",
+          "description": "Column 'is_closed' exists in 'lots'",
+          "passed": true,
+          "details": "Mapped to: is_closed",
+          "timestamp": "2026-01-12T18:05:07.484092"
+        },
+        {
+          "check_name": "COLUMN_EXISTS",
+          "table": "commodities",
+          "description": "Column 'guid' exists in 'commodities'",
+          "passed": true,
+          "details": "Mapped to: guid",
+          "timestamp": "2026-01-12T18:05:07.484241"
+        },
+        {
+          "check_name": "COLUMN_EXISTS",
+          "table": "commodities",
+          "description": "Column 'mnemonic' exists in 'commodities'",
+          "passed": true,
+          "details": "Mapped to: mnemonic",
+          "timestamp": "2026-01-12T18:05:07.484376"
+        },
+        {
+          "check_name": "COLUMN_EXISTS",
+          "table": "commodities",
+          "description": "Column 'namespace' exists in 'commodities'",
+          "passed": true,
+          "details": "Mapped to: namespace",
+          "timestamp": "2026-01-12T18:05:07.484492"
+        },
+        {
+          "check_name": "COLUMN_EXISTS",
+          "table": "books",
+          "description": "Column 'guid' exists in 'books'",
+          "passed": true,
+          "details": "Mapped to: guid",
+          "timestamp": "2026-01-12T18:05:07.484604"
+        },
+        {
+          "check_name": "AP_ACCOUNT",
+          "table": "accounts",
+          "description": "Accounts Payable account exists",
+          "passed": true,
+          "details": "Name: Accounts Payable, GUID: 5ac94bcf2c43...",
+          "timestamp": "2026-01-12T18:05:07.485114"
+        },
+        {
+          "check_name": "EXPENSE_PARENT",
+          "table": "accounts",
+          "description": "Top-level Expense account exists",
+          "passed": true,
+          "details": "Name: Expenses root, GUID: 6b7f7b71f0a7...",
+          "timestamp": "2026-01-12T18:05:07.485909"
+        },
+        {
+          "check_name": "LIABILITY_PARENT",
+          "table": "accounts",
+          "description": "Top-level Liabilities account exists",
+          "passed": true,
+          "details": "Name: Liabilities root, GUID: 171683286aa9...",
+          "timestamp": "2026-01-12T18:05:07.486546"
+        },
+        {
+          "check_name": "USD_CURRENCY",
+          "table": "commodities",
+          "description": "USD currency exists",
+          "passed": true,
+          "details": "GUID: ba2343cfce024968aedb0c606ac457e1",
+          "timestamp": "2026-01-12T18:05:07.487635"
+        },
+        {
+          "check_name": "BOOK_GUID",
+          "table": "books",
+          "description": "Book GUID exists",
+          "passed": true,
+          "details": "GUID: 023fe1583f01448d97514ab72a873685",
+          "timestamp": "2026-01-12T18:05:07.490195"
+        },
+        {
+          "check_name": "DATE_FORMAT",
+          "table": "transactions",
+          "description": "Date format detected: iso",
+          "passed": true,
+          "details": "2831/2831 transactions use iso format",
+          "timestamp": "2026-01-12T18:05:07.492571"
         }
       ],
       "errors": [],
