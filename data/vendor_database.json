@@ -2,8 +2,8 @@
   "vendors": {
     "versailles_brewing": {
       "display_name": "Versailles Brewing Company",
-      "gnucash_guid": null,
-      "gnucash_id": null,
+      "gnucash_guid": "7e910ee5fe1845cd8162c7439ec1bc78",
+      "gnucash_id": "000004",
       "addr_name": "Versailles Brewing Company",
       "addr_line1": "513 Marsailles Rd.",
       "addr_line2": "Versailles, KY 40383",
@@ -13,8 +13,8 @@
     },
     "the_slice_restaurant": {
       "display_name": "The Slice Restaurant",
-      "gnucash_guid": null,
-      "gnucash_id": null,
+      "gnucash_guid": "00e98f71927d4fa690a9a3c93ff554c2",
+      "gnucash_id": "000005",
       "addr_name": "The Slice",
       "addr_line1": "1027 N. Luther Rd.",
       "addr_line2": "Georgetown, KY 47122",
@@ -24,8 +24,8 @@
     },
     "test_vendor2": {
       "display_name": "TEST_VENDOR2",
-      "gnucash_guid": null,
-      "gnucash_id": null,
+      "gnucash_guid": "42b938cfa02d4996bf7fc0824a8fba21",
+      "gnucash_id": "000006",
       "addr_name": "TEST_VENDOR2",
       "addr_line1": "",
       "addr_line2": "",
@@ -33,8 +33,8 @@
     },
     "rgevrrg": {
       "display_name": "rgevrrg",
-      "gnucash_guid": null,
-      "gnucash_id": null,
+      "gnucash_guid": "18eadeb5e60b4d0d9930abfda16c5944",
+      "gnucash_id": "000007",
       "addr_name": "addr1",
       "addr_line1": "strt2",
       "addr_line2": "city, state zip",
@@ -42,8 +42,8 @@
     },
     "eeewffra_arg_sas": {
       "display_name": "eeewffra arg sas",
-      "gnucash_guid": null,
-      "gnucash_id": null,
+      "gnucash_guid": "128bd1a166dc441ba1d8e42fdd58b4bf",
+      "gnucash_id": "000008",
       "addr_name": "eeeadd1",
       "addr_line1": "eeeadd2",
       "addr_line2": "eeeadd3",

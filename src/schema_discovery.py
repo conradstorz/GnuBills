@@ -890,6 +890,66 @@ class SchemaDiscovery:
         
         return variations
     
+    def has_table(self, table_name: str) -> bool:
+        """Check if a table exists in the discovered schema."""
+        return table_name in self.schema.get('tables', {})
+    
+    def get_table_schema(self, table_name: str) -> Optional[Dict]:
+        """Get the complete schema information for a table."""
+        return self.schema.get('tables', {}).get(table_name)
+    
+    def build_vendor_insert_statement(self) -> Tuple[str, List[str]]:
+        """
+        Build the correct INSERT statement for vendors table based on actual schema.
+        
+        Returns:
+            Tuple of (SQL statement, list of column names in order)
+        """
+        if not self.has_table('vendors'):
+            raise ValueError("Vendors table not found in schema")
+        
+        vendor_columns = self.get_columns('vendors')
+        
+        # Define the columns we want to populate (in order of preference)
+        desired_columns = [
+            'guid', 'id', 'name', 'currency', 'active', 'notes',
+            'addr_name', 'addr_addr1', 'addr_addr2', 'addr_addr3', 'addr_addr4', 
+            'addr_phone', 'addr_fax', 'addr_email'
+        ]
+        
+        # Add optional columns that might exist
+        optional_columns = [
+            'tax_override', 'tax_inc', 'tax_table',
+            'terms', 'billing_id', 'credit', 'discount'
+        ]
+        
+        insert_columns = []
+        
+        # Add required columns first
+        for col in desired_columns:
+            if col in vendor_columns:
+                insert_columns.append(col)
+            else:
+                logger.debug(f"Desired column '{col}' not found in vendors table")
+        
+        # Add optional columns if they exist
+        for col in optional_columns:
+            if col in vendor_columns and col not in insert_columns:
+                insert_columns.append(col)
+                logger.debug(f"Adding optional column: {col}")
+        
+        # Build INSERT statement
+        columns_str = ', '.join(insert_columns)
+        placeholders = ', '.join(['?' for _ in insert_columns])
+        
+        sql = f"INSERT INTO vendors ({columns_str}) VALUES ({placeholders})"
+        
+        logger.info(f"Built vendor INSERT statement with {len(insert_columns)} columns")
+        logger.debug(f"INSERT SQL: {sql}")
+        logger.debug(f"Columns: {insert_columns}")
+        
+        return sql, insert_columns
+
     def get_account_guid(self, account_key: str) -> Optional[str]:
         """
         Get GUID for a required account.
