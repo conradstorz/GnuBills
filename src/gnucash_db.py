@@ -785,6 +785,7 @@ def create_vendor(name: str, addr_name: str = None, addr_addr1: str = None,
             logger.debug(f"  {field}: <EMPTY>")
     
     with get_connection(readonly=False) as conn:
+        # Execute INSERT
         conn.execute("""
             INSERT INTO vendors (
                 guid, id, name, currency, active, notes,
@@ -795,7 +796,10 @@ def create_vendor(name: str, addr_name: str = None, addr_addr1: str = None,
             addr_name or '', addr_addr1 or '', addr_addr2 or '', 
             addr_addr3 or '', addr_addr4 or '', addr_phone or '', addr_email or ''
         ))
+        
+        # CRITICAL: Commit the transaction
         conn.commit()
+        logger.debug("Transaction committed to database")
         
         # IMMEDIATE POST-INSERT VERIFICATION
         logger.debug("POST-INSERT: Reading back vendor data from database...")
@@ -806,18 +810,13 @@ def create_vendor(name: str, addr_name: str = None, addr_addr1: str = None,
         
         row = cursor.fetchone()
         if row:
-            logger.info(f"POST-INSERT VERIFICATION: Vendor saved to database")
-            logger.debug(f"  Database contains:")
-            logger.debug(f"    name: '{row['name']}'")
-            logger.debug(f"    addr_name: '{row['addr_name'] or '<EMPTY>'}'")
-            logger.debug(f"    addr_addr1: '{row['addr_addr1'] or '<EMPTY>'}'") 
-            logger.debug(f"    addr_addr2: '{row['addr_addr2'] or '<EMPTY>'}'")
-            logger.debug(f"    addr_addr3: '{row['addr_addr3'] or '<EMPTY>'}'")
-            logger.debug(f"    addr_addr4: '{row['addr_addr4'] or '<EMPTY>'}'")
-            logger.debug(f"    addr_phone: '{row['addr_phone'] or '<EMPTY>'}'")
-            logger.debug(f"    addr_email: '{row['addr_email'] or '<EMPTY>'}'")
+            logger.info(f"POST-INSERT VERIFIED: Vendor saved to database")
+            # Log what was actually stored
+            for field in ['name', 'addr_name', 'addr_addr1', 'addr_addr2', 'addr_phone']:
+                value = row[field] or '<EMPTY>'
+                logger.debug(f"  {field}: '{value}'")
         else:
-            logger.error(f"POST-INSERT VERIFICATION FAILED: Vendor not found in database!")
+            logger.error(f"POST-INSERT VERIFICATION FAILED: Vendor not found!")
 
     logger.info(f"Created vendor: {name} (ID: {vendor_id}, GUID: {vendor_guid})")
     
