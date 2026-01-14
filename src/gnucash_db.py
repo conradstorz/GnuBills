@@ -775,6 +775,7 @@ def create_vendor(name: str, addr_name: str = None, addr_addr1: str = None,
         'currency': usd_guid,
         'active': 1,
         'notes': '',
+        'tax_override': 0,
         'addr_name': addr_name or '',
         'addr_addr1': addr_addr1 or '',
         'addr_addr2': addr_addr2 or '',
@@ -804,9 +805,9 @@ def create_vendor(name: str, addr_name: str = None, addr_addr1: str = None,
                 INSERT INTO vendors (
                     guid, id, name, currency, active, notes, tax_override,
                     addr_name, addr_addr1, addr_addr2, addr_addr3, addr_addr4, addr_phone, addr_email
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """, (
-                vendor_guid, vendor_id, name, usd_guid, 1, 'Auto-Created by Bill Entry GUI', 0,
+                vendor_guid, vendor_id, name, usd_guid, 1, '', 0,
                 addr_name or '', addr_addr1 or '', addr_addr2 or '', 
                 addr_addr3 or '', addr_addr4 or '', addr_phone or '', addr_email or ''
             ))
