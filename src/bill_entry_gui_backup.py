@@ -206,7 +206,7 @@ class SimpleBillEntryGUI:
         bill_line = f"{vendor_name}\t{amount:.2f}\t{memo}\t{date_str}\n"
         
         # Append to bills file
-        bills_file = Path(config.PROJECT_ROOT) / "data" / "bills_to_process.txt"
+        bills_file = Path(config.DATA_DIR) / "bills_to_process.txt"
         try:
             with open(bills_file, "a", encoding="utf-8") as f:
                 f.write(bill_line)
@@ -242,7 +242,7 @@ class SimpleBillEntryGUI:
         for item in self.bills_tree.get_children():
             self.bills_tree.delete(item)
         
-        bills_file = Path(config.PROJECT_ROOT) / "data" / "bills_to_process.txt"
+        bills_file = Path(config.DATA_DIR) / "bills_to_process.txt"
         if not bills_file.exists():
             logger.debug("Bills file does not exist yet")
             self.status_var.set("No bills file found - ready for first bill")
@@ -258,7 +258,7 @@ class SimpleBillEntryGUI:
                         continue
                     
                     try:
-                        bill_data = parse_input_line(line)
+                        bill_data = parse_input_line(line, line_num)
                         if bill_data:
                             # Add to tree
                             self.bills_tree.insert("", "end", values=(
@@ -331,7 +331,7 @@ class SimpleBillEntryGUI:
         memo = values[2]
         date_str = values[3]
         
-        bills_file = Path(config.PROJECT_ROOT) / "data" / "bills_to_process.txt"
+        bills_file = Path(config.DATA_DIR) / "bills_to_process.txt"
         
         try:
             # Read all lines
@@ -347,7 +347,7 @@ class SimpleBillEntryGUI:
                     continue
                 
                 try:
-                    bill_data = parse_input_line(line_stripped)
+                    bill_data = parse_input_line(line_stripped, 0)
                     if (bill_data and 
                         bill_data['vendor_name'] == vendor_name and
                         f"{bill_data['amount']:.2f}" == amount_str and
@@ -374,7 +374,7 @@ class SimpleBillEntryGUI:
     def _clear_all_bills(self):
         """Clear all bills from the file."""
         if messagebox.askyesno("Confirm Clear All", "Delete ALL bills from the queue?"):
-            bills_file = Path(config.PROJECT_ROOT) / "data" / "bills_to_process.txt"
+            bills_file = Path(config.DATA_DIR) / "bills_to_process.txt"
             try:
                 bills_file.unlink(missing_ok=True)
                 self._load_current_bills()
