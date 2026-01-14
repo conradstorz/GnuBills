@@ -25,6 +25,8 @@ sys.path.insert(0, str(Path(__file__).parent))
 import config
 from utils import parse_input_line
 from logging_setup import setup_logging_for_script, log_function_entry, log_function_exit, log_stage
+import vendor_manager
+import gnucash_db
 
 
 class SimpleBillEntryGUI:
@@ -106,10 +108,14 @@ class SimpleBillEntryGUI:
         tools_frame = ttk.LabelFrame(main_frame, text="External Tools", padding="10")
         tools_frame.grid(row=0, column=2, sticky="new", padx=(10, 0))
         
-        ttk.Button(tools_frame, text="🔍 Vendor Manager", command=self._launch_vendor_manager, width=16).pack(pady=2)
-        ttk.Button(tools_frame, text="📧 Address Lookup", command=self._launch_address_lookup, width=16).pack(pady=2)
-        ttk.Button(tools_frame, text="🗃️ Vendor Sync", command=self._launch_vendor_sync, width=16).pack(pady=2)
-        ttk.Button(tools_frame, text="💳 Process Bills", command=self._launch_bill_processor, width=16).pack(pady=2)
+        ttk.Button(tools_frame, text="🔍 Vendor Manager\nFind, create, and\nmanage vendors", 
+                   command=self._launch_vendor_manager, width=20).pack(pady=5, fill="x")
+        ttk.Button(tools_frame, text="📧 Address Lookup\nSearch for vendor\naddresses online", 
+                   command=self._launch_address_lookup, width=20).pack(pady=5, fill="x")
+        ttk.Button(tools_frame, text="🗃️ Vendor Sync\nSync Vendor Records\nbetween this tool and\nthe GnuCash Database", 
+                   command=self._launch_vendor_sync, width=20).pack(pady=5, fill="x")
+        ttk.Button(tools_frame, text="💳 Process Bills\nCreate bills in\nGnuCash database", 
+                   command=self._launch_bill_processor, width=20).pack(pady=5, fill="x")
         
         # === Current Bills List ===
         bills_frame = ttk.LabelFrame(main_frame, text="Current Bills Queue", padding="5")
@@ -139,6 +145,9 @@ class SimpleBillEntryGUI:
         scrollbar.grid(row=0, column=1, sticky="ns")
         self.bills_tree.configure(yscrollcommand=scrollbar.set)
         
+        # Bind selection event to show vendor details
+        self.bills_tree.bind('<<TreeviewSelect>>', self._on_bill_selected)
+        
         # Bills management buttons
         bills_btn_frame = ttk.Frame(bills_frame)
         bills_btn_frame.grid(row=1, column=0, columnspan=2, sticky="ew", pady=(5, 0))
@@ -148,9 +157,19 @@ class SimpleBillEntryGUI:
         ttk.Button(bills_btn_frame, text="Clear All", command=self._clear_all_bills).pack(side="left", padx=5)
         ttk.Button(bills_btn_frame, text="Refresh List", command=self._load_current_bills).pack(side="right", padx=5)
         
+        # === Vendor Details Display ===
+        details_frame = ttk.LabelFrame(main_frame, text="Vendor Details", padding="10")
+        details_frame.grid(row=2, column=0, columnspan=3, sticky="ew", pady=(0, 10))
+        details_frame.columnconfigure(0, weight=1)
+        
+        self.vendor_details_text = tk.Text(details_frame, height=8, wrap="word", font=('TkDefaultFont', 9))
+        self.vendor_details_text.pack(fill="both", expand=True)
+        self.vendor_details_text.insert("1.0", "Select a bill to view vendor details...")
+        self.vendor_details_text.config(state="disabled")
+        
         # === Status Bar ===
         status_frame = ttk.Frame(main_frame)
-        status_frame.grid(row=2, column=0, columnspan=3, sticky="ew")
+        status_frame.grid(row=3, column=0, columnspan=3, sticky="ew")
         status_frame.columnconfigure(0, weight=1)
         
         ttk.Label(status_frame, textvariable=self.status_var, relief="sunken", anchor="w").grid(row=0, column=0, sticky="ew")
@@ -382,6 +401,88 @@ class SimpleBillEntryGUI:
             except Exception as e:
                 logger.error(f"Error clearing bills: {e}")
                 messagebox.showerror("Error", f"Error clearing bills: {e}")
+    
+    def _on_bill_selected(self, event):
+        """Handle bill selection - display vendor details."""
+        selection = self.bills_tree.selection()
+        if not selection:
+            # Clear vendor details
+            self.vendor_details_text.config(state="normal")
+            self.vendor_details_text.delete("1.0", "end")
+            self.vendor_details_text.insert("1.0", "Select a bill to view vendor details...")
+            self.vendor_details_text.config(state="disabled")
+            return
+        
+        item = selection[0]
+        values = self.bills_tree.item(item, "values")
+        vendor_name = values[0]
+        
+        # Update display
+        self.vendor_details_text.config(state="normal")
+        self.vendor_details_text.delete("1.0", "end")
+        
+        try:
+            # Load vendor manager
+            vm = vendor_manager.VendorManager()
+            
+            # Search for vendor
+            vendor_data, match_type = vm.find_vendor(vendor_name)
+            
+            # Build details text
+            details = f"Vendor: {vendor_name}\n"
+            details += "=" * 60 + "\n\n"
+            
+            if vendor_data:
+                details += f"✅ FOUND in database ({match_type} match)\n\n"
+                details += f"Display Name: {vendor_data.get('display_name', 'N/A')}\n"
+                details += f"GnuCash GUID: {vendor_data.get('gnucash_guid', 'Not set')}\n"
+                details += f"GnuCash ID: {vendor_data.get('gnucash_id', 'Not set')}\n\n"
+                
+                # Address info
+                details += "Address:\n"
+                addr_name = vendor_data.get('addr_name', '')
+                addr_line1 = vendor_data.get('addr_line1', '')
+                addr_line2 = vendor_data.get('addr_line2', '')
+                phone = vendor_data.get('phone', '')
+                
+                if addr_name:
+                    details += f"  {addr_name}\n"
+                if addr_line1:
+                    details += f"  {addr_line1}\n"
+                if addr_line2:
+                    details += f"  {addr_line2}\n"
+                if phone:
+                    details += f"  Phone: {phone}\n"
+                if not (addr_name or addr_line1 or addr_line2):
+                    details += "  (No address on file)\n"
+                
+                details += f"\nExpense Account: {vendor_data.get('expense_account', 'Not set')}\n"
+                
+                # Check if vendor exists in GnuCash
+                if vendor_data.get('gnucash_guid'):
+                    try:
+                        gc_vendor = gnucash_db.find_vendor_by_guid(vendor_data['gnucash_guid'])
+                        if gc_vendor:
+                            details += "\n✅ Verified in GnuCash database\n"
+                        else:
+                            details += "\n⚠️ GUID exists but vendor not found in GnuCash database\n"
+                    except Exception as e:
+                        details += f"\n⚠️ Error checking GnuCash: {e}\n"
+                else:
+                    details += "\n❌ Not yet created in GnuCash database\n"
+            else:
+                details += "❌ NOT FOUND in vendor database\n\n"
+                details += "This vendor does not exist in the system yet.\n"
+                details += "Use 'Vendor Manager' to create this vendor before processing bills.\n"
+            
+            self.vendor_details_text.insert("1.0", details)
+            
+        except Exception as e:
+            error_msg = f"Error loading vendor details:\n{e}"
+            logger.error(error_msg)
+            self.vendor_details_text.insert("1.0", error_msg)
+        
+        self.vendor_details_text.config(state="disabled")
     
     def _launch_vendor_manager(self):
         """Launch the vendor management GUI."""
