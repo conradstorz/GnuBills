@@ -24,8 +24,8 @@
     },
     "test_vendor2": {
       "display_name": "TEST_VENDOR2",
-      "gnucash_guid": "5487fd5c336348afa31ceb7d641fe6b0",
-      "gnucash_id": "000006",
+      "gnucash_guid": "b08b2fc410224111abfbe28a12d22e45",
+      "gnucash_id": "000004",
       "addr_name": "TEST_VENDOR2",
       "addr_line1": "",
       "addr_line2": "",
@@ -42,8 +42,8 @@
     },
     "eeewffra_arg_sas": {
       "display_name": "eeewffra arg sas",
-      "gnucash_guid": "5e569a5f510d4f0ea50ba2fd51c88fa9",
-      "gnucash_id": "000007",
+      "gnucash_guid": null,
+      "gnucash_id": null,
       "addr_name": "eeeadd1",
       "addr_line1": "eeeadd2",
       "addr_line2": "eeeadd3",

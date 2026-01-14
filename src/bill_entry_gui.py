@@ -28,12 +28,16 @@ import address_lookup
 from schema_discovery import SchemaDiscovery, get_schema
 from utils import fuzzy_match_vendor, strip_vendor_name, parse_input_line, make_expense_account_name
 from vendor_manager import VendorManager
+from logging_setup import setup_logging_for_script, log_function_entry, log_function_exit, log_stage, log_error_with_context
 
 
 class NewVendorDialog:
     """Dialog for creating a new vendor with address options."""
     
     def __init__(self, parent: tk.Tk, vendor_name: str, all_vendors: List[Dict], prefill_data: Dict = None):
+        log_function_entry("NewVendorDialog.__init__", vendor_name=vendor_name)
+        logger.info(f"Opening new vendor dialog for: {vendor_name}")
+        
         self.result = None  # Will be 'create', 'match', or 'skip'
         self.vendor_data = None
         self.matched_vendor = None
@@ -206,7 +210,11 @@ class NewVendorDialog:
     
     def _web_search(self):
         """Search for address using web APIs."""
+        log_function_entry("NewVendorDialog._web_search")
+        
         search_name = self.name_entry.get().strip() or self.vendor_name
+        logger.info(f"Starting web address lookup for: {search_name}")
+        
         self.search_status.config(text="Searching...", foreground="blue")
         self.dialog.update()
         
@@ -214,6 +222,7 @@ class NewVendorDialog:
             result = address_lookup.lookup_address(search_name)
             
             if result:
+                logger.info(f"Address found via web lookup: {result.get('source')}")
                 self.search_status.config(text="✓ Found", foreground="green")
                 # Fill in the fields
                 self.addr_name_entry.delete(0, tk.END)
@@ -228,17 +237,25 @@ class NewVendorDialog:
                 self.phone_entry.delete(0, tk.END)
                 self.phone_entry.insert(0, result.get('phone', ''))
             else:
+                logger.info("No address found via web lookup")
                 self.search_status.config(text="No results found", foreground="orange")
         except Exception as e:
-            logger.error(f"Address lookup error: {e}")
+            log_error_with_context(e, "Address lookup failed", search_name=search_name)
             self.search_status.config(text=f"Error: {e}", foreground="red")
+        finally:
+            log_function_exit("NewVendorDialog._web_search")
     
     def _create_vendor(self):
         """Create vendor with entered address."""
+        log_function_entry("NewVendorDialog._create_vendor")
+        
         name = self.name_entry.get().strip()
         if not name:
+            logger.warning("User attempted to create vendor without display name")
             messagebox.showwarning("Required", "Display name is required.")
             return
+        
+        logger.info(f"User creating new vendor: {name}")
         
         self.result = 'create'
         self.vendor_data = {
@@ -248,6 +265,9 @@ class NewVendorDialog:
             'addr_line2': self.addr_line2_entry.get().strip(),
             'phone': self.phone_entry.get().strip(),
         }
+        
+        logger.debug(f"New vendor data: {self.vendor_data}")
+        log_function_exit("NewVendorDialog._create_vendor")
         self.dialog.destroy()
     
     def _create_no_address(self):
@@ -630,6 +650,9 @@ class BillEntryGUI:
     """Main GUI application for bill entry."""
     
     def __init__(self, root: tk.Tk):
+        log_function_entry("BillEntryGUI.__init__")
+        logger.info("Initializing Bill Entry GUI application")
+        
         self.root = root
         self.root.title("GnuCash Bill Entry")
         self.root.geometry("900x800")
@@ -644,18 +667,23 @@ class BillEntryGUI:
         
         # STEP 0: Check if database is locked BEFORE anything else
         # This also creates a backup if successful
+        logger.debug("Checking database lock status")
         self.backup_path = None  # Will be set by _check_database_lock
         if not self._check_database_lock():
             # Database is locked - show error and exit
+            logger.error("Database check failed - exiting")
             return
         
         # Load vendor data (from JSON only - no database access)
+        logger.debug("Initializing vendor manager")
         self.vendor_manager = VendorManager()
         
         # Run schema validation at startup (validates schema AND all stored GUIDs)
+        logger.debug("Validating database schema")
         self._validate_schema_at_startup()
         
         # Load all vendors for autocomplete (only if database is accessible)
+        logger.debug("Loading vendors for autocomplete")
         self.all_vendors = self._load_all_vendors()
         
         # Autocomplete state
@@ -2017,17 +2045,29 @@ class BillEntryGUI:
 
 def main():
     """Main entry point."""
-    root = tk.Tk()
+    # Set up logging first
+    setup_logging_for_script("bill_entry_gui")
+    logger.info("Starting Bill Entry GUI application")
     
-    # Set icon if available
     try:
-        # You can add an icon file later if desired
-        pass
-    except:
-        pass
-    
-    app = BillEntryGUI(root)
-    root.mainloop()
+        root = tk.Tk()
+        
+        # Set icon if available
+        try:
+            # You can add an icon file later if desired
+            pass
+        except:
+            pass
+        
+        logger.debug("Creating main application window")
+        app = BillEntryGUI(root)
+        logger.info("Starting GUI main loop")
+        root.mainloop()
+        logger.info("GUI application closed")
+        
+    except Exception as e:
+        log_error_with_context(e, "Fatal error in GUI application")
+        raise
 
 
 if __name__ == '__main__':

@@ -20,11 +20,14 @@ from contextlib import contextmanager
 from loguru import logger
 
 import config
+from logging_setup import log_function_entry, log_function_exit, log_database_operation, log_error_with_context
 
 
 def generate_guid() -> str:
     """Generate a GnuCash-compatible GUID (32 hex chars, no dashes)."""
-    return uuid.uuid4().hex
+    guid = uuid.uuid4().hex
+    logger.debug(f"Generated GUID: {guid}")
+    return guid
 
 
 def _get_schema():
@@ -565,23 +568,33 @@ def get_connection(readonly: bool = True):
     Args:
         readonly: If True, open in read-only mode (default for safety)
     """
+    log_function_entry("get_connection", readonly=readonly)
+    
     db_path = Path(config.GNUCASH_DB_PATH)
+    logger.debug(f"Attempting to connect to database: {db_path}")
     
     if not db_path.exists():
+        logger.error(f"GnuCash database not found: {db_path}")
         raise FileNotFoundError(f"GnuCash database not found: {db_path}")
     
     # SQLite URI format for read-only
     if readonly:
         uri = f"file:{db_path}?mode=ro"
+        logger.debug(f"Opening read-only connection: {uri}")
         conn = sqlite3.connect(uri, uri=True)
     else:
+        logger.debug(f"Opening read-write connection to: {db_path}")
+        logger.warning("Opening database in read-write mode")
         conn = sqlite3.connect(str(db_path))
     
     conn.row_factory = sqlite3.Row
     try:
+        logger.debug("Database connection established")
         yield conn
     finally:
+        logger.debug("Closing database connection")
         conn.close()
+        log_function_exit("get_connection")
 
 
 # =============================================================================
@@ -725,11 +738,16 @@ def create_vendor(
     Returns the new vendor's GUID.
     Raises WriteVerificationError if verification fails.
     """
+    log_function_entry("create_vendor", name=name, addr_name=addr_name)
+    logger.info(f"Creating new vendor: {name}")
+    
     vendor_guid = generate_guid()
     vendor_id = get_next_vendor_id()
+    logger.debug(f"Generated vendor GUID: {vendor_guid}, ID: {vendor_id}")
     
     if currency_guid is None:
         currency_guid = get_usd_guid()
+        logger.debug(f"Using default USD currency GUID: {currency_guid}")
     
     with get_connection(readonly=False) as conn:
         # First, check what columns exist in the vendors table
@@ -2223,10 +2241,16 @@ def create_posted_bill(
     Returns the bill GUID.
     Raises WriteVerificationError if verification fails.
     """
+    log_function_entry("create_posted_bill", vendor_guid=vendor_guid[:8], 
+                       expense_account_guid=expense_account_guid[:8], amount=amount, memo=memo[:50])
+    logger.info(f"Creating posted bill: amount=${amount}, memo='{memo[:50]}'")
+    
     if bill_date is None:
         bill_date = date.today()
     if due_date is None:
         due_date = bill_date
+    
+    logger.debug(f"Bill dates: bill_date={bill_date}, due_date={due_date}")
     
     bill_guid = generate_guid()
     bill_id = get_next_bill_id()
@@ -2235,6 +2259,8 @@ def create_posted_bill(
     split1_guid = generate_guid()  # Expense debit
     split2_guid = generate_guid()  # AP credit
     entry_guid = generate_guid()
+    
+    logger.debug(f"Generated GUIDs: bill={bill_guid[:8]}, bill_id={bill_id}, lot={lot_guid[:8]}, txn={txn_guid[:8]}")
     
     usd_guid = get_usd_guid()
     ap_guid = get_ap_account_guid()

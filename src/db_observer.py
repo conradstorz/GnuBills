@@ -30,10 +30,12 @@ import sys
 from pathlib import Path
 from datetime import datetime
 from typing import Dict, List, Any, Optional
+from loguru import logger
 
 # Add parent to path for config import
 sys.path.insert(0, str(Path(__file__).parent))
 import config
+from logging_setup import setup_logging_for_script, log_function_entry, log_function_exit, log_database_operation, log_stage
 
 SNAPSHOTS_DIR = config.PROJECT_ROOT / "data" / "snapshots"
 
@@ -60,26 +62,57 @@ ALWAYS_FULL_TABLES = [
 
 def get_connection() -> sqlite3.Connection:
     """Get a read-only connection to the GnuCash database."""
+    log_function_entry("get_connection")
+    
     db_path = Path(config.GNUCASH_DB_PATH)
+    logger.debug(f"Attempting to connect to database: {db_path}")
+    
     if not db_path.exists():
+        logger.error(f"Database file not found: {db_path}")
         raise FileNotFoundError(f"Database not found: {db_path}")
     
     uri = f"file:{db_path}?mode=ro"
-    conn = sqlite3.connect(uri, uri=True)
-    conn.row_factory = sqlite3.Row
-    return conn
+    logger.debug(f"Opening read-only connection with URI: {uri}")
+    
+    try:
+        conn = sqlite3.connect(uri, uri=True)
+        conn.row_factory = sqlite3.Row
+        logger.debug("Database connection established successfully")
+        log_function_exit("get_connection", "connection")
+        return conn
+    except Exception as e:
+        logger.error(f"Failed to connect to database: {e}")
+        raise
 
 
 def get_table_schema(conn: sqlite3.Connection, table: str) -> List[str]:
     """Get column names for a table."""
-    cursor = conn.execute(f"PRAGMA table_info({table})")
-    return [row['name'] for row in cursor]
+    log_function_entry("get_table_schema", table=table)
+    
+    try:
+        cursor = conn.execute(f"PRAGMA table_info({table})")
+        columns = [row['name'] for row in cursor]
+        logger.debug(f"Table {table} has {len(columns)} columns: {', '.join(columns)}")
+        log_function_exit("get_table_schema", len(columns))
+        return columns
+    except Exception as e:
+        logger.error(f"Failed to get schema for table {table}: {e}")
+        raise
 
 
 def get_all_tables(conn: sqlite3.Connection) -> List[str]:
     """Get list of all tables in the database."""
-    cursor = conn.execute("SELECT name FROM sqlite_master WHERE type='table' ORDER BY name")
-    return [row['name'] for row in cursor]
+    log_function_entry("get_all_tables")
+    
+    try:
+        cursor = conn.execute("SELECT name FROM sqlite_master WHERE type='table' ORDER BY name")
+        tables = [row['name'] for row in cursor]
+        logger.debug(f"Found {len(tables)} tables in database: {', '.join(tables)}")
+        log_function_exit("get_all_tables", len(tables))
+        return tables
+    except Exception as e:
+        logger.error(f"Failed to get table list: {e}")
+        raise
 
 
 def fetch_table_data(conn: sqlite3.Connection, table: str) -> List[Dict]:
@@ -88,19 +121,27 @@ def fetch_table_data(conn: sqlite3.Connection, table: str) -> List[Dict]:
     Captures ALL rows for most tables.
     For very large tables (slots, splits, transactions), captures recent rows.
     """
+    log_function_entry("fetch_table_data", table=table)
+    
     # Skip sqlite internal tables
     if table.startswith('sqlite_'):
+        logger.debug(f"Skipping SQLite internal table: {table}")
         return []
     
     # Determine if we should limit rows
     if table in ALWAYS_FULL_TABLES:
         limit = None
+        logger.debug(f"Fetching ALL rows from {table} (always full table)")
     elif table in LARGE_TABLES:
         limit = LARGE_TABLES[table]
+        logger.debug(f"Limiting {table} to {limit} rows (large table)")
     else:
         limit = None  # Get all rows by default
+        logger.debug(f"Fetching ALL rows from {table} (standard table)")
     
     try:
+        log_database_operation("SELECT", table, limit=limit)
+        
         if limit:
             cursor = conn.execute(f"SELECT * FROM {table} ORDER BY rowid DESC LIMIT {limit}")
         else:
@@ -109,18 +150,26 @@ def fetch_table_data(conn: sqlite3.Connection, table: str) -> List[Dict]:
         rows = []
         for row in cursor:
             rows.append({key: row[key] for key in row.keys()})
+        
+        logger.debug(f"Fetched {len(rows)} rows from {table}")
+        log_function_exit("fetch_table_data", len(rows))
         return rows
+        
     except Exception as e:
-        print(f"Warning: Could not fetch {table}: {e}")
+        logger.warning(f"Could not fetch data from {table}: {e}")
         return []
 
 
 def capture_snapshot() -> Dict[str, Any]:
     """Capture current database state - ALL tables."""
+    log_function_entry("capture_snapshot")
+    log_stage("Capturing database snapshot")
+    
     conn = get_connection()
     
     # Get all tables dynamically
     all_tables = get_all_tables(conn)
+    logger.info(f"Capturing snapshot of {len(all_tables)} tables")
     
     snapshot = {
         'timestamp': datetime.now().isoformat(),
@@ -128,14 +177,19 @@ def capture_snapshot() -> Dict[str, Any]:
         'tables': {}
     }
     
-    for table in all_tables:
+    total_rows = 0
+    for i, table in enumerate(all_tables, 1):
         try:
+            logger.debug(f"Processing table {i}/{len(all_tables)}: {table}")
             data = fetch_table_data(conn, table)
             snapshot['tables'][table] = {
                 'count': len(data),
                 'rows': data
             }
+            total_rows += len(data)
+            
         except Exception as e:
+            logger.error(f"Error capturing table {table}: {e}")
             snapshot['tables'][table] = {
                 'error': str(e),
                 'count': 0,
@@ -143,41 +197,80 @@ def capture_snapshot() -> Dict[str, Any]:
             }
     
     conn.close()
+    logger.info(f"Snapshot captured: {len(all_tables)} tables, {total_rows} total rows")
+    log_function_exit("capture_snapshot", f"{len(all_tables)} tables")
     return snapshot
 
 
 def save_snapshot(snapshot: Dict, label: str) -> Path:
     """Save a snapshot to disk."""
+    log_function_entry("save_snapshot", label=label)
+    
     SNAPSHOTS_DIR.mkdir(parents=True, exist_ok=True)
+    logger.debug(f"Snapshots directory: {SNAPSHOTS_DIR}")
     
     filename = f"{label}.json"
     filepath = SNAPSHOTS_DIR / filename
+    logger.debug(f"Saving snapshot to: {filepath}")
     
-    with open(filepath, 'w') as f:
-        json.dump(snapshot, f, indent=2, default=str)
-    
-    return filepath
+    try:
+        with open(filepath, 'w') as f:
+            json.dump(snapshot, f, indent=2, default=str)
+        
+        file_size = filepath.stat().st_size / 1024 / 1024  # MB
+        logger.info(f"Snapshot saved: {filepath} ({file_size:.1f} MB)")
+        log_function_exit("save_snapshot", str(filepath))
+        return filepath
+        
+    except Exception as e:
+        logger.error(f"Failed to save snapshot to {filepath}: {e}")
+        raise
 
 
 def load_snapshot(label: str) -> Dict:
     """Load a snapshot from disk."""
+    log_function_entry("load_snapshot", label=label)
+    
     filepath = SNAPSHOTS_DIR / f"{label}.json"
+    logger.debug(f"Loading snapshot from: {filepath}")
+    
     if not filepath.exists():
+        logger.error(f"Snapshot file not found: {filepath}")
         raise FileNotFoundError(f"Snapshot not found: {filepath}")
     
-    with open(filepath) as f:
-        return json.load(f)
+    try:
+        with open(filepath) as f:
+            snapshot = json.load(f)
+        
+        table_count = len(snapshot.get('tables', {}))
+        logger.debug(f"Loaded snapshot with {table_count} tables")
+        log_function_exit("load_snapshot", f"{table_count} tables")
+        return snapshot
+        
+    except Exception as e:
+        logger.error(f"Failed to load snapshot from {filepath}: {e}")
+        raise
 
 
 def list_snapshots() -> List[str]:
     """List all available snapshots."""
+    log_function_entry("list_snapshots")
+    
     if not SNAPSHOTS_DIR.exists():
+        logger.debug(f"Snapshots directory does not exist: {SNAPSHOTS_DIR}")
         return []
-    return sorted([f.stem for f in SNAPSHOTS_DIR.glob("*.json")])
+    
+    snapshots = sorted([f.stem for f in SNAPSHOTS_DIR.glob("*.json")])
+    logger.debug(f"Found {len(snapshots)} snapshots: {', '.join(snapshots)}")
+    log_function_exit("list_snapshots", len(snapshots))
+    return snapshots
 
 
 def diff_snapshots(label1: str, label2: str) -> Dict[str, Any]:
     """Compare two snapshots and return differences."""
+    log_function_entry("diff_snapshots", label1=label1, label2=label2)
+    log_stage(f"Comparing snapshots: {label1} vs {label2}")
+    
     snap1 = load_snapshot(label1)
     snap2 = load_snapshot(label2)
     
@@ -191,8 +284,12 @@ def diff_snapshots(label1: str, label2: str) -> Dict[str, Any]:
     
     # Get all tables from both snapshots
     all_tables = set(snap1['tables'].keys()) | set(snap2['tables'].keys())
+    logger.debug(f"Comparing {len(all_tables)} tables")
     
+    total_changes = 0
     for table in sorted(all_tables):
+        logger.debug(f"Analyzing differences in table: {table}")
+        
         table_diff = {
             'added': [],
             'removed': [],
@@ -235,22 +332,34 @@ def diff_snapshots(label1: str, label2: str) -> Dict[str, Any]:
         # Only include if there are changes
         if table_diff['added'] or table_diff['removed'] or table_diff['modified']:
             diff['changes'][table] = table_diff
+            table_change_count = len(table_diff['added']) + len(table_diff['removed']) + len(table_diff['modified'])
+            total_changes += table_change_count
+            logger.debug(f"Table {table}: {table_change_count} changes (added: {len(table_diff['added'])}, removed: {len(table_diff['removed'])}, modified: {len(table_diff['modified'])})")
     
+    logger.info(f"Comparison complete: {len(diff['changes'])} tables with changes, {total_changes} total changes")
+    log_function_exit("diff_snapshots", f"{len(diff['changes'])} tables changed")
     return diff
 
 
 def print_snapshot_summary(snapshot: Dict):
     """Print a summary of a snapshot."""
+    log_function_entry("print_snapshot_summary")
+    
+    logger.debug("Printing snapshot summary")
     print(f"\n{'='*60}")
     print(f"Snapshot: {snapshot.get('timestamp', 'unknown')}")
     print(f"Database: {snapshot.get('database', 'unknown')}")
     print(f"{'='*60}")
     
+    total_rows = 0
     for table, data in snapshot['tables'].items():
         if 'error' in data:
             print(f"\n{table}: ERROR - {data['error']}")
+            logger.warning(f"Table {table} had error: {data['error']}")
         else:
-            print(f"\n{table}: {data['count']} rows")
+            row_count = data['count']
+            total_rows += row_count
+            print(f"\n{table}: {row_count} rows")
             
             # Show key info for certain tables
             if table == 'invoices' and data['rows']:
@@ -274,6 +383,9 @@ def print_snapshot_summary(snapshot: Dict):
 
 def print_diff(diff: Dict):
     """Print a diff in a readable format."""
+    log_function_entry("print_diff", from_snapshot=diff['from'], to_snapshot=diff['to'])
+    
+    logger.debug("Printing diff summary")
     print(f"\n{'='*60}")
     print(f"DIFF: {diff['from']} -> {diff['to']}")
     print(f"From: {diff['from_timestamp']}")
@@ -281,8 +393,13 @@ def print_diff(diff: Dict):
     print(f"{'='*60}")
     
     if not diff['changes']:
+        logger.info("No changes detected between snapshots")
         print("\nNo changes detected.")
         return
+    
+    total_changes = sum(len(changes['added']) + len(changes['removed']) + len(changes['modified']) 
+                       for changes in diff['changes'].values())
+    logger.info(f"Displaying {len(diff['changes'])} tables with {total_changes} total changes")
     
     for table, changes in sorted(diff['changes'].items()):
         print(f"\n{'─'*60}")
@@ -330,6 +447,9 @@ def print_diff(diff: Dict):
 
 def show_current_state():
     """Show the current database state without saving."""
+    log_function_entry("show_current_state")
+    log_stage("Displaying current database state")
+    
     snapshot = capture_snapshot()
     print_snapshot_summary(snapshot)
     
@@ -339,6 +459,8 @@ def show_current_state():
     print(f"\n{'='*60}")
     print("DETAILED VIEW - VENDOR BILLS")
     print(f"{'='*60}")
+    
+    logger.debug("Querying detailed bill information")
     
     cursor = conn.execute("""
         SELECT i.*, v.name as vendor_name
@@ -392,55 +514,73 @@ def show_current_state():
 
 
 def main():
+    # Set up logging first
+    setup_logging_for_script("db_observer")
+    
     if len(sys.argv) < 2:
+        logger.warning("No command provided")
         print(__doc__)
         return
     
     command = sys.argv[1].lower()
+    logger.info(f"Running command: {command}")
     
-    if command == 'snapshot':
-        if len(sys.argv) < 3:
-            print("Usage: python db_observer.py snapshot <label>")
-            return
-        label = sys.argv[2]
-        print(f"Capturing snapshot '{label}'...")
-        snapshot = capture_snapshot()
-        filepath = save_snapshot(snapshot, label)
-        print(f"Saved to: {filepath}")
-        print_snapshot_summary(snapshot)
-    
-    elif command == 'diff':
-        if len(sys.argv) < 4:
-            print("Usage: python db_observer.py diff <label1> <label2>")
-            return
-        label1 = sys.argv[2]
-        label2 = sys.argv[3]
-        print(f"Comparing '{label1}' to '{label2}'...")
-        diff = diff_snapshots(label1, label2)
-        print_diff(diff)
+    try:
+        if command == 'snapshot':
+            if len(sys.argv) < 3:
+                logger.error("Missing snapshot label argument")
+                print("Usage: python db_observer.py snapshot <label>")
+                return
+            label = sys.argv[2]
+            logger.info(f"Creating snapshot with label: {label}")
+            print(f"Capturing snapshot '{label}'...")
+            snapshot = capture_snapshot()
+            filepath = save_snapshot(snapshot, label)
+            print(f"Saved to: {filepath}")
+            print_snapshot_summary(snapshot)
         
-        # Also save the diff
-        diff_path = SNAPSHOTS_DIR / f"diff_{label1}_to_{label2}.json"
-        with open(diff_path, 'w') as f:
-            json.dump(diff, f, indent=2, default=str)
-        print(f"\nDiff saved to: {diff_path}")
-    
-    elif command == 'list':
-        snapshots = list_snapshots()
-        if snapshots:
-            print("Available snapshots:")
-            for s in snapshots:
-                if not s.startswith('diff_'):
-                    print(f"  {s}")
+        elif command == 'diff':
+            if len(sys.argv) < 4:
+                logger.error("Missing snapshot labels for diff")
+                print("Usage: python db_observer.py diff <label1> <label2>")
+                return
+            label1 = sys.argv[2]
+            label2 = sys.argv[3]
+            logger.info(f"Comparing snapshots: {label1} -> {label2}")
+            print(f"Comparing '{label1}' to '{label2}'...")
+            diff = diff_snapshots(label1, label2)
+            print_diff(diff)
+            
+            # Also save the diff
+            diff_path = SNAPSHOTS_DIR / f"diff_{label1}_to_{label2}.json"
+            with open(diff_path, 'w') as f:
+                json.dump(diff, f, indent=2, default=str)
+            logger.info(f"Diff saved to: {diff_path}")
+            print(f"\nDiff saved to: {diff_path}")
+        
+        elif command == 'list':
+            logger.info("Listing available snapshots")
+            snapshots = list_snapshots()
+            if snapshots:
+                print("Available snapshots:")
+                for s in snapshots:
+                    if not s.startswith('diff_'):
+                        print(f"  {s}")
+            else:
+                print("No snapshots found.")
+        
+        elif command == 'show':
+            logger.info("Showing current database state")
+            show_current_state()
+        
         else:
-            print("No snapshots found.")
-    
-    elif command == 'show':
-        show_current_state()
-    
-    else:
-        print(f"Unknown command: {command}")
-        print(__doc__)
+            logger.error(f"Unknown command: {command}")
+            print(f"Unknown command: {command}")
+            print(__doc__)
+            
+    except Exception as e:
+        logger.error(f"Command '{command}' failed: {e}")
+        raise
 
 
 if __name__ == '__main__':
