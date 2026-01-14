@@ -47,7 +47,36 @@
       "addr_name": "eeeadd1",
       "addr_line1": "eeeadd2",
       "addr_line2": "eeeadd3",
-      "phone": "123.456.1234"
+      "phone": "123.456.1234",
+      "city": "city4",
+      "state": "",
+      "zip": "",
+      "email": "",
+      "search_name": "eeewffra arg sas"
+    },
+    "the_exchange": {
+      "display_name": "the exchange",
+      "search_name": "the exchange",
+      "addr_name": "123 anywhere",
+      "addr_line1": "",
+      "addr_line2": "",
+      "city": "",
+      "state": "",
+      "zip": "",
+      "phone": "",
+      "email": ""
+    },
+    "my_own_place": {
+      "display_name": "my own place",
+      "search_name": "my own place",
+      "addr_name": "here",
+      "addr_line1": "there",
+      "addr_line2": "and",
+      "city": "everywhere",
+      "state": "",
+      "zip": "",
+      "phone": "",
+      "email": ""
     }
   },
   "aliases": {}

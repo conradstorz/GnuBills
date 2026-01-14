@@ -17,9 +17,14 @@ class AddressLookupError(Exception):
     pass
 
 
-def lookup_google_places(business_name: str, locality: str = None) -> Optional[Dict]:
+def lookup_google_places(business_name: str, locality: str = None, return_all: bool = False) -> Optional[Dict]:
     """
     Search for a business using Google Places API.
+    
+    Args:
+        business_name: Business name to search for
+        locality: Location/city to search in (defaults to config.DEFAULT_LOCALITY)
+        return_all: If True, returns a list of all results instead of just the best match
     
     Returns dict with:
         - name: Business name from Google
@@ -29,8 +34,10 @@ def lookup_google_places(business_name: str, locality: str = None) -> Optional[D
         - phone: Phone number (if available)
         - lat, lng: Coordinates
         - place_id: Google place ID
+        - distance: Distance in miles (if CENTER_LAT/LON configured)
     
-    Returns None if not found or API error.
+    If return_all=True, returns a list of dicts instead.
+    Returns None (or empty list) if not found or API error.
     """
     log_function_entry("lookup_google_places", business_name=business_name, locality=locality)
     
@@ -107,8 +114,34 @@ def lookup_google_places(business_name: str, locality: str = None) -> Optional[D
         if not results:
             logger.info("No results within search radius")
             log_function_exit("lookup_google_places", None)
-            return None
+            return [] if return_all else None
         
+        # If return_all is True, process all results and return them
+        if return_all:
+            all_results = []
+            for r in results:
+                formatted_addr = r.get('formatted_address', '')
+                addr_parts = _parse_formatted_address(formatted_addr)
+                
+                result = {
+                    'name': r.get('name'),
+                    'formatted_address': formatted_addr,
+                    'addr_line1': addr_parts.get('line1', ''),
+                    'addr_line2': addr_parts.get('line2', ''),
+                    'phone': None,  # Phone lookup is expensive, only do it when selected
+                    'lat': r.get('geometry', {}).get('location', {}).get('lat'),
+                    'lng': r.get('geometry', {}).get('location', {}).get('lng'),
+                    'place_id': r.get('place_id'),
+                    'distance': r.get('_distance'),
+                    'source': 'google'
+                }
+                all_results.append(result)
+            
+            logger.info(f"Google Places lookup returned {len(all_results)} results for '{business_name}'")
+            log_function_exit("lookup_google_places", f"{len(all_results)} results")
+            return all_results
+        
+        # Original behavior: return only the best result
         best = results[0]
         logger.debug(f"Selected best result: '{best.get('name')}' at {best.get('formatted_address')}")
         

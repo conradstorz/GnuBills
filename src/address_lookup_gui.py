@@ -1,0 +1,537 @@
+"""
+Address Lookup GUI - Standalone tool for managing vendor addresses.
+
+Can be launched standalone or with a vendor name passed as argument.
+Auto-saves all changes to vendor_database.json.
+"""
+
+import sys
+import tkinter as tk
+from tkinter import ttk, messagebox, scrolledtext
+from pathlib import Path
+from typing import Optional, Dict
+from loguru import logger
+
+# Add src directory to path for imports
+sys.path.insert(0, str(Path(__file__).parent))
+
+from vendor_manager import VendorManager
+from address_lookup import lookup_google_places, _parse_formatted_address, _get_google_place_phone
+from logging_setup import setup_logging_for_script, log_function_entry, log_function_exit
+from utils import strip_vendor_name
+
+
+class AddressLookupGUI:
+    """GUI for looking up and editing vendor addresses."""
+    
+    def __init__(self, root: tk.Tk, vendor_name: Optional[str] = None):
+        self.root = root
+        self.root.title("Address Lookup Tool")
+        self.root.geometry("1000x650")
+        
+        self.vendor_manager = VendorManager()
+        self.vendor_key = None
+        self.vendor_data = {}
+        
+        # Track if we're in the middle of loading data (to avoid auto-save during load)
+        self.loading = False
+        
+        # Track the trace ID for new vendor name changes
+        self.name_trace_id = None
+        
+        # Create GUI
+        self._create_widgets()
+        
+        # Load vendor if provided
+        if vendor_name:
+            # Set name and make it read-only since loading existing vendor
+            self.name_entry.config(state="normal")
+            self.vendor_name_var.set(vendor_name)
+            self.name_entry.config(state="readonly")
+            self._load_vendor(vendor_name)
+    
+    def _load_vendor_list(self):
+        """Load all vendors into the listbox."""
+        self.vendor_listbox.delete(0, tk.END)
+        
+        # Get all vendors sorted by display name
+        vendors = []
+        for key, data in self.vendor_manager.vendors.get('vendors', {}).items():
+            display_name = data.get('display_name', key)
+            has_address = bool(data.get('addr_line1'))
+            vendors.append((display_name, key, has_address))
+        
+        vendors.sort(key=lambda x: x[0].lower())
+        
+        # Store for filtering
+        self.all_vendors = vendors
+        
+        # Add to listbox
+        for display_name, key, has_address in vendors:
+            indicator = "📍" if has_address else "  "
+            self.vendor_listbox.insert(tk.END, f"{indicator} {display_name}")
+        
+        self.status_var.set(f"Loaded {len(vendors)} vendors")
+    
+    def _filter_vendors(self, *args):
+        """Filter vendor list based on search term."""
+        search_term = self.filter_var.get().lower()
+        
+        self.vendor_listbox.delete(0, tk.END)
+        
+        for display_name, key, has_address in self.all_vendors:
+            if search_term in display_name.lower():
+                indicator = "📍" if has_address else "  "
+                self.vendor_listbox.insert(tk.END, f"{indicator} {display_name}")
+    
+    def _on_vendor_selected(self, event):
+        """Handle vendor selection from list."""
+        selection = self.vendor_listbox.curselection()
+        if not selection:
+            return
+        
+        # Remove any active name trace from new vendor creation
+        if self.name_trace_id:
+            self.vendor_name_var.trace_remove("write", self.name_trace_id)
+            self.name_trace_id = None
+        
+        # Get selected vendor name (strip the indicator)
+        selected_text = self.vendor_listbox.get(selection[0])
+        vendor_name = selected_text[2:].strip()  # Remove "📍 " or "  " prefix
+        
+        # Load this vendor and make name field read-only
+        self.name_entry.config(state="normal")
+        self.vendor_name_var.set(vendor_name)
+        self.name_entry.config(state="readonly")
+        self._load_vendor(vendor_name)
+    
+    def _new_vendor(self):
+        """Clear fields to create a new vendor and enable name editing."""
+        self.loading = True
+        
+        try:
+            # Remove any existing trace first
+            if self.name_trace_id:
+                self.vendor_name_var.trace_remove("write", self.name_trace_id)
+                self.name_trace_id = None
+            
+            # Enable name field for editing
+            self.name_entry.config(state="normal")
+            
+            self.vendor_name_var.set("")
+            self.addr_name_var.set("")
+            self.addr_line1_var.set("")
+            self.addr_line2_var.set("")
+            self.city_var.set("")
+            self.state_var.set("")
+            self.zip_var.set("")
+            self.phone_var.set("")
+            self.email_var.set("")
+            
+            self.vendor_key = None
+            self.vendor_data = {}
+            
+            self.vendor_listbox.selection_clear(0, tk.END)
+            self.status_var.set("Enter new vendor details - name field is editable")
+            
+        finally:
+            self.loading = False
+        
+        # Add trace for name changes only when creating new vendor (after loading=False)
+        self.name_trace_id = self.vendor_name_var.trace_add("write", self._on_new_vendor_name_changed)
+    
+    def _on_new_vendor_name_changed(self, *args):
+        """Handle name changes when creating a new vendor."""
+        if self.loading:
+            return
+        
+        vendor_name = self.vendor_name_var.get().strip()
+        if vendor_name:
+            # Create vendor key and initialize
+            self.vendor_key = strip_vendor_name(vendor_name)
+            if 'display_name' not in self.vendor_data:
+                self.vendor_data['display_name'] = vendor_name
+                self.vendor_data['search_name'] = vendor_name.lower()
+            else:
+                # Update display name as user types
+                self.vendor_data['display_name'] = vendor_name
+                self.vendor_data['search_name'] = vendor_name.lower()
+    
+    def _create_widgets(self):
+        """Create all GUI widgets."""
+        # Main container with padding
+        main_frame = ttk.Frame(self.root, padding="10")
+        main_frame.pack(fill="both", expand=True)
+        
+        # Create paned window for vendor list and details
+        paned = ttk.PanedWindow(main_frame, orient=tk.HORIZONTAL)
+        paned.pack(fill="both", expand=True)
+        
+        # Left panel - Vendor List
+        left_panel = ttk.Frame(paned)
+        paned.add(left_panel, weight=1)
+        
+        list_label = ttk.Label(left_panel, text="All Vendors", font=("Arial", 10, "bold"))
+        list_label.pack(pady=(0, 5))
+        
+        # Search/filter box for vendor list
+        filter_frame = ttk.Frame(left_panel)
+        filter_frame.pack(fill="x", pady=(0, 5))
+        ttk.Label(filter_frame, text="Filter:").pack(side="left", padx=(0, 5))
+        self.filter_var = tk.StringVar()
+        self.filter_var.trace_add("write", self._filter_vendors)
+        ttk.Entry(filter_frame, textvariable=self.filter_var).pack(side="left", fill="x", expand=True)
+        
+        # Vendor listbox with scrollbar
+        list_frame = ttk.Frame(left_panel)
+        list_frame.pack(fill="both", expand=True)
+        
+        scrollbar_vendors = ttk.Scrollbar(list_frame, orient="vertical")
+        scrollbar_vendors.pack(side="right", fill="y")
+        
+        self.vendor_listbox = tk.Listbox(list_frame, yscrollcommand=scrollbar_vendors.set, font=("Arial", 9))
+        self.vendor_listbox.pack(side="left", fill="both", expand=True)
+        scrollbar_vendors.config(command=self.vendor_listbox.yview)
+        
+        self.vendor_listbox.bind('<<ListboxSelect>>', self._on_vendor_selected)
+        
+        # Right panel - Vendor Details
+        right_panel = ttk.Frame(paned)
+        paned.add(right_panel, weight=2)
+        
+        # Vendor Name Section
+        name_frame = ttk.LabelFrame(right_panel, text="Vendor Name", padding="5")
+        name_frame.pack(fill="x", pady=(0, 10))
+        
+        self.vendor_name_var = tk.StringVar()
+        # Removed auto-matching trace - only triggers on field changes for auto-save
+        
+        ttk.Label(name_frame, text="Name:").grid(row=0, column=0, sticky="w", padx=(0, 5))
+        self.name_entry = ttk.Entry(name_frame, textvariable=self.vendor_name_var, width=40, state="readonly")
+        self.name_entry.grid(row=0, column=1, sticky="ew")
+        ttk.Button(name_frame, text="Search Web", command=self._search_web).grid(row=0, column=2, padx=(5, 0))
+        ttk.Button(name_frame, text="New Vendor", command=self._new_vendor).grid(row=0, column=3, padx=(5, 0))
+        
+        name_frame.columnconfigure(1, weight=1)
+        
+        # Address Fields Section
+        addr_frame = ttk.LabelFrame(right_panel, text="Address Details", padding="5")
+        addr_frame.pack(fill="both", expand=True, pady=(0, 10))
+        
+        # Create entry variables and widgets
+        self.addr_name_var = tk.StringVar()
+        self.addr_line1_var = tk.StringVar()
+        self.addr_line2_var = tk.StringVar()
+        self.city_var = tk.StringVar()
+        self.state_var = tk.StringVar()
+        self.zip_var = tk.StringVar()
+        self.phone_var = tk.StringVar()
+        self.email_var = tk.StringVar()
+        
+        # Add trace to all variables for auto-save
+        for var in [self.addr_name_var, self.addr_line1_var, self.addr_line2_var,
+                    self.city_var, self.state_var, self.zip_var, self.phone_var, self.email_var]:
+            var.trace_add("write", self._on_field_changed)
+        
+        fields = [
+            ("Address Name:", self.addr_name_var),
+            ("Street Address:", self.addr_line1_var),
+            ("Address Line 2:", self.addr_line2_var),
+            ("City:", self.city_var),
+            ("State:", self.state_var),
+            ("ZIP Code:", self.zip_var),
+            ("Phone:", self.phone_var),
+            ("Email:", self.email_var),
+        ]
+        
+        for idx, (label, var) in enumerate(fields):
+            ttk.Label(addr_frame, text=label).grid(row=idx, column=0, sticky="w", padx=(0, 5), pady=2)
+            ttk.Entry(addr_frame, textvariable=var, width=60).grid(row=idx, column=1, sticky="ew", pady=2)
+        
+        addr_frame.columnconfigure(1, weight=1)
+        
+        # Search Results Section (initially hidden)
+        self.results_frame = ttk.LabelFrame(right_panel, text="Search Results", padding="5")
+        
+        # Create frame for listbox and scrollbar
+        list_frame = ttk.Frame(self.results_frame)
+        list_frame.pack(fill="both", expand=True)
+        
+        # Scrollbar for results list
+        scrollbar = ttk.Scrollbar(list_frame, orient="vertical")
+        scrollbar.pack(side="right", fill="y")
+        
+        # Listbox for results
+        self.results_listbox = tk.Listbox(list_frame, height=8, yscrollcommand=scrollbar.set, font=("Courier", 9))
+        self.results_listbox.pack(side="left", fill="both", expand=True)
+        scrollbar.config(command=self.results_listbox.yview)
+        
+        # Bind double-click to use result
+        self.results_listbox.bind('<Double-Button-1>', lambda e: self._use_selected_result())
+        
+        # Button to use selected result
+        ttk.Button(self.results_frame, text="Use Selected Result", 
+                  command=self._use_selected_result).pack(pady=5)
+        
+        # Status bar
+        self.status_var = tk.StringVar(value="Ready")
+        status_bar = ttk.Label(right_panel, textvariable=self.status_var, relief=tk.SUNKEN, anchor="w")
+        status_bar.pack(fill="x", side="bottom", pady=(5, 0))
+        
+        # Store current search results
+        self.current_results = []
+        
+        # Load vendor list
+        self._load_vendor_list()
+    
+    def _load_vendor(self, vendor_name: str):
+        """Load vendor data from JSON database."""
+        log_function_entry("_load_vendor", vendor_name=vendor_name)
+        
+        self.loading = True  # Prevent auto-save during load
+        
+        try:
+            # Normalize the vendor name to get the key
+            vendor_key = strip_vendor_name(vendor_name)
+            
+            # Try to find vendor - returns (vendor_data, vendor_key) tuple
+            result = self.vendor_manager.find_vendor(vendor_name)
+            vendor_data = result[0] if result else None
+            
+            if vendor_data:
+                self.vendor_key = vendor_key
+                self.vendor_data = vendor_data
+                
+                # Populate fields - name is already set and read-only
+                self.addr_name_var.set(vendor_data.get('addr_name', ''))
+                self.addr_line1_var.set(vendor_data.get('addr_line1', ''))
+                self.addr_line2_var.set(vendor_data.get('addr_line2', ''))
+                
+                # Try to extract city, state, zip from addr_line2 if they're not separate
+                city = vendor_data.get('city', '')
+                state = vendor_data.get('state', '')
+                zip_code = vendor_data.get('zip', '')
+                
+                self.city_var.set(city)
+                self.state_var.set(state)
+                self.zip_var.set(zip_code)
+                
+                self.phone_var.set(vendor_data.get('phone', ''))
+                self.email_var.set(vendor_data.get('email', '') or vendor_data.get('addr_email', ''))
+                
+                self.status_var.set(f"Loaded: {vendor_data.get('display_name', vendor_name)} (read-only name)")
+                logger.info(f"Loaded vendor: {vendor_name}")
+            else:
+                # Vendor not found - shouldn't happen when loading from list
+                self.vendor_key = vendor_key
+                self.vendor_data = {
+                    'display_name': vendor_name,
+                    'search_name': vendor_name.lower(),
+                }
+                self.addr_name_var.set(vendor_name)
+                self.status_var.set(f"Vendor not found: {vendor_name}")
+                logger.warning(f"Vendor not found: {vendor_name}")
+        
+        finally:
+            self.loading = False
+        
+        log_function_exit("_load_vendor")
+    
+    # Removed _on_name_changed method - no longer needed
+    
+    def _on_field_changed(self, *args):
+        """Auto-save when any field changes."""
+        if self.loading:
+            return
+        
+        if not self.vendor_key:
+            return
+        
+        # Update vendor_data with current field values
+        self.vendor_data['addr_name'] = self.addr_name_var.get()
+        self.vendor_data['addr_line1'] = self.addr_line1_var.get()
+        self.vendor_data['addr_line2'] = self.addr_line2_var.get()
+        self.vendor_data['city'] = self.city_var.get()
+        self.vendor_data['state'] = self.state_var.get()
+        self.vendor_data['zip'] = self.zip_var.get()
+        self.vendor_data['phone'] = self.phone_var.get()
+        self.vendor_data['email'] = self.email_var.get()
+        
+        # Ensure display_name and search_name are set
+        if 'display_name' not in self.vendor_data:
+            self.vendor_data['display_name'] = self.vendor_name_var.get()
+        if 'search_name' not in self.vendor_data:
+            self.vendor_data['search_name'] = self.vendor_name_var.get().lower()
+        
+        # Save to JSON
+        self.vendor_manager.vendors['vendors'][self.vendor_key] = self.vendor_data
+        self.vendor_manager.save()
+        
+        self.status_var.set("Auto-saved")
+        logger.debug(f"Auto-saved vendor: {self.vendor_key}")
+        
+        # Refresh vendor list
+        self._load_vendor_list()
+    
+    def _search_web(self):
+        """Search for vendor address using Google Places API."""
+        vendor_name = self.vendor_name_var.get().strip()
+        
+        if not vendor_name:
+            messagebox.showwarning("No Vendor Name", "Please enter a vendor name first.")
+            return
+        
+        self.status_var.set("Searching Google Places...")
+        self.root.update()
+        
+        try:
+            # Call Google Places API with return_all=True to get all results
+            results = lookup_google_places(vendor_name, return_all=True)
+            
+            if not results:
+                self.status_var.set("No results found")
+                messagebox.showinfo("No Results", 
+                                  f"No results found for '{vendor_name}'.\n"
+                                  "Try a different search term or enter manually.")
+                return
+            
+            # Display all results in the list
+            self._display_search_results(results)
+            
+        except Exception as e:
+            logger.error(f"Error searching Google Places: {e}")
+            self.status_var.set(f"Search error: {e}")
+            messagebox.showerror("Search Error", f"Error searching Google Places:\n{e}")
+    
+    def _display_search_results(self, results: list):
+        """Display multiple search results in listbox."""
+        # Show results frame
+        self.results_frame.pack(fill="both", expand=True, pady=(0, 10))
+        
+        # Store results for later use
+        self.current_results = results
+        
+        # Clear listbox
+        self.results_listbox.delete(0, tk.END)
+        
+        # Add results to listbox
+        for idx, result in enumerate(results):
+            name = result.get('name', 'N/A')
+            address = result.get('formatted_address', 'N/A')
+            distance = result.get('distance')
+            
+            # Format the display string
+            if distance is not None:
+                display = f"{idx+1}. {name} - {address} ({distance:.1f} mi)"
+            else:
+                display = f"{idx+1}. {name} - {address}"
+            
+            self.results_listbox.insert(tk.END, display)
+        
+        # Select first result by default
+        if results:
+            self.results_listbox.selection_set(0)
+        
+        self.status_var.set(f"Found {len(results)} result(s) - select one and click 'Use Selected Result' or double-click")
+    
+    def _use_selected_result(self):
+        """Use the selected result from the listbox."""
+        selection = self.results_listbox.curselection()
+        if not selection:
+            messagebox.showwarning("No Selection", "Please select a result from the list.")
+            return
+        
+        # Get the selected result
+        idx = selection[0]
+        if idx >= len(self.current_results):
+            return
+        
+        result = self.current_results[idx]
+        
+        # Populate fields with this result
+        self._use_search_result(result)
+    
+    def _use_search_result(self, result: Dict):
+        """Populate fields with search result."""
+        self.loading = True
+        
+        try:
+            # Parse the address
+            addr_parts = _parse_formatted_address(result.get('formatted_address', ''))
+            
+            # Populate fields
+            self.addr_name_var.set(result.get('name', self.vendor_name_var.get()))
+            self.addr_line1_var.set(addr_parts.get('street', ''))
+            
+            # Build addr_line2 from city, state, zip
+            city = addr_parts.get('city', '')
+            state = addr_parts.get('state', '')
+            zip_code = addr_parts.get('zip', '')
+            
+            self.city_var.set(city)
+            self.state_var.set(state)
+            self.zip_var.set(zip_code)
+            
+            # Build conventional addr_line2
+            line2_parts = []
+            if city:
+                line2_parts.append(city)
+            if state:
+                line2_parts.append(state)
+            if zip_code:
+                line2_parts.append(zip_code)
+            self.addr_line2_var.set(' '.join(line2_parts))
+            
+            # Phone number
+            phone = result.get('phone', '')
+            if not phone and result.get('place_id'):
+                # Try to get phone from place details
+                phone = _get_google_place_phone(result['place_id']) or ''
+            self.phone_var.set(phone)
+            
+            # Store coordinates if available
+            if result.get('lat') and result.get('lng'):
+                self.vendor_data['latitude'] = result['lat']
+                self.vendor_data['longitude'] = result['lng']
+            
+            if result.get('place_id'):
+                self.vendor_data['place_id'] = result['place_id']
+            
+            self.vendor_data['address_source'] = 'google'
+            
+            self.status_var.set("Search result populated - auto-saving...")
+            
+        finally:
+            self.loading = False
+        
+        # Trigger auto-save
+        self._on_field_changed()
+        
+        # Hide results frame
+        self.results_frame.pack_forget()
+        
+        self.status_var.set("Search result applied and saved")
+
+
+def main():
+    """Main entry point."""
+    # Setup logging
+    setup_logging_for_script("address_lookup_gui")
+    
+    # Get vendor name from command line if provided
+    vendor_name = None
+    if len(sys.argv) > 1:
+        vendor_name = sys.argv[1]
+        logger.info(f"Launched with vendor: {vendor_name}")
+    
+    # Create GUI
+    root = tk.Tk()
+    app = AddressLookupGUI(root, vendor_name)
+    
+    logger.info("Address Lookup GUI started")
+    root.mainloop()
+    logger.info("Address Lookup GUI closed")
+
+
+if __name__ == "__main__":
+    main()

@@ -108,13 +108,13 @@ class SimpleBillEntryGUI:
         tools_frame = ttk.LabelFrame(main_frame, text="External Tools", padding="10")
         tools_frame.grid(row=0, column=2, sticky="new", padx=(10, 0))
         
-        ttk.Button(tools_frame, text="🔍 Vendor Manager\nFind, create, and\nmanage vendors", 
+        ttk.Button(tools_frame, text="🔍 Vendor Manager:\nFind, create,\nand manage vendors", 
                    command=self._launch_vendor_manager, width=20).pack(pady=5, fill="x")
-        ttk.Button(tools_frame, text="📧 Address Lookup\nSearch for vendor\naddresses online", 
+        ttk.Button(tools_frame, text="📧 Address Lookup:\nSearch for vendor\naddresses online", 
                    command=self._launch_address_lookup, width=20).pack(pady=5, fill="x")
-        ttk.Button(tools_frame, text="🗃️ Vendor Sync\nSync Vendor Records\nbetween this tool and\nthe GnuCash Database", 
+        ttk.Button(tools_frame, text="🗃️ Vendor Sync:\nSync Vendor Records\nbetween this tool and\nthe GnuCash Database", 
                    command=self._launch_vendor_sync, width=20).pack(pady=5, fill="x")
-        ttk.Button(tools_frame, text="💳 Process Bills\nCreate bills in\nGnuCash database", 
+        ttk.Button(tools_frame, text="💳 Process Bills:\nCreate queued bills\n in GnuCash database", 
                    command=self._launch_bill_processor, width=20).pack(pady=5, fill="x")
         
         # === Current Bills List ===
@@ -495,11 +495,27 @@ class SimpleBillEntryGUI:
             messagebox.showerror("Error", f"Could not launch vendor manager: {e}")
     
     def _launch_address_lookup(self):
-        """Launch the address lookup GUI."""
+        """Launch the address lookup GUI with selected vendor if available."""
         try:
             script_path = Path(__file__).parent / "address_lookup_gui.py"
-            subprocess.Popen([sys.executable, str(script_path)], cwd=str(Path(__file__).parent))
-            self.status_var.set("Launched Address Lookup")
+            
+            # Get selected vendor from the bills queue
+            vendor_name = None
+            selection = self.bills_tree.selection()
+            if selection:
+                item = self.bills_tree.item(selection[0])
+                vendor_name = item['values'][0]  # First column is vendor name
+            
+            # Launch with vendor name if available
+            cmd = [sys.executable, str(script_path)]
+            if vendor_name:
+                cmd.append(vendor_name)
+                self.status_var.set(f"Launched Address Lookup for {vendor_name}")
+            else:
+                self.status_var.set("Launched Address Lookup")
+            
+            subprocess.Popen(cmd, cwd=str(Path(__file__).parent))
+            
         except Exception as e:
             logger.error(f"Error launching address lookup: {e}")
             messagebox.showerror("Error", f"Could not launch address lookup: {e}")
