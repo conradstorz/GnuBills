@@ -17,6 +17,7 @@ sys.path.insert(0, str(Path(__file__).parent))
 import config
 from gnucash_db import get_connection, generate_guid, get_usd_guid
 from schema_discovery import SchemaDiscovery
+from logging_setup import setup_logging_for_script
 
 
 class VendorSyncUtility:
@@ -35,7 +36,9 @@ class VendorSyncUtility:
             'created': 0,
             'updated': 0,
             'skipped': 0,
-            'errors': 0
+            'errors': 0,
+            'synced_from_gnucash': 0,
+            'synced_to_gnucash': 0
         }
         
         # Ensure data directory exists
@@ -333,19 +336,232 @@ class VendorSyncUtility:
         return self.stats['errors'] == 0
 
 
+def get_all_gnucash_vendors() -> List[Dict]:
+    """Get all vendors from GnuCash database."""
+    try:
+        with get_connection() as conn:
+            cursor = conn.execute("""
+                SELECT guid, id, name, currency, active, notes,
+                       addr_name, addr_addr1, addr_addr2, addr_addr3, addr_addr4,
+                       addr_phone, addr_fax, addr_email
+                FROM vendors
+                ORDER BY name
+            """)
+            
+            vendors = []
+            for row in cursor.fetchall():
+                vendors.append({
+                    'guid': row['guid'],
+                    'id': row['id'],
+                    'name': row['name'],
+                    'currency': row['currency'],
+                    'active': row['active'],
+                    'notes': row['notes'] or '',
+                    'addr_name': row['addr_name'] or '',
+                    'addr_addr1': row['addr_addr1'] or '',
+                    'addr_addr2': row['addr_addr2'] or '',
+                    'addr_addr3': row['addr_addr3'] or '',
+                    'addr_addr4': row['addr_addr4'] or '',
+                    'addr_phone': row['addr_phone'] or '',
+                    'addr_fax': row['addr_fax'] or '',
+                    'addr_email': row['addr_email'] or ''
+                })
+            
+            return vendors
+            
+    except Exception as e:
+        logger.error(f"Error getting GnuCash vendors: {e}")
+        return []
+
+
+def sync_gnucash_to_json(self) -> bool:
+    """Sync vendors from GnuCash to JSON database."""
+    print(f"\n{'='*60}")
+    print(f"SYNC: GnuCash → JSON")
+    print(f"{'='*60}\n")
+    
+    try:
+        # Get all vendors from GnuCash
+        gnucash_vendors = get_all_gnucash_vendors()
+        print(f"📥 Found {len(gnucash_vendors)} vendors in GnuCash database")
+        
+        if not gnucash_vendors:
+            print("⚠️  No vendors found in GnuCash")
+            return True
+        
+        # Load current JSON database
+        if not self.load_vendor_database():
+            # If JSON doesn't exist, start with empty dict
+            self.vendors_data = {}
+        
+        updated_count = 0
+        new_count = 0
+        
+        for gc_vendor in gnucash_vendors:
+            vendor_name = gc_vendor['name']
+            vendor_guid = gc_vendor['guid']
+            
+            # Generate vendor key (normalized name)
+            from utils import strip_vendor_name
+            vendor_key = strip_vendor_name(vendor_name)
+            
+            # Check if vendor already exists in JSON
+            existing_vendor = None
+            for key, data in self.vendors_data.items():
+                if data.get('gnucash_guid') == vendor_guid:
+                    existing_vendor = key
+                    break
+            
+            if not existing_vendor:
+                # Check by name
+                for key, data in self.vendors_data.items():
+                    if data.get('display_name', '').lower() == vendor_name.lower():
+                        existing_vendor = key
+                        break
+            
+            # Build vendor data
+            vendor_data = {
+                'display_name': vendor_name,
+                'search_name': vendor_name,
+                'gnucash_guid': vendor_guid,
+                'gnucash_id': gc_vendor['id'],
+                'addr_name': gc_vendor['addr_name'],
+                'addr_line1': gc_vendor['addr_addr1'],
+                'addr_line2': f"{gc_vendor['addr_addr2']} {gc_vendor['addr_addr3']}".strip(),
+                'phone': gc_vendor['addr_phone'],
+                'email': gc_vendor['addr_email'],
+                'notes': gc_vendor['notes'],
+                'active': gc_vendor['active'],
+                'address_source': 'gnucash'
+            }
+            
+            if existing_vendor:
+                # Update existing vendor
+                # Preserve expense account info if it exists
+                old_data = self.vendors_data[existing_vendor]
+                if old_data.get('expense_account'):
+                    vendor_data['expense_account'] = old_data['expense_account']
+                if old_data.get('expense_account_guid'):
+                    vendor_data['expense_account_guid'] = old_data['expense_account_guid']
+                
+                self.vendors_data[existing_vendor] = vendor_data
+                print(f"  ✏️  Updated: {vendor_name}")
+                updated_count += 1
+            else:
+                # Add new vendor
+                self.vendors_data[vendor_key] = vendor_data
+                print(f"  ✨ New: {vendor_name}")
+                new_count += 1
+        
+        self.stats['synced_from_gnucash'] = new_count + updated_count
+        
+        print(f"\n📊 Summary:")
+        print(f"  New vendors added: {new_count}")
+        print(f"  Existing vendors updated: {updated_count}")
+        print(f"  Total: {new_count + updated_count}")
+        
+        # Save updated JSON database
+        if new_count > 0 or updated_count > 0:
+            self.save_vendor_database()
+            print(f"✅ JSON database updated successfully")
+        
+        return True
+        
+    except Exception as e:
+        print(f"❌ Error syncing GnuCash to JSON: {e}")
+        logger.error(f"Error in sync_gnucash_to_json: {e}")
+        import traceback
+        logger.error(traceback.format_exc())
+        return False
+
+
+def sync_bidirectional(self, dry_run: bool = False) -> bool:
+    """Perform bidirectional sync between JSON and GnuCash."""
+    print(f"\n{'='*60}")
+    print(f"BIDIRECTIONAL VENDOR SYNC")
+    print(f"{'='*60}")
+    print(f"JSON Database: {self.vendor_db_path}")
+    print(f"GnuCash Database: {getattr(config, 'GNUCASH_DB_PATH', 'Not configured')}")
+    print(f"Dry run: {dry_run}")
+    print(f"{'='*60}\n")
+    
+    if not self.discover_schema():
+        return False
+    
+    if dry_run:
+        print("🔍 DRY RUN - No changes will be made\n")
+    
+    # Step 1: Sync from GnuCash to JSON (get latest from database)
+    print("Step 1: GnuCash → JSON (import from database)")
+    print("-" * 60)
+    if not dry_run:
+        if not self.sync_gnucash_to_json():
+            print("❌ Failed to sync from GnuCash to JSON")
+            return False
+    else:
+        gnucash_vendors = get_all_gnucash_vendors()
+        print(f"Would import {len(gnucash_vendors)} vendors from GnuCash")
+    
+    # Step 2: Sync from JSON to GnuCash (create missing vendors)
+    print("\nStep 2: JSON → GnuCash (create missing vendors)")
+    print("-" * 60)
+    if not dry_run:
+        if not self.sync_all_vendors(force_recreate=False, dry_run=False):
+            print("❌ Failed to sync from JSON to GnuCash")
+            return False
+    else:
+        if self.load_vendor_database():
+            missing_count = 0
+            for vendor_key, vendor_data in self.vendors_data.items():
+                display_name = vendor_data.get('display_name', vendor_key)
+                if not self.vendor_exists_in_gnucash(display_name):
+                    missing_count += 1
+            print(f"Would create {missing_count} new vendors in GnuCash")
+    
+    # Summary
+    print(f"\n{'='*60}")
+    print(f"BIDIRECTIONAL SYNC COMPLETE")
+    print(f"{'='*60}")
+    
+    if not dry_run:
+        print(f"Synced from GnuCash: {self.stats['synced_from_gnucash']}")
+        print(f"Synced to GnuCash: {self.stats['created']}")
+        print(f"Updated in JSON: {self.stats['updated']}")
+        print(f"Skipped: {self.stats['skipped']}")
+        print(f"Errors: {self.stats['errors']}")
+    
+    print(f"{'='*60}\n")
+    
+    return self.stats['errors'] == 0
+
+
+# Add sync_gnucash_to_json and sync_bidirectional as methods to VendorSyncUtility class
+VendorSyncUtility.sync_gnucash_to_json = sync_gnucash_to_json
+VendorSyncUtility.sync_bidirectional = sync_bidirectional
+
+
 def main():
     """Command-line interface for vendor sync."""
     import argparse
     
-    parser = argparse.ArgumentParser(description='Sync vendors from JSON to GnuCash')
+    parser = argparse.ArgumentParser(description='Sync vendors between JSON and GnuCash')
     parser.add_argument('--force', action='store_true', 
                        help='Force recreate existing vendors')
     parser.add_argument('--dry-run', action='store_true',
                        help='Show what would be done without making changes')
     parser.add_argument('--list', action='store_true',
                        help='List vendors in JSON database')
+    parser.add_argument('--from-gnucash', action='store_true',
+                       help='Sync FROM GnuCash TO JSON (import from database)')
+    parser.add_argument('--to-gnucash', action='store_true',
+                       help='Sync FROM JSON TO GnuCash (create missing vendors)')
+    parser.add_argument('--bidirectional', action='store_true',
+                       help='Bidirectional sync (both directions)')
     
     args = parser.parse_args()
+    
+    # Setup centralized logging
+    setup_logging_for_script("vendor_sync")
     
     sync_util = VendorSyncUtility()
     
@@ -360,16 +576,26 @@ def main():
                 print(f"{name:<30} | {gnucash_id:<10} | {'📍' if has_addr else '❌'}")
         return
     
-    # Configure logging
-    log_dir = Path(__file__).parent.parent / "logs"
-    log_dir.mkdir(exist_ok=True)
-    logger.add(log_dir / "vendor_sync.log", rotation="5 MB", retention="30 days")
-    
     try:
-        success = sync_util.sync_all_vendors(
-            force_recreate=args.force, 
-            dry_run=args.dry_run
-        )
+        success = False
+        
+        if args.bidirectional:
+            # Bidirectional sync
+            success = sync_util.sync_bidirectional(dry_run=args.dry_run)
+        elif args.from_gnucash:
+            # Sync from GnuCash to JSON only
+            if not sync_util.discover_schema():
+                sys.exit(1)
+            success = sync_util.sync_gnucash_to_json()
+        elif args.to_gnucash:
+            # Sync from JSON to GnuCash only (original behavior)
+            success = sync_util.sync_all_vendors(
+                force_recreate=args.force, 
+                dry_run=args.dry_run
+            )
+        else:
+            # Default: bidirectional sync
+            success = sync_util.sync_bidirectional(dry_run=args.dry_run)
         
         if success:
             print("🎉 Vendor sync completed successfully!")

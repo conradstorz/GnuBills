@@ -32,7 +32,7 @@ def setup_logging(
     if log_level is None:
         log_level = getattr(config, 'LOG_LEVEL', 'INFO')
     if console_level is None:
-        console_level = log_level
+        console_level = 'INFO'  # Always INFO for console to avoid debug spam
     if file_level is None:
         file_level = 'DEBUG'  # Always debug to file
     if log_file is None:
