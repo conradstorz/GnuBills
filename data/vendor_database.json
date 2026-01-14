@@ -13,8 +13,8 @@
     },
     "the_slice_restaurant": {
       "display_name": "The Slice Restaurant",
-      "gnucash_guid": null,
-      "gnucash_id": null,
+      "gnucash_guid": "21ac1a98663448c09a629fe9a6dff79c",
+      "gnucash_id": "000005",
       "addr_name": "The Slice",
       "addr_line1": "1027 N. Luther Rd.",
       "addr_line2": "Georgetown, KY 47122",

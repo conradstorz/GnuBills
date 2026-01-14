@@ -311,45 +311,42 @@ def lookup_openstreetmap(business_name: str, locality: str = None) -> Optional[D
         return None
 
 
-def lookup_address(business_name: str, locality: str = None) -> Optional[Dict]:
-    """
-    Look up business address using configured sources.
+def lookup_address(search_name: str) -> Optional[Dict]:
+    """Enhanced address lookup with detailed logging."""
+    logger.info(f"Starting address lookup for: '{search_name}'")
     
-    Tries Google Places first (if API key configured), falls back to OpenStreetMap.
+    # Try each source in order
+    sources = [
+        ('Google Places', _google_places_lookup),
+        ('Bing Maps', _bing_maps_lookup), 
+        ('Nominatim', _nominatim_lookup)
+    ]
     
-    Returns address dict or None if not found.
-    """
-    log_function_entry("lookup_address", business_name=business_name, locality=locality)
-    logger.info(f"Looking up address for: {business_name}")
+    for source_name, lookup_func in sources:
+        logger.debug(f"Trying {source_name} for '{search_name}'...")
+        
+        try:
+            result = lookup_func(search_name)
+            
+            if result:
+                logger.info(f"✅ {source_name} found address for '{search_name}'")
+                logger.debug(f"Raw address result: {result}")
+                
+                # Log each field found
+                for field, value in result.items():
+                    if value:
+                        logger.debug(f"  {field}: '{value}'")
+                    else:
+                        logger.debug(f"  {field}: <EMPTY>")
+                
+                return result
+            else:
+                logger.debug(f"❌ {source_name} returned no results for '{search_name}'")
+                
+        except Exception as e:
+            logger.error(f"💥 {source_name} lookup failed for '{search_name}': {e}")
     
-    # Try Google first if configured
-    if config.GOOGLE_PLACES_API_KEY:
-        logger.debug("Trying Google Places API first")
-        result = lookup_google_places(business_name, locality)
-        if result:
-            logger.info(f"Found address via Google Places: {result.get('formatted_address')}")
-            log_function_exit("lookup_address", "google_success")
-            return result
-        else:
-            logger.debug("Google Places search unsuccessful, trying OpenStreetMap")
-    else:
-        logger.debug("No Google Places API key configured, using OpenStreetMap only")
-    
-    # Fall back to OpenStreetMap
-    if config.USE_OPENSTREETMAP:
-        logger.debug("Trying OpenStreetMap/Nominatim")
-        result = lookup_openstreetmap(business_name, locality)
-        if result:
-            logger.info(f"Found address via OpenStreetMap: {result.get('formatted_address')}")
-            log_function_exit("lookup_address", "osm_success")
-            return result
-        else:
-            logger.debug("OpenStreetMap search unsuccessful")
-    else:
-        logger.debug("OpenStreetMap disabled in configuration")
-    
-    logger.warning(f"No address found for: {business_name}")
-    log_function_exit("lookup_address", None)
+    logger.warning(f"🚫 ALL address lookup sources failed for: '{search_name}'")
     return None
 
 

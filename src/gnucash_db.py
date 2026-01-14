@@ -712,85 +712,118 @@ def get_next_vendor_id() -> str:
         return config.VENDOR_ID_FORMAT.format(prefix=config.VENDOR_ID_PREFIX, num=1)
 
 
-def create_vendor(
-    name: str,
-    addr_name: str = "",
-    addr_addr1: str = "",
-    addr_addr2: str = "",
-    addr_addr3: str = "",
-    addr_addr4: str = "",
-    addr_phone: str = "",
-    addr_email: str = "",
-    notes: str = "",
-    currency_guid: str = None,
-    verify: bool = True
-) -> str:
+def create_vendor(name: str, addr_name: str = None, addr_addr1: str = None, 
+                 addr_addr2: str = None, addr_addr3: str = None, addr_addr4: str = None,
+                 addr_phone: str = None, addr_email: str = None, **kwargs) -> str:
     """
-    Create a new vendor in GnuCash.
-    
-    Args:
-        name: Vendor name (required)
-        addr_*: Address fields (optional)
-        notes: Notes (optional)
-        currency_guid: Currency GUID (defaults to USD)
-        verify: If True, verify the vendor was created (default True)
-    
-    Returns the new vendor's GUID.
-    Raises WriteVerificationError if verification fails.
+    Create a new vendor with comprehensive address logging.
     """
-    log_function_entry("create_vendor", name=name, addr_name=addr_name)
     logger.info(f"Creating new vendor: {name}")
     
+    # LOG ALL ADDRESS PARAMETERS RECEIVED
+    address_params = {
+        'addr_name': addr_name,
+        'addr_addr1': addr_addr1, 
+        'addr_addr2': addr_addr2,
+        'addr_addr3': addr_addr3,
+        'addr_addr4': addr_addr4,
+        'addr_phone': addr_phone,
+        'addr_email': addr_email
+    }
+    
+    # Log what address data we actually received
+    non_empty_addresses = {k: v for k, v in address_params.items() if v}
+    if non_empty_addresses:
+        logger.info(f"Address data received: {non_empty_addresses}")
+    else:
+        logger.warning(f"NO ADDRESS DATA received for vendor '{name}'")
+    
+    # Log empty address fields
+    empty_addresses = [k for k, v in address_params.items() if not v]
+    if empty_addresses:
+        logger.debug(f"Empty address fields: {empty_addresses}")
+
     vendor_guid = generate_guid()
-    vendor_id = get_next_vendor_id()
+    
+    # Get next vendor ID
+    with get_connection() as conn:
+        cursor = conn.execute("SELECT MAX(CAST(id AS INTEGER)) FROM vendors")
+        max_id = cursor.fetchone()[0] or 0
+        vendor_id = f"{max_id + 1:06d}"
+    
     logger.debug(f"Generated vendor GUID: {vendor_guid}, ID: {vendor_id}")
     
-    if currency_guid is None:
-        currency_guid = get_usd_guid()
-        logger.debug(f"Using default USD currency GUID: {currency_guid}")
+    # Get USD currency
+    usd_guid = get_usd_guid()
+    if not usd_guid:
+        raise ValueError("USD currency not found")
+    
+    logger.debug(f"Using default USD currency GUID: {usd_guid}")
+    
+    # DETAILED INSERT STATEMENT LOGGING
+    insert_values = {
+        'guid': vendor_guid,
+        'id': vendor_id, 
+        'name': name,
+        'currency': usd_guid,
+        'active': 1,
+        'notes': '',
+        'addr_name': addr_name or '',
+        'addr_addr1': addr_addr1 or '',
+        'addr_addr2': addr_addr2 or '',
+        'addr_addr3': addr_addr3 or '',
+        'addr_addr4': addr_addr4 or '',
+        'addr_phone': addr_phone or '',
+        'addr_email': addr_email or ''
+    }
+    
+    logger.debug(f"INSERT VALUES being written to database:")
+    for field, value in insert_values.items():
+        if value:  # Only log non-empty values
+            logger.debug(f"  {field}: '{value}'")
+        else:
+            logger.debug(f"  {field}: <EMPTY>")
     
     with get_connection(readonly=False) as conn:
-        # First, check what columns exist in the vendors table
-        cursor = conn.execute("PRAGMA table_info(vendors)")
-        columns = {row['name'] for row in cursor.fetchall()}
-        
-        # Build INSERT based on available columns
-        base_columns = [
-            'guid', 'id', 'name', 'currency',
-            'addr_name', 'addr_addr1', 'addr_addr2', 'addr_addr3', 'addr_addr4',
-            'addr_phone', 'addr_email', 'notes', 'active'
-        ]
-        base_values = [
-            vendor_guid, vendor_id, name, currency_guid,
-            addr_name, addr_addr1, addr_addr2, addr_addr3, addr_addr4,
-            addr_phone, addr_email, notes, 1  # active=1
-        ]
-        
-        # Add optional columns if they exist
-        if 'tax_override' in columns:
-            base_columns.append('tax_override')
-            base_values.append(0)
-        if 'tax_included' in columns:
-            base_columns.append('tax_included')
-            base_values.append(1)
-        if 'tax_inc' in columns:
-            base_columns.append('tax_inc')
-            base_values.append('USEGLOBAL')  # Required for GnuCash to display vendor properly
-        
-        placeholders = ', '.join(['?'] * len(base_columns))
-        column_names = ', '.join(base_columns)
-        
-        conn.execute(f"""
-            INSERT INTO vendors ({column_names})
-            VALUES ({placeholders})
-        """, base_values)
+        conn.execute("""
+            INSERT INTO vendors (
+                guid, id, name, currency, active, notes,
+                addr_name, addr_addr1, addr_addr2, addr_addr3, addr_addr4, addr_phone, addr_email
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """, (
+            vendor_guid, vendor_id, name, usd_guid, 1, '',
+            addr_name or '', addr_addr1 or '', addr_addr2 or '', 
+            addr_addr3 or '', addr_addr4 or '', addr_phone or '', addr_email or ''
+        ))
         conn.commit()
-    
+        
+        # IMMEDIATE POST-INSERT VERIFICATION
+        logger.debug("POST-INSERT: Reading back vendor data from database...")
+        cursor = conn.execute("""
+            SELECT guid, name, addr_name, addr_addr1, addr_addr2, addr_addr3, addr_addr4, addr_phone, addr_email
+            FROM vendors WHERE guid = ?
+        """, (vendor_guid,))
+        
+        row = cursor.fetchone()
+        if row:
+            logger.info(f"POST-INSERT VERIFICATION: Vendor saved to database")
+            logger.debug(f"  Database contains:")
+            logger.debug(f"    name: '{row['name']}'")
+            logger.debug(f"    addr_name: '{row['addr_name'] or '<EMPTY>'}'")
+            logger.debug(f"    addr_addr1: '{row['addr_addr1'] or '<EMPTY>'}'") 
+            logger.debug(f"    addr_addr2: '{row['addr_addr2'] or '<EMPTY>'}'")
+            logger.debug(f"    addr_addr3: '{row['addr_addr3'] or '<EMPTY>'}'")
+            logger.debug(f"    addr_addr4: '{row['addr_addr4'] or '<EMPTY>'}'")
+            logger.debug(f"    addr_phone: '{row['addr_phone'] or '<EMPTY>'}'")
+            logger.debug(f"    addr_email: '{row['addr_email'] or '<EMPTY>'}'")
+        else:
+            logger.error(f"POST-INSERT VERIFICATION FAILED: Vendor not found in database!")
+
     logger.info(f"Created vendor: {name} (ID: {vendor_id}, GUID: {vendor_guid})")
     
-    # POST-WRITE VERIFICATION - User data is SACRED
-    if verify:
-        verify_vendor_created(vendor_guid, name)
+    # POST-WRITE VERIFICATION
+    if kwargs.get('verify', True):
+        verify_vendor_created(vendor_guid, name, vendor_id)
     
     return vendor_guid
 

@@ -160,110 +160,228 @@ class VendorManager:
             'expense_account': None  # Will need to be set
         }
     
-    def create_new_vendor(self, display_name: str, search_name: str = None) -> Dict:
-        """
-        Create a new vendor with address lookup.
+def create_new_vendor(self, search_name: str, display_name: str = None) -> str:
+    """Enhanced vendor creation with comprehensive address logging."""
+    
+    logger.info(f"Creating new vendor: search='{search_name}', display='{display_name}'")
+
+    if search_name is None:
+        search_name = display_name
+    
+    print(f"\n{'='*60}")
+    print(f"Creating new vendor: {display_name}")
+    print('='*60)
+    
+    # Address lookup with detailed logging
+    logger.debug(f"Starting address lookup for: '{search_name}'")
+    address = address_lookup.lookup_address(search_name)
+    
+    if address:
+        logger.info(f"✅ Address lookup successful for '{search_name}'")
+        logger.debug(f"Complete address data found:")
+        for key, value in address.items():
+            logger.debug(f"  {key}: '{value}'" if value else f"  {key}: <EMPTY>")
+    else:
+        logger.warning(f"❌ Address lookup FAILED for '{search_name}' - using empty address")
+        address = {}
         
-        Returns the new vendor data dict.
-        """
-        if search_name is None:
-            search_name = display_name
+    if address:
+        print(f"\nFound address:")
+        print(f"  {address.get('name', display_name)}")
+        print(f"  {address.get('addr_line1', '')}")
+        print(f"  {address.get('addr_line2', '')}")
+        if address.get('phone'):
+            print(f"  Phone: {address['phone']}")
         
-        print(f"\n{'='*60}")
-        print(f"Creating new vendor: {display_name}")
-        print('='*60)
-        
-        # Look up address
-        print(f"\nSearching for address...")
-        address = address_lookup.lookup_address(search_name)
-        
-        if address:
-            print(f"\nFound address:")
-            print(f"  {address.get('name', display_name)}")
-            print(f"  {address.get('addr_line1', '')}")
-            print(f"  {address.get('addr_line2', '')}")
-            if address.get('phone'):
-                print(f"  Phone: {address['phone']}")
-            
-            if not confirm_proceed("Use this address?"):
-                address = None
-        
-        if not address:
-            print("\nNo address found or rejected.")
-            if confirm_proceed("Enter address manually?"):
-                manual = address_lookup.prompt_manual_address()
-                address = {
-                    'name': manual.get('addr_name') or display_name,
-                    'addr_line1': manual.get('addr_line1', ''),
-                    'addr_line2': manual.get('addr_line2', ''),
-                    'phone': manual.get('phone', ''),
-                    'source': 'manual'
-                }
-            else:
-                address = {
-                    'name': display_name,
-                    'addr_line1': '',
-                    'addr_line2': '',
-                    'phone': '',
-                    'source': 'skipped'
-                }
-        
-        # Create expense account name
-        expense_acct_name = make_expense_account_name(display_name)
-        
-        # Check if expense account exists
-        existing_accts = gnucash_db.find_expense_accounts_like(expense_acct_name)
-        expense_acct_guid = None
-        
-        if existing_accts:
-            print(f"\nFound existing expense account: {existing_accts[0]['name']}")
-            expense_acct_guid = existing_accts[0]['guid']
-            expense_acct_name = existing_accts[0]['name']
+        if not confirm_proceed("Use this address?"):
+            logger.info("User rejected found address")
+            address = None
+    
+    if not address:
+        print("\nNo address found or rejected.")
+        logger.debug("No address available - prompting for manual entry")
+        if confirm_proceed("Enter address manually?"):
+            logger.info("User chose manual address entry")
+            manual = address_lookup.prompt_manual_address()
+            address = {
+                'name': manual.get('addr_name') or display_name,
+                'addr_line1': manual.get('addr_line1', ''),
+                'addr_line2': manual.get('addr_line2', ''),
+                'phone': manual.get('phone', ''),
+                'source': 'manual'
+            }
+            logger.debug(f"Manual address entered: {address}")
         else:
-            print(f"\nWill create expense account: {expense_acct_name}")
-            if confirm_proceed("Create this expense account?"):
-                expense_acct_guid = gnucash_db.create_expense_account(expense_acct_name)
-        
-        # Create vendor in GnuCash
-        print(f"\nCreating vendor in GnuCash...")
+            logger.info("User skipped address entry - using empty address")
+            address = {
+                'name': display_name,
+                'addr_line1': '',
+                'addr_line2': '',
+                'phone': '',
+                'source': 'skipped'
+            }
+    
+    # Log final address data before vendor creation
+    logger.info("Final address data prepared for vendor creation:")
+    logger.debug(f"  name: '{address.get('name', '')}'")
+    logger.debug(f"  addr_line1: '{address.get('addr_line1', '')}'")
+    logger.debug(f"  addr_line2: '{address.get('addr_line2', '')}'")
+    logger.debug(f"  phone: '{address.get('phone', '')}'")
+    logger.debug(f"  source: '{address.get('source', 'unknown')}'")
+    
+    # Extract and log address components that will be passed to GnuCash
+    addr_name = address.get('name', display_name)
+    addr_addr1 = address.get('addr_line1', '')
+    addr_addr2 = address.get('addr_line2', '')
+    addr_phone = address.get('phone', '')
+    
+    logger.info("Address components mapped for GnuCash create_vendor call:")
+    logger.debug(f"  name parameter: '{display_name}'")
+    logger.debug(f"  addr_name parameter: '{addr_name}'")
+    logger.debug(f"  addr_addr1 parameter: '{addr_addr1}'")
+    logger.debug(f"  addr_addr2 parameter: '{addr_addr2}'")
+    logger.debug(f"  addr_phone parameter: '{addr_phone}'")
+    
+    # Check for empty address fields and log warnings
+    empty_fields = []
+    if not addr_name: empty_fields.append('addr_name')
+    if not addr_addr1: empty_fields.append('addr_addr1')
+    if not addr_addr2: empty_fields.append('addr_addr2')
+    if not addr_phone: empty_fields.append('addr_phone')
+    
+    if empty_fields:
+        logger.warning(f"Empty address fields being passed to GnuCash: {empty_fields}")
+    else:
+        logger.info("All address fields populated for GnuCash")
+    
+    # Create expense account name
+    expense_acct_name = make_expense_account_name(display_name)
+    logger.debug(f"Generated expense account name: '{expense_acct_name}'")
+    
+    # Check if expense account exists
+    existing_accts = gnucash_db.find_expense_accounts_like(expense_acct_name)
+    expense_acct_guid = None
+    
+    if existing_accts:
+        print(f"\nFound existing expense account: {existing_accts[0]['name']}")
+        logger.info(f"Using existing expense account: {existing_accts[0]['name']}")
+        expense_acct_guid = existing_accts[0]['guid']
+        expense_acct_name = existing_accts[0]['name']
+    else:
+        print(f"\nWill create expense account: {expense_acct_name}")
+        logger.debug(f"No existing expense account found, will create: {expense_acct_name}")
+        if confirm_proceed("Create this expense account?"):
+            logger.info(f"Creating new expense account: {expense_acct_name}")
+            expense_acct_guid = gnucash_db.create_expense_account(expense_acct_name)
+            logger.debug(f"Created expense account with GUID: {expense_acct_guid}")
+        else:
+            logger.warning("User declined expense account creation")
+    
+    # Create vendor in GnuCash with comprehensive logging
+    print(f"\nCreating vendor in GnuCash...")
+    logger.info(f"Calling gnucash_db.create_vendor for '{display_name}'...")
+    logger.debug("create_vendor parameters:")
+    logger.debug(f"  name='{display_name}'")
+    logger.debug(f"  addr_name='{addr_name}'")
+    logger.debug(f"  addr_addr1='{addr_addr1}'")
+    logger.debug(f"  addr_addr2='{addr_addr2}'")
+    logger.debug(f"  addr_phone='{addr_phone}'")
+    
+    try:
         vendor_guid = gnucash_db.create_vendor(
             name=display_name,
-            addr_name=address.get('name', display_name),
-            addr_addr1=address.get('addr_line1', ''),
-            addr_addr2=address.get('addr_line2', ''),  # City/State/ZIP goes to addr2
-            addr_phone=address.get('phone', '')
+            addr_name=addr_name,
+            addr_addr1=addr_addr1,
+            addr_addr2=addr_addr2,
+            addr_phone=addr_phone
         )
+        logger.info(f"✅ GnuCash vendor created successfully: GUID={vendor_guid}")
+    except Exception as e:
+        logger.error(f"💥 GnuCash vendor creation FAILED: {e}")
+        raise
+    
+    # Get the assigned vendor ID with verification
+    logger.debug("Retrieving vendor record from GnuCash for verification...")
+    vendor_record = gnucash_db.find_vendor_by_name(display_name)
+    
+    if vendor_record:
+        vendor_id = vendor_record['id']
+        logger.info(f"Vendor record verified in GnuCash: ID={vendor_id}")
         
-        # Get the assigned vendor ID
-        vendor_record = gnucash_db.find_vendor_by_name(display_name)
-        vendor_id = vendor_record['id'] if vendor_record else None
+        # Log what address data is actually stored in GnuCash
+        logger.debug("Address data stored in GnuCash database:")
+        logger.debug(f"  addr_name: '{vendor_record.get('addr_name', '')}'")
+        logger.debug(f"  addr_addr1: '{vendor_record.get('addr_addr1', '')}'")
+        logger.debug(f"  addr_addr2: '{vendor_record.get('addr_addr2', '')}'")
+        logger.debug(f"  addr_phone: '{vendor_record.get('addr_phone', '')}'")
         
-        # Build vendor data for JSON
-        vendor_key = strip_vendor_name(display_name)
-        vendor_data = {
-            'display_name': display_name,
-            'search_name': search_name,
-            'gnucash_guid': vendor_guid,
-            'gnucash_id': vendor_id,
-            'addr_name': address.get('name', display_name),
-            'addr_line1': address.get('addr_line1', ''),
-            'addr_line2': address.get('addr_line2', ''),
-            'phone': address.get('phone', ''),
-            'address_source': address.get('source', 'unknown'),
-            'expense_account': expense_acct_name,
-            'expense_account_guid': expense_acct_guid
+        # Check for address data loss
+        stored_fields = {
+            'addr_name': vendor_record.get('addr_name', ''),
+            'addr_addr1': vendor_record.get('addr_addr1', ''),
+            'addr_addr2': vendor_record.get('addr_addr2', ''),
+            'addr_phone': vendor_record.get('addr_phone', '')
         }
         
-        # Save to JSON database
-        self.vendors['vendors'][vendor_key] = vendor_data
-        self.save()
+        sent_fields = {
+            'addr_name': addr_name,
+            'addr_addr1': addr_addr1,
+            'addr_addr2': addr_addr2,
+            'addr_phone': addr_phone
+        }
         
-        # Refresh GnuCash cache
-        self.refresh_gnucash_vendors()
-        
-        print(f"\n✓ Vendor created: {display_name} (ID: {vendor_id})")
-        
-        return vendor_data
+        for field_name, sent_value in sent_fields.items():
+            stored_value = stored_fields.get(field_name, '')
+            if sent_value and not stored_value:
+                logger.error(f"❌ ADDRESS DATA LOST: {field_name} sent='{sent_value}' but stored='{stored_value}'")
+            elif sent_value != stored_value:
+                logger.warning(f"⚠️  ADDRESS MISMATCH: {field_name} sent='{sent_value}' but stored='{stored_value}'")
+            elif sent_value:
+                logger.debug(f"✅ ADDRESS MATCH: {field_name} = '{sent_value}'")
+                
+    else:
+        vendor_id = None
+        logger.error("❌ CRITICAL: Vendor record NOT FOUND after creation!")
+    
+    # Build vendor data for JSON with comprehensive logging
+    vendor_key = strip_vendor_name(display_name)
+    logger.debug(f"Generated vendor key for JSON: '{vendor_key}'")
+    
+    vendor_data = {
+        'display_name': display_name,
+        'search_name': search_name,
+        'gnucash_guid': vendor_guid,
+        'gnucash_id': vendor_id,
+        'addr_name': address.get('name', display_name),
+        'addr_line1': address.get('addr_line1', ''),
+        'addr_line2': address.get('addr_line2', ''),
+        'phone': address.get('phone', ''),
+        'address_source': address.get('source', 'unknown'),
+        'expense_account': expense_acct_name,
+        'expense_account_guid': expense_acct_guid
+    }
+    
+    logger.debug("Vendor data prepared for JSON storage:")
+    for key, value in vendor_data.items():
+        if value:
+            logger.debug(f"  {key}: '{value}'")
+        else:
+            logger.debug(f"  {key}: <EMPTY>")
+    
+    # Save to JSON database
+    logger.debug(f"Saving vendor data to JSON database...")
+    self.vendors['vendors'][vendor_key] = vendor_data
+    self.save()
+    logger.info(f"✅ Vendor data saved to JSON database: key='{vendor_key}'")
+    
+    # Refresh GnuCash cache
+    logger.debug("Refreshing GnuCash vendor cache...")
+    self.refresh_gnucash_vendors()
+    
+    print(f"\n✓ Vendor created: {display_name} (ID: {vendor_id})")
+    logger.info(f"🎉 Vendor creation completed successfully: '{display_name}' (ID: {vendor_id}, GUID: {vendor_guid})")
+    
+    return vendor_data
     
     def add_alias(self, alias: str, vendor_key: str):
         """Add an alias for a vendor."""
