@@ -744,21 +744,28 @@ def create_vendor(name: str, addr_name: str = None, addr_addr1: str = None,
         logger.debug(f"Empty address fields: {empty_addresses}")
 
     vendor_guid = generate_guid()
+    logger.debug(f"Generated vendor GUID: {vendor_guid}")
     
-    # Get next vendor ID
-    with get_connection() as conn:
-        cursor = conn.execute("SELECT MAX(CAST(id AS INTEGER)) FROM vendors")
-        max_id = cursor.fetchone()[0] or 0
-        vendor_id = f"{max_id + 1:06d}"
+    # Get next vendor ID - ENHANCED LOGGING
+    logger.debug("Getting next vendor ID...")
+    try:
+        with get_connection() as conn:
+            cursor = conn.execute("SELECT MAX(CAST(id AS INTEGER)) FROM vendors")
+            max_id = cursor.fetchone()[0] or 0
+            vendor_id = f"{max_id + 1:06d}"
+            logger.debug(f"Successfully got next vendor ID: {vendor_id}")
+    except Exception as e:
+        logger.error(f"Failed to get next vendor ID: {e}")
+        raise
     
-    logger.debug(f"Generated vendor GUID: {vendor_guid}, ID: {vendor_id}")
-    
-    # Get USD currency
-    usd_guid = get_usd_guid()
-    if not usd_guid:
-        raise ValueError("USD currency not found")
-    
-    logger.debug(f"Using default USD currency GUID: {usd_guid}")
+    # Get USD currency - ENHANCED LOGGING
+    logger.debug("Getting USD currency GUID...")
+    try:
+        usd_guid = get_usd_guid()
+        logger.debug(f"Successfully got USD GUID: {usd_guid}")
+    except Exception as e:
+        logger.error(f"Failed to get USD currency: {e}")
+        raise
     
     # DETAILED INSERT STATEMENT LOGGING
     insert_values = {
@@ -784,46 +791,72 @@ def create_vendor(name: str, addr_name: str = None, addr_addr1: str = None,
         else:
             logger.debug(f"  {field}: <EMPTY>")
     
-    with get_connection(readonly=False) as conn:
-        # Execute INSERT
-        conn.execute("""
-            INSERT INTO vendors (
-                guid, id, name, currency, active, notes,
-                addr_name, addr_addr1, addr_addr2, addr_addr3, addr_addr4, addr_phone, addr_email
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        """, (
-            vendor_guid, vendor_id, name, usd_guid, 1, '',
-            addr_name or '', addr_addr1 or '', addr_addr2 or '', 
-            addr_addr3 or '', addr_addr4 or '', addr_phone or '', addr_email or ''
-        ))
-        
-        # CRITICAL: Commit the transaction
-        conn.commit()
-        logger.debug("Transaction committed to database")
-        
-        # IMMEDIATE POST-INSERT VERIFICATION
-        logger.debug("POST-INSERT: Reading back vendor data from database...")
-        cursor = conn.execute("""
-            SELECT guid, name, addr_name, addr_addr1, addr_addr2, addr_addr3, addr_addr4, addr_phone, addr_email
-            FROM vendors WHERE guid = ?
-        """, (vendor_guid,))
-        
-        row = cursor.fetchone()
-        if row:
-            logger.info(f"POST-INSERT VERIFIED: Vendor saved to database")
-            # Log what was actually stored
-            for field in ['name', 'addr_name', 'addr_addr1', 'addr_addr2', 'addr_phone']:
-                value = row[field] or '<EMPTY>'
-                logger.debug(f"  {field}: '{value}'")
-        else:
-            logger.error(f"POST-INSERT VERIFICATION FAILED: Vendor not found!")
+    # ENHANCED DATABASE OPERATION LOGGING
+    logger.debug("Starting database transaction for vendor creation...")
+    
+    try:
+        with get_connection(readonly=False) as conn:
+            logger.debug("INSIDE database connection context - about to execute INSERT")
+            
+            # Execute INSERT
+            logger.debug("Executing INSERT statement...")
+            conn.execute("""
+                INSERT INTO vendors (
+                    guid, id, name, currency, active, notes,
+                    addr_name, addr_addr1, addr_addr2, addr_addr3, addr_addr4, addr_phone, addr_email
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """, (
+                vendor_guid, vendor_id, name, usd_guid, 1, '',
+                addr_name or '', addr_addr1 or '', addr_addr2 or '', 
+                addr_addr3 or '', addr_addr4 or '', addr_phone or '', addr_email or ''
+            ))
+            logger.debug("INSERT statement executed successfully")
+            
+            # CRITICAL: Commit the transaction
+            logger.debug("Committing transaction...")
+            conn.commit()
+            logger.debug("Transaction committed to database")
+            
+            # IMMEDIATE POST-INSERT VERIFICATION
+            logger.debug("POST-INSERT: Reading back vendor data from database...")
+            cursor = conn.execute("""
+                SELECT guid, name, addr_name, addr_addr1, addr_addr2, addr_addr3, addr_addr4, addr_phone, addr_email
+                FROM vendors WHERE guid = ?
+            """, (vendor_guid,))
+            
+            row = cursor.fetchone()
+            if row:
+                logger.info(f"POST-INSERT VERIFIED: Vendor saved to database")
+                # Log what was actually stored
+                for field in ['name', 'addr_name', 'addr_addr1', 'addr_addr2', 'addr_phone']:
+                    value = row[field] or '<EMPTY>'
+                    logger.debug(f"  STORED {field}: '{value}'")
+            else:
+                logger.error(f"POST-INSERT VERIFICATION FAILED: Vendor not found!")
+                raise WriteVerificationError("Vendor not found after INSERT")
+            
+            logger.debug("Exiting database connection context")
+            
+    except Exception as e:
+        logger.error(f"Database operation FAILED: {e}")
+        logger.error(f"Exception type: {type(e).__name__}")
+        import traceback
+        logger.error(f"Full traceback: {traceback.format_exc()}")
+        raise
 
     logger.info(f"Created vendor: {name} (ID: {vendor_id}, GUID: {vendor_guid})")
     
     # POST-WRITE VERIFICATION
     if kwargs.get('verify', True):
-        verify_vendor_created(vendor_guid, name, vendor_id)
+        logger.debug("Running final verification...")
+        try:
+            verify_vendor_created(vendor_guid, name)
+            logger.debug("Final verification passed")
+        except Exception as e:
+            logger.error(f"Final verification failed: {e}")
+            raise
     
+    logger.debug("create_vendor function completing successfully")
     return vendor_guid
 
 
