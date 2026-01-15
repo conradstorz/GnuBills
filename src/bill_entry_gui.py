@@ -754,6 +754,16 @@ class SimpleBillEntryGUI:
                     progress.append_text("Processing bills...")
                     progress.append_text("")
                     
+                    # Ensure Accounts Payable account exists before processing bills
+                    try:
+                        ap_guid = gnucash_db.ensure_ap_account_exists()
+                        progress.append_text("✓ Accounts Payable account ready")
+                        progress.append_text("")
+                    except Exception as e:
+                        progress.append_text(f"✗ Could not create/find Accounts Payable account: {e}")
+                        self.root.after(0, lambda: progress.set_complete(False))
+                        return
+                    
                     # Process bills (non-interactive mode)
                     vendor_manager = VendorManager()
                     results = {'total': len(bills), 'success': 0, 'failed': 0, 'skipped': 0}
