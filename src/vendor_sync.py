@@ -94,6 +94,7 @@ class VendorSyncUtility:
             print(f"📍 Using GnuCash database: {gnucash_path}")
             
             # Create fresh schema discovery instance
+            SchemaDiscovery = get_schema_discovery()
             self.schema = SchemaDiscovery()
             
             # Ensure schema is discovered/loaded

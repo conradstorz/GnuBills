@@ -14,6 +14,8 @@ import sys
 import os
 import json
 import subprocess
+import threading
+import queue
 from pathlib import Path
 from datetime import date, datetime
 from typing import List, Dict, Optional
@@ -27,6 +29,59 @@ from utils import parse_input_line
 from logging_setup import setup_logging_for_script, log_function_entry, log_function_exit, log_stage
 import vendor_manager
 import gnucash_db
+
+
+class VendorSyncProgressDialog:
+    """Dialog to show vendor sync progress."""
+    
+    def __init__(self, parent):
+        self.dialog = tk.Toplevel(parent)
+        self.dialog.title("Vendor Sync Progress")
+        self.dialog.geometry("600x400")
+        self.dialog.transient(parent)
+        self.dialog.grab_set()
+        
+        # Progress text area
+        frame = ttk.Frame(self.dialog, padding=10)
+        frame.pack(fill="both", expand=True)
+        
+        ttk.Label(frame, text="Vendor Sync Progress:", font=('TkDefaultFont', 10, 'bold')).pack(anchor="w", pady=(0, 5))
+        
+        self.text = scrolledtext.ScrolledText(frame, wrap="word", height=20, font=('Consolas', 9))
+        self.text.pack(fill="both", expand=True)
+        
+        # Buttons
+        btn_frame = ttk.Frame(frame)
+        btn_frame.pack(fill="x", pady=(10, 0))
+        
+        self.close_btn = ttk.Button(btn_frame, text="Close", command=self.close, state="disabled")
+        self.close_btn.pack(side="right")
+        
+        # Status
+        self.status_var = tk.StringVar()
+        self.status_var.set("Running vendor sync...")
+        ttk.Label(btn_frame, textvariable=self.status_var).pack(side="left")
+        
+        self.is_running = True
+        
+    def append_text(self, text):
+        """Append text to the progress display."""
+        self.text.insert("end", text + "\n")
+        self.text.see("end")
+        self.dialog.update_idletasks()
+        
+    def set_complete(self, success=True):
+        """Mark sync as complete."""
+        self.is_running = False
+        if success:
+            self.status_var.set("✅ Sync completed successfully!")
+        else:
+            self.status_var.set("❌ Sync completed with errors")
+        self.close_btn.config(state="normal")
+        
+    def close(self):
+        """Close the dialog."""
+        self.dialog.destroy()
 
 
 class SimpleBillEntryGUI:
@@ -559,18 +614,72 @@ class SimpleBillEntryGUI:
             messagebox.showerror("Error", f"Could not launch vendor manager: {e}")
     
     def _launch_vendor_sync(self):
-        """Launch the vendor sync utility."""
+        """Launch the vendor sync utility with progress dialog."""
         logger.debug("Launching Vendor Sync")
-        try:
-            script_path = Path(__file__).parent / "vendor_sync.py"
-            subprocess.Popen([sys.executable, str(script_path)], cwd=str(Path(__file__).parent))
-            logger.info("Vendor Sync launched successfully")
-            self.status_var.set("Launched Vendor Sync")
-            # Update stats after a brief delay to allow sync to complete
-            self.root.after(2000, self._update_vendor_stats)
-        except Exception as e:
-            logger.error(f"Error launching vendor sync: {e}")
-            messagebox.showerror("Error", f"Could not launch vendor sync: {e}")
+        
+        # Create progress dialog
+        progress = VendorSyncProgressDialog(self.root)
+        
+        def run_sync():
+            """Run vendor sync in a thread."""
+            try:
+                # Import vendor_sync module
+                import vendor_sync
+                
+                # Create sync utility
+                sync_util = vendor_sync.VendorSyncUtility()
+                
+                # Redirect output to progress dialog
+                class ProgressWriter:
+                    def __init__(self, dialog):
+                        self.dialog = dialog
+                        
+                    def write(self, text):
+                        if text.strip():
+                            self.dialog.append_text(text.rstrip())
+                            
+                    def flush(self):
+                        pass
+                
+                # Temporarily redirect stdout
+                import sys
+                old_stdout = sys.stdout
+                sys.stdout = ProgressWriter(progress)
+                
+                try:
+                    # Run bidirectional sync (default behavior)
+                    progress.append_text("🔄 Starting bidirectional vendor sync...")
+                    progress.append_text("")
+                    
+                    success = sync_util.sync_bidirectional(dry_run=False)
+                    
+                    # Update UI on main thread
+                    self.root.after(0, lambda: progress.set_complete(success))
+                    self.root.after(100, self._update_vendor_stats)
+                    
+                    if success:
+                        self.root.after(0, lambda: self.status_var.set("✅ Vendor sync completed"))
+                    else:
+                        self.root.after(0, lambda: self.status_var.set("❌ Vendor sync had errors"))
+                        
+                finally:
+                    # Restore stdout
+                    sys.stdout = old_stdout
+                    
+            except Exception as e:
+                logger.error(f"Error during vendor sync: {e}")
+                import traceback
+                error_msg = f"❌ Error: {e}\n\n{traceback.format_exc()}"
+                self.root.after(0, lambda: progress.append_text(error_msg))
+                self.root.after(0, lambda: progress.set_complete(False))
+                self.root.after(0, lambda: self.status_var.set("❌ Vendor sync failed"))
+        
+        # Start sync in background thread
+        sync_thread = threading.Thread(target=run_sync, daemon=True)
+        sync_thread.start()
+        
+        logger.info("Vendor Sync started in background")
+
     
     def _launch_bill_processor(self):
         """Launch the bill processor."""
