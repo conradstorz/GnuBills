@@ -263,7 +263,27 @@ class SchemaDiscovery:
         self.verification = VerificationReport()
         self.verification.load_from_schema(self.schema)
         
+        # Validate vendor references on startup
+        self._validate_vendor_references()
+        
         logger.debug(f"SchemaDiscovery initialized for {self.db_path}")
+    
+    def _validate_vendor_references(self):
+        """Validate vendor JSON references against GnuCash database."""
+        try:
+            from vendor_sync import validate_and_fix_vendor_references
+            
+            logger.debug("Validating vendor references...")
+            result = validate_and_fix_vendor_references(auto_fix=True, verbose=False)
+            
+            if result['invalid']:
+                logger.warning(f"Found {len(result['invalid'])} vendors with stale GnuCash references")
+            if result['fixed']:
+                logger.info(f"Reset {len(result['fixed'])} vendors to unsynced state")
+                
+        except Exception as e:
+            # Don't fail initialization if vendor validation fails
+            logger.error(f"Error validating vendor references: {e}")
     
     def _load_schema(self) -> Dict:
         """Load schema from JSON file or create default."""

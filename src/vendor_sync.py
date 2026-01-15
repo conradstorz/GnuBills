@@ -1,6 +1,7 @@
 """
 Standalone Vendor Sync Utility
 Syncs vendors from vendor_database.json to GnuCash database.
+Provides API for vendor validation and JSON manipulation.
 """
 
 import json
@@ -16,8 +17,14 @@ sys.path.insert(0, str(Path(__file__).parent))
 
 import config
 from gnucash_db import get_connection, generate_guid, get_usd_guid
-from schema_discovery import SchemaDiscovery
 from logging_setup import setup_logging_for_script
+
+
+# Circular import prevention - import SchemaDiscovery only when needed
+def get_schema_discovery():
+    """Lazy import of SchemaDiscovery to prevent circular dependencies."""
+    from schema_discovery import SchemaDiscovery
+    return SchemaDiscovery
 
 
 class VendorSyncUtility:
@@ -268,6 +275,124 @@ class VendorSyncUtility:
         except Exception as e:
             print(f"❌ Failed to save vendor database: {e}")
             return False
+    
+    def reset_vendor_to_unsynced(self, vendor_key: str) -> bool:
+        """
+        Reset a vendor record to unsynced state, removing stale GnuCash references.
+        
+        Args:
+            vendor_key: The key of the vendor in the JSON database
+            
+        Returns:
+            True if reset was successful, False otherwise
+        """
+        try:
+            if vendor_key not in self.vendors_data:
+                logger.warning(f"Vendor key '{vendor_key}' not found in database")
+                return False
+            
+            vendor_data = self.vendors_data[vendor_key]
+            
+            # Remove GnuCash sync fields
+            fields_to_remove = [
+                'gnucash_guid', 
+                'gnucash_id',
+                'expense_account_guid',  # Stale account reference
+            ]
+            
+            removed_fields = []
+            for field in fields_to_remove:
+                if field in vendor_data:
+                    removed_fields.append(f"{field}={vendor_data[field]}")
+                    del vendor_data[field]
+            
+            if removed_fields:
+                logger.info(f"Reset vendor '{vendor_data.get('display_name', vendor_key)}' to unsynced state")
+                logger.debug(f"Removed fields: {', '.join(removed_fields)}")
+            
+            return True
+            
+        except Exception as e:
+            logger.error(f"Error resetting vendor {vendor_key}: {e}")
+            return False
+    
+    def validate_vendor_references(self, auto_fix: bool = True) -> Dict[str, List[str]]:
+        """
+        Validate all vendor GnuCash references and optionally fix stale data.
+        
+        Args:
+            auto_fix: If True, automatically reset vendors with invalid references
+            
+        Returns:
+            Dict with 'valid', 'invalid', and 'fixed' lists of vendor keys
+        """
+        result = {
+            'valid': [],
+            'invalid': [],
+            'fixed': []
+        }
+        
+        if not self.load_vendor_database():
+            logger.error("Failed to load vendor database for validation")
+            return result
+        
+        try:
+            with get_connection() as conn:
+                for vendor_key, vendor_data in self.vendors_data.items():
+                    gnucash_guid = vendor_data.get('gnucash_guid')
+                    display_name = vendor_data.get('display_name', vendor_key)
+                    
+                    # Skip vendors that aren't synced yet
+                    if not gnucash_guid:
+                        continue
+                    
+                    # Check if vendor still exists in GnuCash
+                    cursor = conn.execute(
+                        "SELECT guid, id, name FROM vendors WHERE guid = ?",
+                        (gnucash_guid,)
+                    )
+                    row = cursor.fetchone()
+                    
+                    if row:
+                        # Vendor exists in GnuCash
+                        result['valid'].append(vendor_key)
+                        
+                        # Also validate expense account if present
+                        expense_guid = vendor_data.get('expense_account_guid')
+                        if expense_guid:
+                            cursor = conn.execute(
+                                "SELECT guid FROM accounts WHERE guid = ?",
+                                (expense_guid,)
+                            )
+                            acct_row = cursor.fetchone()
+                            if not acct_row:
+                                logger.warning(f"Vendor '{display_name}' has invalid expense_account_guid: {expense_guid}")
+                                if auto_fix:
+                                    if 'expense_account_guid' in vendor_data:
+                                        del vendor_data['expense_account_guid']
+                                    logger.info(f"Removed invalid expense_account_guid from '{display_name}'")
+                                    result['fixed'].append(vendor_key)
+                    else:
+                        # Vendor deleted from GnuCash but still in JSON
+                        logger.warning(f"Vendor '{display_name}' (GUID: {gnucash_guid}) not found in GnuCash database")
+                        result['invalid'].append(vendor_key)
+                        
+                        if auto_fix:
+                            if self.reset_vendor_to_unsynced(vendor_key):
+                                logger.info(f"Reset vendor '{display_name}' to unsynced state")
+                                result['fixed'].append(vendor_key)
+            
+            # Save changes if any fixes were made
+            if auto_fix and result['fixed']:
+                self.save_vendor_database()
+                logger.info(f"Vendor database updated: {len(result['fixed'])} vendors fixed")
+            
+        except Exception as e:
+            logger.error(f"Error validating vendor references: {e}")
+            import traceback
+            logger.error(traceback.format_exc())
+        
+        return result
     
     def sync_all_vendors(self, force_recreate: bool = False, dry_run: bool = False) -> bool:
         """Sync all vendors from JSON to GnuCash."""
@@ -616,4 +741,47 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    main()    main()
+
+
+# ============================================================================
+# PUBLIC API FOR OTHER SCRIPTS
+# ============================================================================
+
+def validate_and_fix_vendor_references(auto_fix: bool = True, verbose: bool = False):
+    """
+    Public API: Validate vendor references and optionally fix stale data.
+    
+    This function can be called from other scripts (like schema_discovery.py)
+    to detect and fix vendors that have been deleted from GnuCash but still
+    have sync data in the JSON file.
+    
+    Args:
+        auto_fix: If True, automatically reset vendors with invalid references
+        verbose: If True, print detailed information
+        
+    Returns:
+        Dict with 'valid', 'invalid', and 'fixed' lists of vendor keys
+    """
+    sync_util = VendorSyncUtility()
+    result = sync_util.validate_vendor_references(auto_fix=auto_fix)
+    
+    if verbose:
+        print(f"\n{'='*60}")
+        print("VENDOR VALIDATION REPORT")
+        print(f"{'='*60}")
+        print(f"Valid vendors: {len(result['valid'])}")
+        print(f"Invalid vendors: {len(result['invalid'])}")
+        if auto_fix:
+            print(f"Fixed vendors: {len(result['fixed'])}")
+        
+        if result['invalid']:
+            print(f"\n⚠️  Invalid vendors found:")
+            for vendor_key in result['invalid']:
+                print(f"  - {vendor_key}")
+            if not auto_fix:
+                print("\nRun with auto_fix=True to reset these vendors")
+        
+        print(f"{'='*60}\n")
+    
+    return result
