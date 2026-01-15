@@ -788,8 +788,38 @@ class SimpleBillEntryGUI:
                                         progress.append_text("")
                                         continue
                                 
-                                # Get expense account
-                                expense_acct_guid = vendor_manager.get_or_create_expense_account(vendor_data)
+                                # Get expense account (non-interactive)
+                                expense_acct_guid = None
+                                
+                                # Check if we have it cached
+                                if vendor_data.get('expense_account_guid'):
+                                    expense_acct_guid = vendor_data.get('expense_account_guid')
+                                else:
+                                    # Try to find by name
+                                    from utils import make_expense_account_name
+                                    acct_name = vendor_data.get('expense_account')
+                                    if not acct_name:
+                                        acct_name = make_expense_account_name(vendor_data.get('display_name', ''))
+                                    
+                                    # Search for existing account
+                                    existing = gnucash_db.find_expense_accounts_like(acct_name)
+                                    if existing:
+                                        expense_acct_guid = existing[0]['guid']
+                                    else:
+                                        # Try exact match
+                                        exact = gnucash_db.get_account_by_name(acct_name)
+                                        if exact:
+                                            expense_acct_guid = exact['guid']
+                                        else:
+                                            # Create new account automatically (non-interactive)
+                                            try:
+                                                expense_acct_guid = gnucash_db.create_expense_account(acct_name)
+                                                progress.append_text(f"  ✓ Created expense account: {acct_name}")
+                                            except Exception as e:
+                                                progress.append_text(f"  ✗ Could not create expense account: {e}")
+                                                results['failed'] += 1
+                                                progress.append_text("")
+                                                continue
                                 
                                 # Create the bill
                                 bill_guid = gnucash_db.create_posted_bill(
