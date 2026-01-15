@@ -682,16 +682,184 @@ class SimpleBillEntryGUI:
 
     
     def _launch_bill_processor(self):
-        """Launch the bill processor."""
+        """Launch the bill processor with progress dialog."""
         logger.debug("Launching Bill Processor")
-        try:
-            script_path = Path(__file__).parent / "bill_processor.py"
-            subprocess.Popen([sys.executable, str(script_path)], cwd=str(Path(__file__).parent))
-            logger.info("Bill Processor launched successfully")
-            self.status_var.set("Launched Bill Processor")
-        except Exception as e:
-            logger.error(f"Error launching bill processor: {e}")
-            messagebox.showerror("Error", f"Could not launch bill processor: {e}")
+        
+        # Check if there are bills to process
+        bills_file = Path(config.PROJECT_ROOT) / "data" / "bills_to_process.txt"
+        if not bills_file.exists() or bills_file.stat().st_size == 0:
+            messagebox.showinfo(
+                "No Bills", 
+                "There are no bills in the queue to process.\n\nAdd bills first, then click 'Process Bills'."
+            )
+            return
+        
+        # Create progress dialog
+        progress = VendorSyncProgressDialog(self.root)
+        progress.dialog.title("Bill Processing Progress")
+        
+        def run_bill_processor():
+            """Run bill processor in a thread."""
+            try:
+                # Import bill processor module
+                import bill_processor
+                from vendor_manager import VendorManager
+                from utils import parse_input_line, format_currency
+                
+                # Redirect output to progress dialog
+                class ProgressWriter:
+                    def __init__(self, dialog):
+                        self.dialog = dialog
+                        
+                    def write(self, text):
+                        if text.strip():
+                            self.dialog.append_text(text.rstrip())
+                            
+                    def flush(self):
+                        pass
+                
+                # Temporarily redirect stdout
+                import sys
+                old_stdout = sys.stdout
+                sys.stdout = ProgressWriter(progress)
+                
+                try:
+                    progress.append_text("💳 Starting bill processor...")
+                    progress.append_text(f"Input file: {bills_file}")
+                    progress.append_text("")
+                    
+                    # Read and parse bills
+                    bills = []
+                    with open(bills_file, 'r', encoding='utf-8') as f:
+                        for line_num, line in enumerate(f, 1):
+                            parsed = parse_input_line(line)
+                            if parsed:
+                                parsed['line_num'] = line_num
+                                bills.append(parsed)
+                    
+                    if not bills:
+                        progress.append_text("⚠️  No bills found to process")
+                        self.root.after(0, lambda: progress.set_complete(True))
+                        return
+                    
+                    # Show bills
+                    total_amount = sum(b['amount'] for b in bills)
+                    progress.append_text(f"Found {len(bills)} bill(s) totaling {format_currency(total_amount)}")
+                    progress.append_text("")
+                    
+                    for i, bill in enumerate(bills, 1):
+                        progress.append_text(f"  {i}. {bill['vendor_name']}: {format_currency(bill['amount'])}")
+                    
+                    progress.append_text("")
+                    progress.append_text("Processing bills...")
+                    progress.append_text("")
+                    
+                    # Process bills (non-interactive mode)
+                    vendor_manager = VendorManager()
+                    results = {'total': len(bills), 'success': 0, 'failed': 0, 'skipped': 0}
+                    
+                    for bill in bills:
+                        try:
+                            # NOTE: This is simplified non-interactive processing
+                            # It will skip vendors that don't exist rather than prompting
+                            vendor_name = bill['vendor_name']
+                            amount = bill['amount']
+                            memo = bill['memo']
+                            bill_date = bill['date']
+                            
+                            progress.append_text(f"Processing: {vendor_name}")
+                            
+                            # Find vendor
+                            vendor_data, match_type = vendor_manager.find_vendor(vendor_name)
+                            
+                            if vendor_data:
+                                progress.append_text(f"  ✓ Found vendor: {vendor_data.get('display_name')} ({match_type} match)")
+                                
+                                # Get vendor GUID
+                                vendor_guid = vendor_data.get('gnucash_guid')
+                                if not vendor_guid:
+                                    # Try to find in GnuCash by name
+                                    gc_vendor = gnucash_db.find_vendor_by_name(vendor_data.get('display_name'))
+                                    if gc_vendor:
+                                        vendor_guid = gc_vendor['guid']
+                                    else:
+                                        progress.append_text(f"  ✗ Could not find vendor GUID")
+                                        results['failed'] += 1
+                                        progress.append_text("")
+                                        continue
+                                
+                                # Get expense account
+                                expense_acct_guid = vendor_manager.get_or_create_expense_account(vendor_data)
+                                
+                                # Create the bill
+                                bill_guid = gnucash_db.create_posted_bill(
+                                    vendor_guid=vendor_guid,
+                                    expense_account_guid=expense_acct_guid,
+                                    amount=amount,
+                                    memo=memo,
+                                    bill_date=bill_date
+                                )
+                                
+                                if bill_guid:
+                                    progress.append_text(f"  ✓ Bill created successfully ({format_currency(amount)})")
+                                    results['success'] += 1
+                                else:
+                                    progress.append_text(f"  ✗ Failed to create bill")
+                                    results['failed'] += 1
+                            else:
+                                progress.append_text(f"  ⚠️  Vendor not found - skipping")
+                                progress.append_text(f"     Use 'Manage Vendors' to create '{vendor_name}' first")
+                                results['skipped'] += 1
+                            
+                            progress.append_text("")
+                            
+                        except Exception as e:
+                            progress.append_text(f"  ✗ Error: {e}")
+                            results['failed'] += 1
+                            progress.append_text("")
+                    
+                    # Show summary
+                    progress.append_text("=" * 50)
+                    progress.append_text("PROCESSING COMPLETE")
+                    progress.append_text("=" * 50)
+                    progress.append_text(f"Total bills: {results['total']}")
+                    progress.append_text(f"Successful:  {results['success']}")
+                    progress.append_text(f"Failed:      {results['failed']}")
+                    progress.append_text(f"Skipped:     {results['skipped']}")
+                    
+                    success = results['failed'] == 0 and results['skipped'] == 0
+                    
+                    if results['success'] > 0:
+                        progress.append_text("")
+                        progress.append_text("✓ Bills are ready in GnuCash for payment!")
+                        progress.append_text("  Open GnuCash -> Business -> Vendor -> Pay Bill")
+                    
+                    # Update UI on main thread
+                    self.root.after(0, lambda: progress.set_complete(success))
+                    self.root.after(100, self._load_current_bills)  # Refresh bill list
+                    
+                    if success:
+                        self.root.after(0, lambda: self.status_var.set("✅ Bills processed successfully"))
+                    else:
+                        self.root.after(0, lambda: self.status_var.set("⚠️  Some bills were skipped or failed"))
+                        
+                finally:
+                    # Restore stdout
+                    sys.stdout = old_stdout
+                    
+            except Exception as e:
+                logger.error(f"Error during bill processing: {e}")
+                import traceback
+                error_msg = f"❌ Error: {e}\n\n{traceback.format_exc()}"
+                self.root.after(0, lambda: progress.append_text(error_msg))
+                self.root.after(0, lambda: progress.set_complete(False))
+                self.root.after(0, lambda: self.status_var.set("❌ Bill processing failed"))
+        
+        # Start processing in background thread
+        processor_thread = threading.Thread(target=run_bill_processor, daemon=True)
+        processor_thread.start()
+        
+        logger.info("Bill Processor started in background")
 
 
 def main():
