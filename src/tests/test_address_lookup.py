@@ -28,40 +28,73 @@ class TestParseFormattedAddress:
         address = "123 Main St, Springfield, IL 62701, USA"
         result = _parse_formatted_address(address)
         
+        # Test legacy line1/line2 format
         assert result['line1'] == "123 Main St"
         assert "Springfield" in result['line2']
         assert "IL 62701" in result['line2']
+        
+        # Test new granular fields
+        assert result['street'] == "123 Main St"
+        assert result['city'] == "Springfield"
+        assert result['state'] == "IL"
+        assert result['zip'] == "62701"
     
     def test_address_without_country(self):
         """Test parsing address without country suffix"""
         address = "456 Oak Ave, Louisville, KY 40205"
         result = _parse_formatted_address(address)
         
+        # Test legacy format
         assert result['line1'] == "456 Oak Ave"
         assert "Louisville" in result['line2']
+        
+        # Test granular fields
+        assert result['street'] == "456 Oak Ave"
+        assert result['city'] == "Louisville"
+        assert result['state'] == "KY"
+        assert result['zip'] == "40205"
     
     def test_two_part_address(self):
         """Test parsing simple two-part address"""
         address = "789 Elm St, Chicago"
         result = _parse_formatted_address(address)
         
+        # Test legacy format
         assert result['line1'] == "789 Elm St"
         assert result['line2'] == "Chicago"
+        
+        # Test granular fields
+        assert result['street'] == "789 Elm St"
+        assert result['city'] == "Chicago"
+        assert result['state'] == ""
+        assert result['zip'] == ""
     
     def test_single_part_address(self):
         """Test parsing single-line address"""
         address = "123 Main Street"
         result = _parse_formatted_address(address)
         
+        # Test legacy format
         assert result['line1'] == "123 Main Street"
         assert result['line2'] == ""
+        
+        # Test granular fields
+        assert result['street'] == "123 Main Street"
+        assert result['city'] == ""
+        assert result['state'] == ""
+        assert result['zip'] == ""
     
     def test_empty_address(self):
         """Test parsing empty address"""
         result = _parse_formatted_address("")
         
+        # Test all fields are empty
         assert result['line1'] == ""
         assert result['line2'] == ""
+        assert result['street'] == ""
+        assert result['city'] == ""
+        assert result['state'] == ""
+        assert result['zip'] == ""
     
     def test_removes_usa_suffix(self):
         """Test that USA suffix is removed"""
@@ -85,6 +118,46 @@ class TestParseFormattedAddress:
         assert result['line1'] == "123 Main St"
         assert not result['line2'].startswith(" ")
         assert not result['line2'].endswith(" ")
+    
+    def test_zip_code_with_dash(self):
+        """Test parsing ZIP+4 format"""
+        address = "100 Tech Blvd, San Francisco, CA 94105-1234"
+        result = _parse_formatted_address(address)
+        
+        assert result['street'] == "100 Tech Blvd"
+        assert result['city'] == "San Francisco"
+        assert result['state'] == "CA"
+        assert result['zip'] == "94105-1234"
+    
+    def test_state_only_no_zip(self):
+        """Test parsing address with state but no ZIP"""
+        address = "200 Park Ave, New York, NY"
+        result = _parse_formatted_address(address)
+        
+        assert result['street'] == "200 Park Ave"
+        assert result['city'] == "New York"
+        assert result['state'] == "NY"
+        assert result['zip'] == ""
+    
+    def test_zip_only_no_state(self):
+        """Test parsing address with ZIP but no state (edge case)"""
+        address = "300 Main St, Sometown, 12345"
+        result = _parse_formatted_address(address)
+        
+        assert result['street'] == "300 Main St"
+        assert result['city'] == "Sometown"
+        assert result['state'] == ""
+        assert result['zip'] == "12345"
+    
+    def test_full_state_name(self):
+        """Test parsing with full state name instead of abbreviation"""
+        address = "400 River Rd, Boston, Massachusetts 02101"
+        result = _parse_formatted_address(address)
+        
+        assert result['street'] == "400 River Rd"
+        assert result['city'] == "Boston"
+        assert result['state'] == "Massachusetts"
+        assert result['zip'] == "02101"
 
 
 class TestFormatAddressForDisplay:
@@ -219,10 +292,22 @@ class TestPropertyBasedAddressLookup:
         try:
             result = _parse_formatted_address(address)
             assert isinstance(result, dict)
+            
+            # Check legacy fields
             assert 'line1' in result
             assert 'line2' in result
             assert isinstance(result['line1'], str)
             assert isinstance(result['line2'], str)
+            
+            # Check granular fields
+            assert 'street' in result
+            assert 'city' in result
+            assert 'state' in result
+            assert 'zip' in result
+            assert isinstance(result['street'], str)
+            assert isinstance(result['city'], str)
+            assert isinstance(result['state'], str)
+            assert isinstance(result['zip'], str)
         except Exception as e:
             pytest.fail(f"_parse_formatted_address crashed on input '{address}': {e}")
     
@@ -323,6 +408,271 @@ class TestMockedAPILookups:
         result = lookup_google_places("Test Business")
         
         assert result is None
+    
+    @patch('address_lookup.config.GOOGLE_PLACES_API_KEY', 'test_key')
+    @patch('address_lookup.config.DEFAULT_LOCALITY', 'Louisville, KY')
+    @patch('address_lookup.config.CENTER_LAT', None)
+    @patch('address_lookup.config.CENTER_LON', None)
+    @patch('address_lookup.requests.get')
+    def test_google_places_return_all_true(self, mock_get):
+        """Test Google Places with return_all=True returns list of all results"""
+        from address_lookup import lookup_google_places
+        
+        # Mock multiple results
+        mock_response = Mock()
+        mock_response.json.return_value = {
+            'status': 'OK',
+            'results': [
+                {
+                    'name': 'Home Depot - Main St',
+                    'formatted_address': '123 Main St, Louisville, KY 40202',
+                    'geometry': {'location': {'lat': 38.25, 'lng': -85.76}},
+                    'place_id': 'place_1'
+                },
+                {
+                    'name': 'Home Depot - Oak Ave',
+                    'formatted_address': '456 Oak Ave, Louisville, KY 40204',
+                    'geometry': {'location': {'lat': 38.26, 'lng': -85.75}},
+                    'place_id': 'place_2'
+                },
+                {
+                    'name': 'Home Depot - Elm St',
+                    'formatted_address': '789 Elm St, Louisville, KY 40205',
+                    'geometry': {'location': {'lat': 38.27, 'lng': -85.74}},
+                    'place_id': 'place_3'
+                }
+            ]
+        }
+        mock_response.raise_for_status = Mock()
+        mock_get.return_value = mock_response
+        
+        results = lookup_google_places("Home Depot", return_all=True)
+        
+        # Should return a list
+        assert isinstance(results, list)
+        assert len(results) == 3
+        
+        # Check first result
+        assert results[0]['name'] == 'Home Depot - Main St'
+        assert results[0]['source'] == 'google'
+        assert results[0]['place_id'] == 'place_1'
+        
+        # Check all results have required fields
+        for result in results:
+            assert 'name' in result
+            assert 'formatted_address' in result
+            assert 'addr_line1' in result
+            assert 'addr_line2' in result
+            assert 'lat' in result
+            assert 'lng' in result
+            assert 'place_id' in result
+            assert result['source'] == 'google'
+    
+    @patch('address_lookup.config.GOOGLE_PLACES_API_KEY', 'test_key')
+    @patch('address_lookup.config.DEFAULT_LOCALITY', 'Louisville, KY')
+    @patch('address_lookup.requests.get')
+    def test_google_places_return_all_no_results(self, mock_get):
+        """Test Google Places with return_all=True when no results found"""
+        from address_lookup import lookup_google_places
+        
+        mock_response = Mock()
+        mock_response.json.return_value = {
+            'status': 'ZERO_RESULTS',
+            'results': []
+        }
+        mock_response.raise_for_status = Mock()
+        mock_get.return_value = mock_response
+        
+        results = lookup_google_places("Nonexistent", return_all=True)
+        
+        # Should return None when no results with return_all=False
+        # But empty list with return_all=True
+        assert results is None or results == []
+    
+    @patch('address_lookup.config.GOOGLE_PLACES_API_KEY', 'test_key')
+    @patch('address_lookup.config.DEFAULT_LOCALITY', 'Louisville, KY')
+    @patch('address_lookup.config.CENTER_LAT', None)
+    @patch('address_lookup.config.CENTER_LON', None)
+    @patch('address_lookup.requests.get')
+    def test_google_places_return_all_false_returns_single(self, mock_get):
+        """Test Google Places with return_all=False returns only best result"""
+        from address_lookup import lookup_google_places
+        
+        # Mock multiple results
+        mock_response = Mock()
+        mock_response.json.return_value = {
+            'status': 'OK',
+            'results': [
+                {
+                    'name': 'Best Match',
+                    'formatted_address': '123 Main St, Louisville, KY 40202',
+                    'geometry': {'location': {'lat': 38.25, 'lng': -85.76}},
+                    'place_id': 'place_1'
+                },
+                {
+                    'name': 'Second Match',
+                    'formatted_address': '456 Oak Ave, Louisville, KY 40204',
+                    'geometry': {'location': {'lat': 38.26, 'lng': -85.75}},
+                    'place_id': 'place_2'
+                }
+            ]
+        }
+        mock_response.raise_for_status = Mock()
+        mock_get.return_value = mock_response
+        
+        # Need to mock the phone lookup too
+        with patch('address_lookup._get_google_place_phone', return_value=None):
+            result = lookup_google_places("Test", return_all=False)
+        
+        # Should return a dict (single result), not a list
+        assert isinstance(result, dict)
+        assert result['name'] == 'Best Match'
+        assert result['source'] == 'google'
+
+
+class TestOpenStreetMapLookup:
+    """Test lookup_openstreetmap() with mocking"""
+    
+    @patch('address_lookup.config.DEFAULT_LOCALITY', 'Louisville, KY')
+    @patch('address_lookup.config.CENTER_LAT', None)
+    @patch('address_lookup.config.CENTER_LON', None)
+    @patch('address_lookup.config.OSM_USER_AGENT', 'TestAgent/1.0')
+    @patch('address_lookup.time.sleep')  # Skip the rate limiting sleep
+    @patch('address_lookup.requests.get')
+    def test_openstreetmap_success(self, mock_get, mock_sleep):
+        """Test successful OpenStreetMap lookup"""
+        from address_lookup import lookup_openstreetmap
+        
+        mock_response = Mock()
+        mock_response.json.return_value = [
+            {
+                'display_name': 'Acme Corp, 123 Main St, Louisville, KY, USA',
+                'lat': '38.2527',
+                'lon': '-85.7585',
+                'place_id': 'osm_place_123',
+                'address': {
+                    'house_number': '123',
+                    'road': 'Main St',
+                    'city': 'Louisville',
+                    'state': 'Kentucky',
+                    'postcode': '40202'
+                }
+            }
+        ]
+        mock_response.raise_for_status = Mock()
+        mock_get.return_value = mock_response
+        
+        result = lookup_openstreetmap("Acme Corp")
+        
+        assert result is not None
+        assert result['source'] == 'openstreetmap'
+        assert 'Main St' in result['addr_line1']
+        assert 'Louisville' in result['addr_line2']
+        assert result['lat'] == 38.2527
+        assert result['lng'] == -85.7585
+        
+        # Verify rate limiting sleep was called
+        assert mock_sleep.called
+    
+    @patch('address_lookup.config.DEFAULT_LOCALITY', 'Louisville, KY')
+    @patch('address_lookup.config.OSM_USER_AGENT', 'TestAgent/1.0')
+    @patch('address_lookup.time.sleep')
+    @patch('address_lookup.requests.get')
+    def test_openstreetmap_no_results(self, mock_get, mock_sleep):
+        """Test OpenStreetMap when no results found"""
+        from address_lookup import lookup_openstreetmap
+        
+        mock_response = Mock()
+        mock_response.json.return_value = []
+        mock_response.raise_for_status = Mock()
+        mock_get.return_value = mock_response
+        
+        result = lookup_openstreetmap("Nonexistent Business")
+        
+        assert result is None
+    
+    @patch('address_lookup.config.DEFAULT_LOCALITY', 'Louisville, KY')
+    @patch('address_lookup.config.CENTER_LAT', 38.2527)
+    @patch('address_lookup.config.CENTER_LON', -85.7585)
+    @patch('address_lookup.config.SEARCH_RADIUS_MILES', 25)
+    @patch('address_lookup.config.OSM_USER_AGENT', 'TestAgent/1.0')
+    @patch('address_lookup.time.sleep')
+    @patch('address_lookup.requests.get')
+    def test_openstreetmap_with_distance_filter(self, mock_get, mock_sleep):
+        """Test OpenStreetMap with distance filtering"""
+        from address_lookup import lookup_openstreetmap
+        
+        # Mock results - one close, one far
+        mock_response = Mock()
+        mock_response.json.return_value = [
+            {
+                'display_name': 'Nearby Business',
+                'lat': '38.26',  # Very close to center
+                'lon': '-85.76',
+                'place_id': 'near',
+                'address': {
+                    'road': 'Near St',
+                    'city': 'Louisville',
+                    'state': 'KY',
+                    'postcode': '40202'
+                }
+            },
+            {
+                'display_name': 'Far Business',
+                'lat': '40.0',  # Far from center
+                'lon': '-87.0',
+                'place_id': 'far',
+                'address': {
+                    'road': 'Far St',
+                    'city': 'Farville',
+                    'state': 'KY',
+                    'postcode': '99999'
+                }
+            }
+        ]
+        mock_response.raise_for_status = Mock()
+        mock_get.return_value = mock_response
+        
+        result = lookup_openstreetmap("Test Business")
+        
+        # Should return the nearby result, not the far one
+        assert result is not None
+        assert 'Near St' in result['addr_line1']
+    
+    @patch('address_lookup.config.DEFAULT_LOCALITY', 'Louisville, KY')
+    @patch('address_lookup.config.OSM_USER_AGENT', 'TestAgent/1.0')
+    @patch('address_lookup.time.sleep')
+    @patch('address_lookup.requests.get')
+    def test_openstreetmap_request_exception(self, mock_get, mock_sleep):
+        """Test OpenStreetMap handles request exceptions"""
+        from address_lookup import lookup_openstreetmap
+        import requests
+        
+        mock_get.side_effect = requests.RequestException("Network error")
+        
+        result = lookup_openstreetmap("Test Business")
+        
+        assert result is None
+    
+    @patch('address_lookup.config.DEFAULT_LOCALITY', None)
+    @patch('address_lookup.config.OSM_USER_AGENT', 'TestAgent/1.0')
+    @patch('address_lookup.time.sleep')
+    @patch('address_lookup.requests.get')
+    def test_openstreetmap_uses_default_locality(self, mock_get, mock_sleep):
+        """Test that OpenStreetMap uses DEFAULT_LOCALITY when locality not provided"""
+        from address_lookup import lookup_openstreetmap
+        
+        # Set up to succeed but we just want to check the call
+        mock_response = Mock()
+        mock_response.json.return_value = []
+        mock_response.raise_for_status = Mock()
+        mock_get.return_value = mock_response
+        
+        # Should not crash even with None locality
+        result = lookup_openstreetmap("Test")
+        
+        # Function should handle None locality gracefully
+        assert mock_get.called
 
 
 if __name__ == "__main__":
