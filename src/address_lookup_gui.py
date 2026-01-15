@@ -16,7 +16,7 @@ from loguru import logger
 sys.path.insert(0, str(Path(__file__).parent))
 
 from vendor_manager import VendorManager
-from address_lookup import lookup_google_places, _parse_formatted_address, _get_google_place_phone
+from address_lookup import lookup_google_places, lookup_openstreetmap, _parse_formatted_address, _get_google_place_phone
 from logging_setup import setup_logging_for_script, log_function_entry, log_function_exit
 from utils import strip_vendor_name
 
@@ -374,34 +374,80 @@ class AddressLookupGUI:
         self._load_vendor_list()
     
     def _search_web(self):
-        """Search for vendor address using Google Places API."""
+        """Search for vendor address using Google Places API with OpenStreetMap fallback."""
+        import config
         vendor_name = self.vendor_name_var.get().strip()
         
         if not vendor_name:
             messagebox.showwarning("No Vendor Name", "Please enter a vendor name first.")
             return
         
-        self.status_var.set("Searching Google Places...")
-        self.root.update()
+        # Try Google Places first
+        results = None
+        source = None
         
-        try:
-            # Call Google Places API with return_all=True to get all results
-            results = lookup_google_places(vendor_name, return_all=True)
+        if config.GOOGLE_PLACES_API_KEY:
+            self.status_var.set("Searching Google Places...")
+            self.root.update()
             
-            if not results:
-                self.status_var.set("No results found")
-                messagebox.showinfo("No Results", 
-                                  f"No results found for '{vendor_name}'.\n"
-                                  "Try a different search term or enter manually.")
-                return
+            try:
+                # Call Google Places API with return_all=True to get all results
+                results = lookup_google_places(vendor_name, return_all=True)
+                source = "Google Places"
+                
+            except Exception as e:
+                logger.error(f"Error searching Google Places: {e}")
+                self.status_var.set("Google failed, trying OpenStreetMap...")
+                self.root.update()
+        else:
+            logger.info("Google Places API key not configured, using OpenStreetMap")
+        
+        # Try OpenStreetMap as fallback
+        if not results and config.USE_OPENSTREETMAP:
+            self.status_var.set("Searching OpenStreetMap...")
+            self.root.update()
             
-            # Display all results in the list
-            self._display_search_results(results)
+            try:
+                from address_lookup import lookup_openstreetmap
+                osm_result = lookup_openstreetmap(vendor_name)
+                
+                if osm_result:
+                    # Convert single result to list format for consistency
+                    results = [osm_result]
+                    source = "OpenStreetMap"
+                    logger.info(f"OpenStreetMap found result for '{vendor_name}'")
+                    
+            except Exception as e:
+                logger.error(f"Error searching OpenStreetMap: {e}")
+                self.status_var.set(f"Search error: {e}")
+        
+        # Handle no results
+        if not results:
+            self.status_var.set("No results found")
             
-        except Exception as e:
-            logger.error(f"Error searching Google Places: {e}")
-            self.status_var.set(f"Search error: {e}")
-            messagebox.showerror("Search Error", f"Error searching Google Places:\n{e}")
+            # Provide helpful error message based on configuration
+            if not config.GOOGLE_PLACES_API_KEY:
+                msg = (f"No results found for '{vendor_name}'.\n\n"
+                       "💡 TIP: For better results, configure a Google Places API key:\n"
+                       "1. Go to: https://console.cloud.google.com/\n"
+                       "2. Create project and enable Places API\n"
+                       "3. Create API key in Credentials\n"
+                       "4. Add key to config.py (GOOGLE_PLACES_API_KEY)\n\n"
+                       "Currently using OpenStreetMap (free but less accurate).\n"
+                       "Try a different search term or enter address manually.")
+            else:
+                msg = (f"No results found for '{vendor_name}'.\n\n"
+                       "Try:\n"
+                       "• A simpler search term (e.g., 'Kroger' instead of 'Kroger Store #123')\n"
+                       "• Just the business name without location\n"
+                       "• Or enter the address manually")
+            
+            messagebox.showinfo("No Results", msg)
+            return
+        
+        # Display results
+        self._display_search_results(results)
+        self.status_var.set(f"Found {len(results)} result(s) from {source}")
     
     def _display_search_results(self, results: list):
         """Display multiple search results in listbox."""

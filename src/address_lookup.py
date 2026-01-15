@@ -184,10 +184,17 @@ def lookup_google_places(business_name: str, locality: str = None, return_all: b
 
 def _get_google_place_phone(place_id: str) -> Optional[str]:
     """Get phone number from Google Place Details API."""
-    log_function_entry("_get_google_place_phone", place_id=place_id[:20] if place_id else None)
+    log_function_entry("_get_google_place_phone", place_id=str(place_id)[:20] if place_id else None)
     
     if not place_id or not config.GOOGLE_PLACES_API_KEY:
         logger.debug("Missing place_id or API key for phone lookup")
+        log_function_exit("_get_google_place_phone", None)
+        return None
+    
+    # OpenStreetMap returns integer place_id, Google expects string
+    # Only Google place IDs work with the Google Places Details API
+    if isinstance(place_id, int):
+        logger.debug("place_id is from OpenStreetMap (integer), cannot query Google for phone")
         log_function_exit("_get_google_place_phone", None)
         return None
     

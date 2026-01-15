@@ -137,8 +137,27 @@ Additional fields stored from web search:
 
 ### Requirements
 
-- Google Places API key configured in `config.py`
+- **Google Places API key** (recommended for best results)
+  - OR **OpenStreetMap** (free fallback, automatically used if no Google key)
 - Internet connection
+
+### How Search Works
+
+The tool uses a **two-tier search system**:
+
+1. **Primary: Google Places API** (if API key configured)
+   - Most accurate and comprehensive
+   - Best coverage for businesses worldwide
+   - Requires free API key (see Troubleshooting section)
+   - Returns phone numbers when available
+
+2. **Fallback: OpenStreetMap Nominatim** (always available)
+   - Completely free, no API key needed
+   - Good coverage for major chains and landmarks
+   - May have gaps for small local businesses
+   - Automatically used when Google is not configured or fails
+
+**The tool will try Google first (if configured), then automatically fall back to OpenStreetMap if needed.**
 
 ### Search Behavior
 
@@ -243,12 +262,49 @@ Structure:
 
 ## Troubleshooting
 
-### "Google Places API key not configured"
+### "No results found" when searching
 
-**Solution:** Add API key to `config.py`:
-```python
-GOOGLE_PLACES_API_KEY = "your-api-key-here"
-```
+**If you don't have a Google Places API key configured:**
+
+The tool uses OpenStreetMap (free) as a fallback, which has less comprehensive business data than Google Places.
+
+**To get better search results, set up Google Places API (recommended):**
+
+1. **Go to Google Cloud Console**: https://console.cloud.google.com/
+2. **Create or select a project**
+3. **Enable the Places API**:
+   - Click "APIs & Services" → "Library"
+   - Search for "Places API"
+   - Click "Enable"
+4. **Create API Key**:
+   - Go to "APIs & Services" → "Credentials"
+   - Click "Create Credentials" → "API Key"
+   - Copy your new API key
+5. **Restrict your key (recommended)**:
+   - Click on the key you just created
+   - Under "API restrictions", select "Restrict key"
+   - Choose "Places API" from the list
+   - Click "Save"
+6. **Add key to config**:
+   - Open `src/config.py`
+   - Find `GOOGLE_PLACES_API_KEY = ""`
+   - Paste your key: `GOOGLE_PLACES_API_KEY = "your-key-here"`
+   - Save the file
+
+**Search tips when results are poor:**
+
+- **Use simpler terms**: Try "Kroger" instead of "Kroger Pharmacy #1234"
+- **Try just the business name**: Remove location qualifiers
+- **Check spelling**: Make sure the name is spelled correctly
+- **Use common names**: "McDonald's" instead of "McDonald's Restaurant & Drive-Thru"
+
+**Using OpenStreetMap (no API key needed):**
+
+If you can't or don't want to use Google Places:
+- OpenStreetMap is free and works automatically
+- Best for well-known chains and landmarks
+- May have less coverage for small local businesses
+- Results are still quite good for most searches
 
 ### Vendor doesn't appear after creating
 

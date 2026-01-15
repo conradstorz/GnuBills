@@ -85,10 +85,19 @@ DEFAULT_CURRENCY = "USD"
 # =============================================================================
 
 # Google Places API (most accurate, requires API key)
-# Get a key at: https://console.cloud.google.com/
-GOOGLE_PLACES_API_KEY = ""  # Leave empty to skip Google
+# 
+# HOW TO GET A GOOGLE PLACES API KEY:
+# 1. Go to: https://console.cloud.google.com/
+# 2. Create a new project (or select existing)
+# 3. Enable "Places API" in API Library
+# 4. Go to "Credentials" and create API key
+# 5. (Recommended) Restrict key to Places API only
+# 6. Paste your key below:
+#
+GOOGLE_PLACES_API_KEY = ""  # Paste your API key here (leave empty to use OpenStreetMap only)
 
-# OpenStreetMap Nominatim (free, no key needed)
+# OpenStreetMap Nominatim (free fallback, no key needed)
+# Automatically used when Google API key is not configured
 # Be respectful of usage limits: max 1 request per second
 USE_OPENSTREETMAP = True
 
