@@ -382,33 +382,37 @@ class AddressLookupGUI:
             messagebox.showwarning("No Vendor Name", "Please enter a vendor name first.")
             return
         
+        # Progress callback to update status
+        def update_progress(message: str):
+            self.status_var.set(message)
+            self.root.update()
+        
         # Try Google Places first
         results = None
         source = None
         
         if config.GOOGLE_PLACES_API_KEY:
-            self.status_var.set("Searching Google Places...")
-            self.root.update()
+            update_progress("Searching Google Places...")
             
             try:
                 # Call Google Places API with return_all=True to get all results
-                results = lookup_google_places(vendor_name, return_all=True)
+                results = lookup_google_places(vendor_name, return_all=True, 
+                                              progress_callback=update_progress)
                 source = "Google Places"
                 
             except Exception as e:
                 logger.error(f"Error searching Google Places: {e}")
-                self.status_var.set("Google failed, trying OpenStreetMap...")
-                self.root.update()
+                update_progress("Google failed, trying OpenStreetMap...")
         else:
             logger.info("Google Places API key not configured, using OpenStreetMap")
         
         # Try OpenStreetMap as fallback
         if not results and config.USE_OPENSTREETMAP:
-            self.status_var.set("Searching OpenStreetMap...")
-            self.root.update()
+            update_progress("Searching OpenStreetMap...")
             
             try:
-                osm_results = lookup_openstreetmap(vendor_name, return_all=True)
+                osm_results = lookup_openstreetmap(vendor_name, return_all=True,
+                                                  progress_callback=update_progress)
                 
                 if osm_results:
                     results = osm_results
@@ -417,7 +421,7 @@ class AddressLookupGUI:
                     
             except Exception as e:
                 logger.error(f"Error searching OpenStreetMap: {e}")
-                self.status_var.set(f"Search error: {e}")
+                update_progress(f"Search error: {e}")
         
         # Handle no results
         if not results:

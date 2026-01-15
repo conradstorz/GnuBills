@@ -59,7 +59,53 @@ def _generate_fuzzy_search_terms(business_name: str) -> List[str]:
     return variations
 
 
-def lookup_google_places(business_name: str, locality: str = None, return_all: bool = False) -> Optional[Dict]:
+def _filter_results_by_name_match(results: list, original_search: str, min_word_matches: int = 1) -> list:
+    """
+    Filter search results to keep only those that match multiple words from original search.
+    
+    Args:
+        results: List of search results
+        original_search: The original business name searched for
+        min_word_matches: Minimum number of words that must match
+        
+    Returns:
+        Filtered list of results
+    """
+    import re
+    
+    # Extract meaningful words from original search (2+ chars, not common words)
+    search_words = [w.lower() for w in re.findall(r'\b\w{2,}\b', original_search)]
+    
+    if len(search_words) <= 1:
+        # If only one search word, return all results
+        return results
+    
+    filtered = []
+    for result in results:
+        # Get the name from the result
+        name = result.get('name', '').lower()
+        display_name = result.get('display_name', '').lower()
+        formatted_address = result.get('formatted_address', '').lower()
+        
+        # Combine all text to search
+        combined_text = f"{name} {display_name} {formatted_address}"
+        
+        # Count how many search words appear in the result
+        matches = sum(1 for word in search_words if word in combined_text)
+        
+        # Keep if at least min_word_matches words match
+        if matches >= min_word_matches:
+            result['_word_matches'] = matches
+            filtered.append(result)
+    
+    # Sort by number of word matches (descending) and then by distance
+    filtered.sort(key=lambda x: (-x.get('_word_matches', 0), x.get('_distance', 999)))
+    
+    return filtered
+
+
+def lookup_google_places(business_name: str, locality: str = None, return_all: bool = False, 
+                         progress_callback=None) -> Optional[Dict]:
     """
     Search for a business using Google Places API.
     
@@ -67,6 +113,7 @@ def lookup_google_places(business_name: str, locality: str = None, return_all: b
         business_name: Business name to search for
         locality: Location/city to search in (defaults to config.DEFAULT_LOCALITY)
         return_all: If True, returns a list of all results instead of just the best match
+        progress_callback: Optional callback function(message: str) to report progress
     
     Returns dict with:
         - name: Business name from Google
@@ -95,6 +142,8 @@ def lookup_google_places(business_name: str, locality: str = None, return_all: b
     # Build search query
     query = f"{business_name} {locality}"
     logger.debug(f"Google Places search query: '{query}'")
+    if progress_callback:
+        progress_callback(f"Searching Google: {business_name}...")
     
     try:
         # Text Search API
@@ -133,6 +182,8 @@ def lookup_google_places(business_name: str, locality: str = None, return_all: b
             fuzzy_terms = _generate_fuzzy_search_terms(business_name)
             
             for fuzzy_term in fuzzy_terms:
+                if progress_callback:
+                    progress_callback(f"Trying: {fuzzy_term}...")
                 logger.debug(f"Trying fuzzy search term: '{fuzzy_term}'")
                 fuzzy_query = f"{fuzzy_term} {locality}"
                 params['query'] = fuzzy_query
@@ -146,6 +197,15 @@ def lookup_google_places(business_name: str, locality: str = None, return_all: b
                     results = data.get('results', [])
                     if results:
                         logger.info(f"Fuzzy search successful with term '{fuzzy_term}', found {len(results)} results")
+                        # Filter to keep only results matching multiple words from original search
+                        if len(business_name.split()) > 1:
+                            results = _filter_results_by_name_match(results, business_name, min_word_matches=2)
+                            if results:
+                                logger.info(f"After name filtering: {len(results)} results match multiple words")
+                            else:
+                                logger.info("Name filtering removed all results, trying next fuzzy term")
+                                results = []
+                                continue
                         break
             
             if not results:
@@ -153,9 +213,10 @@ def lookup_google_places(business_name: str, locality: str = None, return_all: b
                 log_function_exit("lookup_google_places", None)
                 return [] if return_all else None
         
-        # Filter by distance if we have center coordinates
+        # Filter by distance if we have center coordinates (use 3x radius)
         if config.CENTER_LAT and config.CENTER_LON:
             logger.debug("Filtering results by distance")
+            max_distance = config.SEARCH_RADIUS_MILES * 3  # More permissive
             filtered = []
             for r in results:
                 loc = r.get('geometry', {}).get('location', {})
@@ -164,14 +225,19 @@ def lookup_google_places(business_name: str, locality: str = None, return_all: b
                         config.CENTER_LAT, config.CENTER_LON,
                         loc.get('lat', 0), loc.get('lng', 0)
                     )
-                    if dist <= config.SEARCH_RADIUS_MILES:
+                    if dist <= max_distance:
                         r['_distance'] = dist
                         filtered.append(r)
                         logger.debug(f"Including result '{r.get('name')}' at {dist:.1f} miles")
                     else:
-                        logger.debug(f"Excluding result '{r.get('name')}' at {dist:.1f} miles (too far)")
+                        logger.debug(f"Excluding result '{r.get('name')}' at {dist:.1f} miles (too far, max={max_distance})")
             results = sorted(filtered, key=lambda x: x.get('_distance', 999))
             logger.debug(f"After distance filtering: {len(results)} results")
+            
+            # Take top 20 closest results
+            if len(results) > 20:
+                logger.debug(f"Limiting to top 20 closest results")
+                results = results[:20]
         
         if not results:
             logger.info("No results within search radius")
@@ -289,7 +355,8 @@ def _get_google_place_phone(place_id: str) -> Optional[str]:
         return None
 
 
-def lookup_openstreetmap(business_name: str, locality: str = None, return_all: bool = False) -> Optional[Dict]:
+def lookup_openstreetmap(business_name: str, locality: str = None, return_all: bool = False,
+                         progress_callback=None) -> Optional[Dict]:
     """
     Search for a business using OpenStreetMap Nominatim API.
     
@@ -299,6 +366,7 @@ def lookup_openstreetmap(business_name: str, locality: str = None, return_all: b
         business_name: Business name to search for
         locality: Location/city to search in (defaults to config.DEFAULT_LOCALITY)
         return_all: If True, returns a list of all results instead of just the best match
+        progress_callback: Optional callback function(message: str) to report progress
     
     Returns same structure as lookup_google_places.
     If return_all=True, returns a list of dicts instead.
@@ -312,6 +380,8 @@ def lookup_openstreetmap(business_name: str, locality: str = None, return_all: b
     
     query = f"{business_name} {locality}"
     logger.debug(f"OpenStreetMap search query: '{query}'")
+    if progress_callback:
+        progress_callback(f"Searching OpenStreetMap: {business_name}...")
     
     try:
         # Nominatim requires a User-Agent
@@ -324,23 +394,23 @@ def lookup_openstreetmap(business_name: str, locality: str = None, return_all: b
             'q': query,
             'format': 'json',
             'addressdetails': 1,
-            'limit': 5
+            'limit': 50  # Increased for better coverage
         }
         
-        # Add bounding box if configured
+        # Add viewbox for location bias (but don't bound to it strictly)
         if config.CENTER_LAT and config.CENTER_LON:
-            logger.debug("Adding bounding box for location bias")
-            # Create bounding box (rough approximation)
+            logger.debug("Adding viewbox for location bias")
+            # Create viewbox (rough approximation)
             # 1 degree lat ≈ 69 miles, 1 degree lon varies
             lat_delta = config.SEARCH_RADIUS_MILES / 69
             lon_delta = config.SEARCH_RADIUS_MILES / 54  # Approximate for ~38° latitude
             
-            params['bounded'] = 1
+            # Remove bounded=1 to allow results outside viewbox
             params['viewbox'] = (
                 f"{config.CENTER_LON - lon_delta},{config.CENTER_LAT + lat_delta},"
                 f"{config.CENTER_LON + lon_delta},{config.CENTER_LAT - lat_delta}"
             )
-            logger.debug(f"Bounding box: {params['viewbox']}")
+            logger.debug(f"Viewbox: {params['viewbox']}")
         
         # Rate limiting - Nominatim requires max 1 request/second
         logger.debug("Rate limiting: waiting 1.1 seconds for Nominatim")
@@ -357,8 +427,11 @@ def lookup_openstreetmap(business_name: str, locality: str = None, return_all: b
             logger.info("No results from OpenStreetMap, trying fuzzy matching")
             fuzzy_terms = _generate_fuzzy_search_terms(business_name)
             
+            # Try fuzzy terms with locality first
             for fuzzy_term in fuzzy_terms:
-                logger.debug(f"Trying fuzzy search term: '{fuzzy_term}'")
+                if progress_callback:
+                    progress_callback(f"Trying: {fuzzy_term} (with locality)...")
+                logger.debug(f"Trying fuzzy search term: '{fuzzy_term}' with locality")
                 fuzzy_query = f"{fuzzy_term} {locality}"
                 params['q'] = fuzzy_query
                 
@@ -373,16 +446,56 @@ def lookup_openstreetmap(business_name: str, locality: str = None, return_all: b
                 
                 if results:
                     logger.info(f"Fuzzy search successful with term '{fuzzy_term}', found {len(results)} results")
+                    # Filter to keep only results matching multiple words from original search
+                    if len(business_name.split()) > 1:
+                        results = _filter_results_by_name_match(results, business_name, min_word_matches=2)
+                        if results:
+                            logger.info(f"After name filtering: {len(results)} results match multiple words")
+                        else:
+                            logger.info("Name filtering removed all results, trying next fuzzy term")
+                            results = []  # Clear to try next term
+                            continue
                     break
             
+            # If still no results, try without locality constraint
             if not results:
-                logger.info("No results from OpenStreetMap even with fuzzy matching")
+                if progress_callback:
+                    progress_callback("Trying broader search (no locality)...")
+                logger.info("Trying search without locality constraint")
+                for search_term in [business_name] + fuzzy_terms:
+                    if progress_callback:
+                        progress_callback(f"Trying: {search_term} (broad)...")
+                    logger.debug(f"Trying broad search: '{search_term}'")
+                    params['q'] = search_term
+                    
+                    time.sleep(1.1)
+                    log_api_call("OpenStreetMap Nominatim", "search (broad)", query=search_term[:50])
+                    response = requests.get(url, params=params, headers=headers, timeout=10)
+                    response.raise_for_status()
+                    results = response.json()
+                    
+                    if results:
+                        logger.info(f"Broad search successful with '{search_term}', found {len(results)} results")
+                        # Filter to keep only results matching multiple words from original search
+                        if len(business_name.split()) > 1:
+                            results = _filter_results_by_name_match(results, business_name, min_word_matches=2)
+                            if results:
+                                logger.info(f"After name filtering: {len(results)} results match multiple words")
+                            else:
+                                logger.info("Name filtering removed all results, trying next search term")
+                                results = []
+                                continue
+                        break
+            
+            if not results:
+                logger.info("No results from OpenStreetMap even with fuzzy and broad matching")
                 log_function_exit("lookup_openstreetmap", None)
                 return [] if return_all else None
         
-        # Filter by distance
+        # Filter by distance (use 3x radius for more permissive filtering)
         if config.CENTER_LAT and config.CENTER_LON:
             logger.debug("Filtering results by distance")
+            max_distance = config.SEARCH_RADIUS_MILES * 3  # More permissive
             filtered = []
             for r in results:
                 lat = float(r.get('lat', 0))
@@ -390,14 +503,19 @@ def lookup_openstreetmap(business_name: str, locality: str = None, return_all: b
                 dist = calculate_distance_miles(
                     config.CENTER_LAT, config.CENTER_LON, lat, lon
                 )
-                if dist <= config.SEARCH_RADIUS_MILES:
+                if dist <= max_distance:
                     r['_distance'] = dist
                     filtered.append(r)
                     logger.debug(f"Including result at {dist:.1f} miles")
                 else:
-                    logger.debug(f"Excluding result at {dist:.1f} miles (too far)")
+                    logger.debug(f"Excluding result at {dist:.1f} miles (too far, max={max_distance})")
             results = sorted(filtered, key=lambda x: x.get('_distance', 999))
             logger.debug(f"After distance filtering: {len(results)} results")
+            
+            # Take top 20 closest results
+            if len(results) > 20:
+                logger.debug(f"Limiting to top 20 closest results")
+                results = results[:20]
         
         if not results:
             logger.info("No results within search radius")
