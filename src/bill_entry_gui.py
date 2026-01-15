@@ -44,10 +44,13 @@ class SimpleBillEntryGUI:
         # Status
         self.status_var = tk.StringVar()
         self.status_var.set("Ready")
+        self.vendor_stats_var = tk.StringVar()
+        self.vendor_stats_var.set("Vendors: Loading...")
         
         # Build UI
         self._create_widgets()
         self._load_current_bills()
+        self._update_vendor_stats()  # Load vendor statistics
         
         # Bind keyboard shortcuts
         self.root.bind('<Control-s>', lambda e: self._save_bill())
@@ -171,6 +174,7 @@ class SimpleBillEntryGUI:
         status_frame.columnconfigure(0, weight=1)
         
         ttk.Label(status_frame, textvariable=self.status_var, relief="sunken", anchor="w").grid(row=0, column=0, sticky="ew")
+        ttk.Label(status_frame, textvariable=self.vendor_stats_var, relief="sunken", anchor="e").grid(row=0, column=1, sticky="ew")
         
         log_function_exit("SimpleBillEntryGUI._create_widgets")
     
@@ -294,6 +298,35 @@ class SimpleBillEntryGUI:
         except Exception as e:
             logger.error(f"Error loading bills: {e}")
             messagebox.showerror("Error", f"Error loading bills: {e}")
+    
+    def _update_vendor_stats(self):
+        """Update vendor statistics display."""
+        try:
+            # Count vendors in JSON
+            json_count = 0
+            try:
+                from vendor_manager import VendorManager
+                vendor_mgr = VendorManager()
+                json_count = len(vendor_mgr.vendors.get('vendors', {}))
+            except Exception as e:
+                logger.warning(f"Could not load JSON vendors: {e}")
+            
+            # Count vendors in GnuCash
+            gnucash_count = 0
+            try:
+                from gnucash_db import get_connection
+                with get_connection() as conn:
+                    cursor = conn.execute("SELECT COUNT(*) FROM vendors")
+                    gnucash_count = cursor.fetchone()[0]
+            except Exception as e:
+                logger.warning(f"Could not count GnuCash vendors: {e}")
+            
+            # Update display
+            self.vendor_stats_var.set(f"Vendors: JSON={json_count} | GnuCash={gnucash_count}")
+            
+        except Exception as e:
+            logger.error(f"Error updating vendor stats: {e}")
+            self.vendor_stats_var.set("Vendors: Error loading stats")
         
         log_function_exit("SimpleBillEntryGUI._load_current_bills")
     
@@ -514,6 +547,8 @@ class SimpleBillEntryGUI:
             script_path = Path(__file__).parent / "vendor_sync.py"
             subprocess.Popen([sys.executable, str(script_path)], cwd=str(Path(__file__).parent))
             self.status_var.set("Launched Vendor Sync")
+            # Update stats after a brief delay to allow sync to complete
+            self.root.after(2000, self._update_vendor_stats)
         except Exception as e:
             logger.error(f"Error launching vendor sync: {e}")
             messagebox.showerror("Error", f"Could not launch vendor sync: {e}")
