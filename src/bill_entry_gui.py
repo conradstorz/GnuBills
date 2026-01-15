@@ -512,7 +512,7 @@ class SimpleBillEntryGUI:
         """Launch the vendor sync utility."""
         try:
             script_path = Path(__file__).parent / "vendor_sync.py"
-            subprocess.Popen([sys.executable, str(script_path), "--gui"], cwd=str(Path(__file__).parent))
+            subprocess.Popen([sys.executable, str(script_path)], cwd=str(Path(__file__).parent))
             self.status_var.set("Launched Vendor Sync")
         except Exception as e:
             logger.error(f"Error launching vendor sync: {e}")
