@@ -17,6 +17,48 @@ class AddressLookupError(Exception):
     pass
 
 
+def _generate_fuzzy_search_terms(business_name: str) -> List[str]:
+    """
+    Generate fuzzy search variations from a business name.
+    Removes suffixes, numbers, and tries shorter forms.
+    
+    Args:
+        business_name: Original business name
+        
+    Returns:
+        List of search term variations, ordered from most to least specific
+    """
+    import re
+    
+    variations = []
+    
+    # Remove common business suffixes
+    suffixes = [
+        r'\s+Inc\.?$', r'\s+LLC\.?$', r'\s+Ltd\.?$', r'\s+Corp\.?$',
+        r'\s+Corporation$', r'\s+Company$', r'\s+Co\.?$',
+        r'\s+Store\s*#?\d*$', r'\s+#\d+$', r'\s+\d+$',
+        r'\s+Supercenter$', r'\s+Center$', r'\s+Market$'
+    ]
+    
+    cleaned = business_name
+    for suffix in suffixes:
+        cleaned = re.sub(suffix, '', cleaned, flags=re.IGNORECASE)
+    
+    if cleaned != business_name:
+        variations.append(cleaned.strip())
+    
+    # Try first two words for multi-word names
+    words = cleaned.split()
+    if len(words) > 2:
+        variations.append(' '.join(words[:2]))
+    
+    # Try first word only (brand name)
+    if len(words) > 1:
+        variations.append(words[0])
+    
+    return variations
+
+
 def lookup_google_places(business_name: str, locality: str = None, return_all: bool = False) -> Optional[Dict]:
     """
     Search for a business using Google Places API.
@@ -87,9 +129,29 @@ def lookup_google_places(business_name: str, locality: str = None, return_all: b
         logger.debug(f"Google Places found {len(results)} results")
         
         if not results:
-            logger.info("No results from Google Places")
-            log_function_exit("lookup_google_places", None)
-            return None
+            logger.info("No results from Google Places, trying fuzzy matching")
+            fuzzy_terms = _generate_fuzzy_search_terms(business_name)
+            
+            for fuzzy_term in fuzzy_terms:
+                logger.debug(f"Trying fuzzy search term: '{fuzzy_term}'")
+                fuzzy_query = f"{fuzzy_term} {locality}"
+                params['query'] = fuzzy_query
+                
+                log_api_call("Google Places", "textsearch (fuzzy)", query=fuzzy_query[:50])
+                response = requests.get(url, params=params, timeout=10)
+                response.raise_for_status()
+                data = response.json()
+                
+                if data.get('status') == 'OK':
+                    results = data.get('results', [])
+                    if results:
+                        logger.info(f"Fuzzy search successful with term '{fuzzy_term}', found {len(results)} results")
+                        break
+            
+            if not results:
+                logger.info("No results from Google Places even with fuzzy matching")
+                log_function_exit("lookup_google_places", None)
+                return [] if return_all else None
         
         # Filter by distance if we have center coordinates
         if config.CENTER_LAT and config.CENTER_LON:
@@ -292,9 +354,31 @@ def lookup_openstreetmap(business_name: str, locality: str = None, return_all: b
         logger.debug(f"OpenStreetMap found {len(results)} results")
         
         if not results:
-            logger.info("No results from OpenStreetMap")
-            log_function_exit("lookup_openstreetmap", None)
-            return None
+            logger.info("No results from OpenStreetMap, trying fuzzy matching")
+            fuzzy_terms = _generate_fuzzy_search_terms(business_name)
+            
+            for fuzzy_term in fuzzy_terms:
+                logger.debug(f"Trying fuzzy search term: '{fuzzy_term}'")
+                fuzzy_query = f"{fuzzy_term} {locality}"
+                params['q'] = fuzzy_query
+                
+                # Rate limiting - Nominatim requires max 1 request/second
+                logger.debug("Rate limiting: waiting 1.1 seconds for Nominatim")
+                time.sleep(1.1)
+                
+                log_api_call("OpenStreetMap Nominatim", "search (fuzzy)", query=fuzzy_query[:50])
+                response = requests.get(url, params=params, headers=headers, timeout=10)
+                response.raise_for_status()
+                results = response.json()
+                
+                if results:
+                    logger.info(f"Fuzzy search successful with term '{fuzzy_term}', found {len(results)} results")
+                    break
+            
+            if not results:
+                logger.info("No results from OpenStreetMap even with fuzzy matching")
+                log_function_exit("lookup_openstreetmap", None)
+                return [] if return_all else None
         
         # Filter by distance
         if config.CENTER_LAT and config.CENTER_LON:

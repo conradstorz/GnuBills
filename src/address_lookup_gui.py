@@ -521,8 +521,58 @@ class AddressLookupGUI:
                 state = addr_parts.get('state', '')
                 zip_code = addr_parts.get('zip', '')
             
+            # Check for name collision when creating a new vendor
+            result_name = result.get('name', self.vendor_name_var.get())
+            final_vendor_name = result_name
+            
+            # If creating a new vendor (name field is editable) and name would collide
+            if str(self.name_entry.cget('state')) != 'readonly':
+                test_key = strip_vendor_name(result_name)
+                
+                # Check if this key already exists in the database
+                if test_key in self.vendor_manager.vendors.get('vendors', {}):
+                    # Name collision - make it unique by appending location
+                    location_suffix = None
+                    
+                    # Try to use city first
+                    if city:
+                        location_suffix = city
+                    # Fall back to street address
+                    elif street:
+                        # Use just the street name without number for readability
+                        import re
+                        street_parts = street.split()
+                        # Take everything after the first number
+                        street_name = ' '.join([p for p in street_parts if not p.isdigit()])
+                        location_suffix = street_name.strip()
+                    
+                    if location_suffix:
+                        final_vendor_name = f"{result_name} - {location_suffix}"
+                        logger.info(f"Name collision detected. Changed '{result_name}' to '{final_vendor_name}'")
+                        
+                        # Verify the new name is unique, if not add a number
+                        counter = 2
+                        test_key = strip_vendor_name(final_vendor_name)
+                        while test_key in self.vendor_manager.vendors.get('vendors', {}):
+                            final_vendor_name = f"{result_name} - {location_suffix} {counter}"
+                            test_key = strip_vendor_name(final_vendor_name)
+                            counter += 1
+                        
+                        self.status_var.set(f"Name collision - renamed to: {final_vendor_name}")
+                        logger.info(f"Final unique name: {final_vendor_name}")
+                
+                # Update vendor name field and create NEW vendor data dictionary
+                self.vendor_name_var.set(final_vendor_name)
+                self.vendor_key = strip_vendor_name(final_vendor_name)
+                # Create a fresh vendor_data dict to avoid modifying existing vendor
+                self.vendor_data = {
+                    'display_name': final_vendor_name,
+                    'search_name': final_vendor_name.lower()
+                }
+                logger.debug(f"Created new vendor_data for: {final_vendor_name}")
+            
             # Populate fields
-            self.addr_name_var.set(result.get('name', self.vendor_name_var.get()))
+            self.addr_name_var.set(result.get('name', final_vendor_name))
             self.addr_line1_var.set(street)
             
             self.city_var.set(city)
