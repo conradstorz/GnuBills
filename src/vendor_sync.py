@@ -2,6 +2,18 @@
 Standalone Vendor Sync Utility
 Syncs vendors from vendor_database.json to GnuCash database.
 Provides API for vendor validation and JSON manipulation.
+
+Key Features:
+- Bidirectional sync between JSON and GnuCash
+- Automatic duplicate detection and cleanup
+- Stale reference validation
+- Address data preservation
+
+The utility automatically validates the JSON database on load and:
+1. Detects duplicate vendor entries (multiple entries with same GUID)
+2. Removes duplicates, keeping the first entry
+3. Saves the cleaned database automatically
+4. Validates vendor GUIDs against GnuCash database
 """
 
 import json
@@ -51,6 +63,64 @@ class VendorSyncUtility:
         # Ensure data directory exists
         data_dir.mkdir(exist_ok=True)
     
+    def validate_and_cleanup_duplicates(self, auto_fix: bool = True) -> Dict[str, any]:
+        """Detect and optionally remove duplicate vendor entries sharing the same GUID.
+        
+        Args:
+            auto_fix: If True, automatically remove duplicate entries keeping only the first
+            
+        Returns:
+            Dict with 'duplicates_found', 'duplicates_removed', and 'duplicate_groups' info
+        """
+        result = {
+            'duplicates_found': 0,
+            'duplicates_removed': 0,
+            'duplicate_groups': []
+        }
+        
+        # Build GUID to vendor keys mapping
+        guid_map = {}
+        for vendor_key, vendor_data in self.vendors_data.items():
+            guid = vendor_data.get('gnucash_guid')
+            if guid:  # Only check vendors that have been synced
+                if guid not in guid_map:
+                    guid_map[guid] = []
+                guid_map[guid].append(vendor_key)
+        
+        # Find duplicates (GUIDs with multiple vendor keys)
+        duplicate_guids = {guid: keys for guid, keys in guid_map.items() if len(keys) > 1}
+        
+        if duplicate_guids:
+            result['duplicates_found'] = sum(len(keys) - 1 for keys in duplicate_guids.values())
+            
+            for guid, vendor_keys in duplicate_guids.items():
+                vendor_names = [self.vendors_data[k].get('display_name', k) for k in vendor_keys]
+                result['duplicate_groups'].append({
+                    'guid': guid,
+                    'vendor_keys': vendor_keys,
+                    'vendor_names': vendor_names
+                })
+                
+                logger.warning(
+                    f"Found {len(vendor_keys)} vendors sharing GUID {guid}: {', '.join(vendor_names)}"
+                )
+                print(f"⚠️  Duplicate vendors found (same GUID {guid[:8]}...):")
+                for i, (key, name) in enumerate(zip(vendor_keys, vendor_names)):
+                    status = "(keeping)" if i == 0 else "(removing)" if auto_fix else "(duplicate)"
+                    print(f"   {i+1}. {name} [{key}] {status}")
+                
+                if auto_fix:
+                    # Keep the first entry, remove the rest
+                    keys_to_remove = vendor_keys[1:]
+                    for key in keys_to_remove:
+                        logger.info(f"Removing duplicate vendor: {key} ({self.vendors_data[key].get('display_name')})")
+                        del self.vendors_data[key]
+                        result['duplicates_removed'] += 1
+                    
+                    print(f"   ✅ Removed {len(keys_to_remove)} duplicate(s), kept {vendor_keys[0]}")
+        
+        return result
+    
     def load_vendor_database(self) -> bool:
         """Load vendor database from JSON file."""
         try:
@@ -69,6 +139,15 @@ class VendorSyncUtility:
             if self.stats['total'] == 0:
                 print("⚠️  No vendors found in database")
                 return False
+            
+            # Validate and cleanup duplicates
+            dup_result = self.validate_and_cleanup_duplicates(auto_fix=True)
+            if dup_result['duplicates_removed'] > 0:
+                print(f"🧹 Cleaned up {dup_result['duplicates_removed']} duplicate vendor entries")
+                self.stats['total'] = len(self.vendors_data)
+                # Save cleaned database immediately
+                self.save_vendor_database()
+                print(f"💾 Saved cleaned database: {self.stats['total']} unique vendors")
                 
             return True
             
