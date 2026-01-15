@@ -108,9 +108,7 @@ class SimpleBillEntryGUI:
         tools_frame = ttk.LabelFrame(main_frame, text="External Tools", padding="10")
         tools_frame.grid(row=0, column=2, sticky="new", padx=(10, 0))
         
-        ttk.Button(tools_frame, text="🔍 Vendor Manager:\nFind, create,\nand manage vendors", 
-                   command=self._launch_vendor_manager, width=20).pack(pady=5, fill="x")
-        ttk.Button(tools_frame, text="📧 Address Lookup:\nSearch for vendor\naddresses online", 
+        ttk.Button(tools_frame, text="🔍 Manage Vendors:\nFind, create,\nand manage vendors", 
                    command=self._launch_address_lookup, width=20).pack(pady=5, fill="x")
         ttk.Button(tools_frame, text="🗃️ Vendor Sync:\nSync Vendor Records\nbetween this tool and\nthe GnuCash Database", 
                    command=self._launch_vendor_sync, width=20).pack(pady=5, fill="x")
@@ -484,18 +482,8 @@ class SimpleBillEntryGUI:
         
         self.vendor_details_text.config(state="disabled")
     
-    def _launch_vendor_manager(self):
-        """Launch the vendor management GUI."""
-        try:
-            script_path = Path(__file__).parent / "vendor_manager_gui.py"
-            subprocess.Popen([sys.executable, str(script_path)], cwd=str(Path(__file__).parent))
-            self.status_var.set("Launched Vendor Manager")
-        except Exception as e:
-            logger.error(f"Error launching vendor manager: {e}")
-            messagebox.showerror("Error", f"Could not launch vendor manager: {e}")
-    
     def _launch_address_lookup(self):
-        """Launch the address lookup GUI with selected vendor if available."""
+        """Launch the address lookup GUI (vendor manager) with selected vendor if available."""
         try:
             script_path = Path(__file__).parent / "address_lookup_gui.py"
             
@@ -510,15 +498,15 @@ class SimpleBillEntryGUI:
             cmd = [sys.executable, str(script_path)]
             if vendor_name:
                 cmd.append(vendor_name)
-                self.status_var.set(f"Launched Address Lookup for {vendor_name}")
+                self.status_var.set(f"Launched Vendor Manager for {vendor_name}")
             else:
-                self.status_var.set("Launched Address Lookup")
+                self.status_var.set("Launched Vendor Manager")
             
             subprocess.Popen(cmd, cwd=str(Path(__file__).parent))
             
         except Exception as e:
-            logger.error(f"Error launching address lookup: {e}")
-            messagebox.showerror("Error", f"Could not launch address lookup: {e}")
+            logger.error(f"Error launching vendor manager: {e}")
+            messagebox.showerror("Error", f"Could not launch vendor manager: {e}")
     
     def _launch_vendor_sync(self):
         """Launch the vendor sync utility."""
