@@ -12,8 +12,7 @@ import gnucash_db
 import address_lookup
 from utils import (
     fuzzy_match_vendor, 
-    strip_vendor_name, 
-    make_expense_account_name,
+    strip_vendor_name,
     format_address_for_display,
     confirm_proceed
 )
@@ -271,29 +270,6 @@ def create_new_vendor(self, search_name: str, display_name: str = None) -> str:
     else:
         logger.info("All address fields populated for GnuCash")
     
-    # Create expense account name
-    expense_acct_name = make_expense_account_name(display_name)
-    logger.debug(f"Generated expense account name: '{expense_acct_name}'")
-    
-    # Check if expense account exists
-    existing_accts = gnucash_db.find_expense_accounts_like(expense_acct_name)
-    expense_acct_guid = None
-    
-    if existing_accts:
-        print(f"\nFound existing expense account: {existing_accts[0]['name']}")
-        logger.info(f"Using existing expense account: {existing_accts[0]['name']}")
-        expense_acct_guid = existing_accts[0]['guid']
-        expense_acct_name = existing_accts[0]['name']
-    else:
-        print(f"\nWill create expense account: {expense_acct_name}")
-        logger.debug(f"No existing expense account found, will create: {expense_acct_name}")
-        if confirm_proceed("Create this expense account?"):
-            logger.info(f"Creating new expense account: {expense_acct_name}")
-            expense_acct_guid = gnucash_db.create_expense_account(expense_acct_name)
-            logger.debug(f"Created expense account with GUID: {expense_acct_guid}")
-        else:
-            logger.warning("User declined expense account creation")
-    
     # Create vendor in GnuCash with comprehensive logging
     print(f"\nCreating vendor in GnuCash...")
     logger.info(f"Calling gnucash_db.create_vendor for '{display_name}'...")
@@ -408,38 +384,6 @@ def create_new_vendor(self, search_name: str, display_name: str = None) -> str:
         self.vendors['aliases'][alias.lower()] = vendor_key
         self.save()
         logger.info(f"Added alias '{alias}' -> '{vendor_key}'")
-    
-    def get_or_create_expense_account(self, vendor_data: Dict) -> str:
-        """
-        Get or create the expense account for a vendor.
-        
-        Returns the account GUID.
-        """
-        # Check if we have it cached
-        if vendor_data.get('expense_account_guid'):
-            return vendor_data['expense_account_guid']
-        
-        # Try to find by name
-        acct_name = vendor_data.get('expense_account')
-        if not acct_name:
-            acct_name = make_expense_account_name(vendor_data.get('display_name', ''))
-        
-        # Search for existing account
-        existing = gnucash_db.find_expense_accounts_like(acct_name)
-        if existing:
-            return existing[0]['guid']
-        
-        # Also try exact match
-        exact = gnucash_db.get_account_by_name(acct_name)
-        if exact:
-            return exact['guid']
-        
-        # Create new account
-        print(f"\nExpense account not found: {acct_name}")
-        if confirm_proceed("Create it?"):
-            return gnucash_db.create_expense_account(acct_name)
-        
-        raise ValueError(f"No expense account for vendor: {vendor_data.get('display_name')}")
     
     def list_vendors(self) -> List[Dict]:
         """List all vendors from JSON database."""

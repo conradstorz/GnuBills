@@ -84,6 +84,126 @@ class VendorSyncProgressDialog:
         self.dialog.destroy()
 
 
+class AccountSelectionDialog:
+    """Dialog for selecting expense and checking accounts before processing bills."""
+    
+    def __init__(self, parent):
+        self.dialog = tk.Toplevel(parent)
+        self.dialog.title("Select Accounts for Bill Processing")
+        self.dialog.geometry("600x400")
+        self.dialog.transient(parent)
+        self.dialog.grab_set()
+        
+        self.selected_expense_guid = None
+        self.selected_checking_guid = None
+        self.cancelled = True
+        
+        self._create_widgets()
+        
+    def _create_widgets(self):
+        """Create dialog widgets."""
+        frame = ttk.Frame(self.dialog, padding=20)
+        frame.pack(fill="both", expand=True)
+        
+        # Title
+        ttk.Label(
+            frame, 
+            text="Select accounts for processing bills:",
+            font=('TkDefaultFont', 11, 'bold')
+        ).pack(anchor="w", pady=(0, 15))
+        
+        # Expense Account Section
+        exp_frame = ttk.LabelFrame(frame, text="Expense Account", padding=10)
+        exp_frame.pack(fill="x", pady=(0, 15))
+        
+        ttk.Label(exp_frame, text="Select an expense account (non-placeholder):").pack(anchor="w", pady=(0, 5))
+        
+        self.expense_var = tk.StringVar()
+        self.expense_combo = ttk.Combobox(exp_frame, textvariable=self.expense_var, state="readonly", width=70)
+        self.expense_combo.pack(fill="x")
+        
+        # Checking Account Section
+        check_frame = ttk.LabelFrame(frame, text="Checking Account", padding=10)
+        check_frame.pack(fill="x", pady=(0, 15))
+        
+        ttk.Label(check_frame, text="Select a checking account (non-placeholder):").pack(anchor="w", pady=(0, 5))
+        
+        self.checking_var = tk.StringVar()
+        self.checking_combo = ttk.Combobox(check_frame, textvariable=self.checking_var, state="readonly", width=70)
+        self.checking_combo.pack(fill="x")
+        
+        # Status message
+        self.status_var = tk.StringVar()
+        self.status_label = ttk.Label(frame, textvariable=self.status_var, foreground="red")
+        self.status_label.pack(fill="x", pady=(0, 10))
+        
+        # Buttons
+        btn_frame = ttk.Frame(frame)
+        btn_frame.pack(fill="x")
+        
+        ttk.Button(btn_frame, text="Cancel", command=self.cancel).pack(side="right", padx=(5, 0))
+        ttk.Button(btn_frame, text="OK", command=self.ok).pack(side="right")
+        
+        # Load accounts
+        self._load_accounts()
+        
+    def _load_accounts(self):
+        """Load accounts from database."""
+        try:
+            # Get expense accounts
+            expense_accounts = gnucash_db.get_expense_accounts()
+            if not expense_accounts:
+                self.status_var.set("⚠️ No expense accounts found. Please create an expense account in GnuCash first.")
+                self.expense_combo.config(state="disabled")
+            else:
+                expense_items = [f"{acc['name']} ({acc['guid'][:8]}...)" for acc in expense_accounts]
+                self.expense_combo['values'] = expense_items
+                self.expense_accounts = expense_accounts
+                if expense_items:
+                    self.expense_combo.current(0)
+            
+            # Get checking accounts
+            checking_accounts = gnucash_db.get_checking_accounts()
+            if not checking_accounts:
+                self.status_var.set("⚠️ No checking accounts found. Please create a checking account in GnuCash first.")
+                self.checking_combo.config(state="disabled")
+            else:
+                checking_items = [f"{acc['name']} ({acc['guid'][:8]}...)" for acc in checking_accounts]
+                self.checking_combo['values'] = checking_items
+                self.checking_accounts = checking_accounts
+                if checking_items:
+                    self.checking_combo.current(0)
+                    
+        except Exception as e:
+            logger.error(f"Failed to load accounts: {e}")
+            self.status_var.set(f"Error loading accounts: {e}")
+    
+    def ok(self):
+        """OK button handler."""
+        # Validate selections
+        exp_idx = self.expense_combo.current()
+        check_idx = self.checking_combo.current()
+        
+        if exp_idx < 0:
+            self.status_var.set("Please select an expense account")
+            return
+            
+        if check_idx < 0:
+            self.status_var.set("Please select a checking account")
+            return
+        
+        # Get selected GUIDs
+        self.selected_expense_guid = self.expense_accounts[exp_idx]['guid']
+        self.selected_checking_guid = self.checking_accounts[check_idx]['guid']
+        self.cancelled = False
+        self.dialog.destroy()
+    
+    def cancel(self):
+        """Cancel button handler."""
+        self.cancelled = True
+        self.dialog.destroy()
+
+
 class SimpleBillEntryGUI:
     """Simple GUI application for bill entry - no database operations."""
     
@@ -101,6 +221,17 @@ class SimpleBillEntryGUI:
         self.status_var.set("Ready")
         self.vendor_stats_var = tk.StringVar()
         self.vendor_stats_var.set("Vendors: Loading...")
+        
+        # Verify/create AP account at startup
+        try:
+            ap_guid = gnucash_db.ensure_ap_account_exists()
+            logger.info(f"AP account verified/created: {ap_guid}")
+        except Exception as e:
+            logger.error(f"Failed to verify AP account at startup: {e}")
+            messagebox.showerror(
+                "Database Error",
+                f"Could not verify Accounts Payable account:\n{e}\n\nThe application may not function correctly."
+            )
         
         # Build UI
         self._create_widgets()
@@ -694,6 +825,22 @@ class SimpleBillEntryGUI:
             )
             return
         
+        # Show account selection dialog
+        account_dialog = AccountSelectionDialog(self.root)
+        self.root.wait_window(account_dialog.dialog)
+        
+        # If user cancelled, abort
+        if account_dialog.cancelled:
+            logger.info("Bill processing cancelled by user")
+            return
+        
+        # Get selected accounts
+        expense_guid = account_dialog.selected_expense_guid
+        checking_guid = account_dialog.selected_checking_guid
+        
+        logger.info(f"Selected expense account: {expense_guid}")
+        logger.info(f"Selected checking account: {checking_guid}")
+        
         # Create progress dialog
         progress = VendorSyncProgressDialog(self.root)
         progress.dialog.title("Bill Processing Progress")
@@ -701,8 +848,7 @@ class SimpleBillEntryGUI:
         def run_bill_processor():
             """Run bill processor in a thread."""
             try:
-                # Import bill processor module
-                import bill_processor
+                # Import required modules
                 from vendor_manager import VendorManager
                 from utils import parse_input_line, format_currency
                 
@@ -798,38 +944,8 @@ class SimpleBillEntryGUI:
                                         progress.append_text("")
                                         continue
                                 
-                                # Get expense account (non-interactive)
-                                expense_acct_guid = None
-                                
-                                # Check if we have it cached
-                                if vendor_data.get('expense_account_guid'):
-                                    expense_acct_guid = vendor_data.get('expense_account_guid')
-                                else:
-                                    # Try to find by name
-                                    from utils import make_expense_account_name
-                                    acct_name = vendor_data.get('expense_account')
-                                    if not acct_name:
-                                        acct_name = make_expense_account_name(vendor_data.get('display_name', ''))
-                                    
-                                    # Search for existing account
-                                    existing = gnucash_db.find_expense_accounts_like(acct_name)
-                                    if existing:
-                                        expense_acct_guid = existing[0]['guid']
-                                    else:
-                                        # Try exact match
-                                        exact = gnucash_db.get_account_by_name(acct_name)
-                                        if exact:
-                                            expense_acct_guid = exact['guid']
-                                        else:
-                                            # Create new account automatically (non-interactive)
-                                            try:
-                                                expense_acct_guid = gnucash_db.create_expense_account(acct_name)
-                                                progress.append_text(f"  ✓ Created expense account: {acct_name}")
-                                            except Exception as e:
-                                                progress.append_text(f"  ✗ Could not create expense account: {e}")
-                                                results['failed'] += 1
-                                                progress.append_text("")
-                                                continue
+                                # Use the user-selected expense account for all bills
+                                expense_acct_guid = expense_guid
                                 
                                 # Create the bill
                                 bill_guid = gnucash_db.create_posted_bill(

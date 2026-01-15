@@ -46,16 +46,6 @@ def strip_vendor_name(name: str) -> str:
     return stripped
 
 
-def make_expense_account_name(vendor_name: str) -> str:
-    """
-    Create expense account name from vendor name.
-    
-    "Acme Electric Co." -> "cmsnpd_acme_electric_co"
-    """
-    stripped = strip_vendor_name(vendor_name)
-    return f"{config.EXPENSE_ACCOUNT_PREFIX}{stripped}"
-
-
 def parse_input_line(line: str) -> Optional[dict]:
     """
     Parse a bill input line.

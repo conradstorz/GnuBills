@@ -51,18 +51,6 @@ DEFAULT_LOCALITY = f"{LOCALITY_CITY}, {LOCALITY_STATE}"
 # GNUCASH SETTINGS
 # =============================================================================
 
-# Parent account for new expense accounts (created under this)
-# IMPORTANT: Must be a NON-PLACEHOLDER account! Placeholder accounts cannot 
-# accept transactions in GnuCash. Use an account that can hold transactions.
-# Example: "SAMUSE_Gameroom_Commissions_Paid" - not "Expenses root" (placeholder)
-DEFAULT_EXPENSE_PARENT = "SAMUSE_Gameroom_Commissions_Paid"
-
-# Fallback expense parent name (created at top level if nothing else works)
-FALLBACK_EXPENSE_PARENT = "Expenses"
-
-# Expense account prefix
-EXPENSE_ACCOUNT_PREFIX = "cmsnpd_"
-
 # Accounts Payable account path
 ACCOUNTS_PAYABLE_PATH = "Liabilities:Accounts Payable"
 
