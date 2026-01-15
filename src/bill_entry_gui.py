@@ -180,6 +180,7 @@ class SimpleBillEntryGUI:
     
     def _set_today(self):
         """Set date entry to today."""
+        logger.debug("Setting date to today")
         self.date_entry.delete(0, tk.END)
         self.date_entry.insert(0, date.today().strftime("%Y-%m-%d"))
     
@@ -247,6 +248,7 @@ class SimpleBillEntryGUI:
     
     def _clear_form(self):
         """Clear all form fields."""
+        logger.debug("Clearing form fields")
         self.vendor_entry.delete(0, tk.END)
         self.amount_entry.delete(0, tk.END)
         self.memo_entry.delete(0, tk.END)
@@ -332,13 +334,16 @@ class SimpleBillEntryGUI:
     
     def _edit_selected_bill(self):
         """Edit the selected bill."""
+        logger.debug("Editing selected bill")
         selection = self.bills_tree.selection()
         if not selection:
+            logger.warning("No bill selected for editing")
             messagebox.showwarning("No Selection", "Please select a bill to edit.")
             return
         
         item = selection[0]
         values = self.bills_tree.item(item, "values")
+        logger.info(f"Loading bill for editing: vendor={values[0]}, amount={values[1]}")
         
         # Fill form with selected bill data
         self.vendor_entry.delete(0, tk.END)
@@ -361,20 +366,25 @@ class SimpleBillEntryGUI:
     
     def _delete_selected_bill(self):
         """Delete the selected bill."""
+        logger.debug("Attempting to delete selected bill")
         selection = self.bills_tree.selection()
         if not selection:
+            logger.warning("No bill selected for deletion")
             messagebox.showwarning("No Selection", "Please select a bill to delete.")
             return
         
         item = selection[0]
         values = self.bills_tree.item(item, "values")
+        logger.info(f"Prompting to delete bill: vendor={values[0]}, amount={values[1]}")
         
         if messagebox.askyesno("Confirm Delete", f"Delete bill for {values[0]} - {values[1]}?"):
+            logger.info(f"Deleting bill for vendor: {values[0]}")
             self._delete_selected_bill_from_file(item)
             self.status_var.set(f"Deleted bill: {values[0]}")
     
     def _delete_selected_bill_from_file(self, tree_item):
         """Remove the selected bill from the file."""
+        logger.debug("Removing bill from file")
         values = self.bills_tree.item(tree_item, "values")
         vendor_name = values[0]
         amount_str = values[1].replace('$', '')
@@ -423,7 +433,9 @@ class SimpleBillEntryGUI:
     
     def _clear_all_bills(self):
         """Clear all bills from the file."""
+        logger.debug("Clear all bills requested")
         if messagebox.askyesno("Confirm Clear All", "Delete ALL bills from the queue?"):
+            logger.warning("Clearing all bills from queue")
             bills_file = Path(config.PROJECT_ROOT) / "data" / "bills_to_process.txt"
             try:
                 bills_file.unlink(missing_ok=True)
@@ -435,6 +447,7 @@ class SimpleBillEntryGUI:
     
     def _on_bill_selected(self, event):
         """Handle bill selection - display vendor details."""
+        logger.debug("Bill selection changed")
         selection = self.bills_tree.selection()
         if not selection:
             # Clear vendor details
@@ -447,6 +460,7 @@ class SimpleBillEntryGUI:
         item = selection[0]
         values = self.bills_tree.item(item, "values")
         vendor_name = values[0]
+        logger.info(f"Loading vendor details for: {vendor_name}")
         
         # Update display
         self.vendor_details_text.config(state="normal")
@@ -517,6 +531,7 @@ class SimpleBillEntryGUI:
     
     def _launch_address_lookup(self):
         """Launch the vendor manager GUI with selected vendor if available."""
+        logger.debug("Launching Vendor Manager")
         try:
             script_path = Path(__file__).parent / "vendor_manager_gui.py"
             
@@ -531,8 +546,10 @@ class SimpleBillEntryGUI:
             cmd = [sys.executable, str(script_path)]
             if vendor_name:
                 cmd.append(vendor_name)
+                logger.info(f"Launching Vendor Manager for vendor: {vendor_name}")
                 self.status_var.set(f"Launched Vendor Manager for {vendor_name}")
             else:
+                logger.info("Launching Vendor Manager (no vendor selected)")
                 self.status_var.set("Launched Vendor Manager")
             
             subprocess.Popen(cmd, cwd=str(Path(__file__).parent))
@@ -543,9 +560,11 @@ class SimpleBillEntryGUI:
     
     def _launch_vendor_sync(self):
         """Launch the vendor sync utility."""
+        logger.debug("Launching Vendor Sync")
         try:
             script_path = Path(__file__).parent / "vendor_sync.py"
             subprocess.Popen([sys.executable, str(script_path)], cwd=str(Path(__file__).parent))
+            logger.info("Vendor Sync launched successfully")
             self.status_var.set("Launched Vendor Sync")
             # Update stats after a brief delay to allow sync to complete
             self.root.after(2000, self._update_vendor_stats)
@@ -555,9 +574,11 @@ class SimpleBillEntryGUI:
     
     def _launch_bill_processor(self):
         """Launch the bill processor."""
+        logger.debug("Launching Bill Processor")
         try:
             script_path = Path(__file__).parent / "bill_processor.py"
             subprocess.Popen([sys.executable, str(script_path)], cwd=str(Path(__file__).parent))
+            logger.info("Bill Processor launched successfully")
             self.status_var.set("Launched Bill Processor")
         except Exception as e:
             logger.error(f"Error launching bill processor: {e}")
