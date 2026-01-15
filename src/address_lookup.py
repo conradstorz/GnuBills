@@ -344,60 +344,29 @@ def lookup_openstreetmap(business_name: str, locality: str = None) -> Optional[D
         return None
 
 
-def lookup_address(search_name: str) -> Optional[Dict]:
-    """Enhanced address lookup with detailed logging."""
-    logger.info(f"Starting address lookup for: '{search_name}'")
-    
-    # Try each source in order
-    sources = [
-        ('Google Places', _google_places_lookup),
-        ('Bing Maps', _bing_maps_lookup), 
-        ('Nominatim', _nominatim_lookup)
-    ]
-    
-    for source_name, lookup_func in sources:
-        logger.debug(f"Trying {source_name} for '{search_name}'...")
-        
-        try:
-            result = lookup_func(search_name)
-            
-            if result:
-                logger.info(f"✅ {source_name} found address for '{search_name}'")
-                logger.debug(f"Raw address result: {result}")
-                
-                # Log each field found
-                for field, value in result.items():
-                    if value:
-                        logger.debug(f"  {field}: '{value}'")
-                    else:
-                        logger.debug(f"  {field}: <EMPTY>")
-                
-                return result
-            else:
-                logger.debug(f"❌ {source_name} returned no results for '{search_name}'")
-                
-        except Exception as e:
-            logger.error(f"💥 {source_name} lookup failed for '{search_name}': {e}")
-    
-    logger.warning(f"🚫 ALL address lookup sources failed for: '{search_name}'")
-    return None
-
-
 def _parse_formatted_address(address: str) -> Dict[str, str]:
     """
-    Parse a formatted address string into lines.
+    Parse a formatted address string into granular components.
     
     "123 Main St, Louisville, KY 40201, USA" ->
     {
+        'street': '123 Main St',
+        'city': 'Louisville',
+        'state': 'KY',
+        'zip': '40201',
         'line1': '123 Main St',
         'line2': 'Louisville, KY 40201'
     }
+    
+    Returns both granular components (street, city, state, zip) and
+    traditional line1/line2 format for compatibility.
     """
     log_function_entry("_parse_formatted_address", address=address[:50] if address else None)
     
+    result = {'street': '', 'city': '', 'state': '', 'zip': '', 'line1': '', 'line2': ''}
+    
     if not address:
         logger.debug("Empty address provided")
-        result = {'line1': '', 'line2': ''}
         log_function_exit("_parse_formatted_address", "empty")
         return result
     
@@ -410,63 +379,59 @@ def _parse_formatted_address(address: str) -> Dict[str, str]:
     
     if len(parts) >= 3:
         # Format: "123 Main St, City, State ZIP"
-        line1 = parts[0]
-        line2 = ', '.join(parts[1:])
+        street = parts[0]
+        city = parts[1]
+        
+        # Parse state and ZIP from last part ("KY 40201" or "Kentucky 40201")
+        last_part = parts[2].strip()
+        state = ''
+        zip_code = ''
+        
+        # Split on whitespace to separate state from ZIP
+        last_parts = last_part.split()
+        if len(last_parts) >= 2:
+            state = last_parts[0]
+            zip_code = last_parts[1]
+        elif len(last_parts) == 1:
+            # Could be just state or just ZIP
+            if last_parts[0].isdigit() or '-' in last_parts[0]:
+                zip_code = last_parts[0]
+            else:
+                state = last_parts[0]
+        
+        result = {
+            'street': street,
+            'city': city,
+            'state': state,
+            'zip': zip_code,
+            'line1': street,
+            'line2': f"{city}, {state} {zip_code}".strip()
+        }
+        
     elif len(parts) == 2:
-        line1 = parts[0]
-        line2 = parts[1]
+        # Format: "123 Main St, Louisville"
+        result = {
+            'street': parts[0],
+            'city': parts[1],
+            'state': '',
+            'zip': '',
+            'line1': parts[0],
+            'line2': parts[1]
+        }
     else:
-        line1 = address
-        line2 = ''
+        # Just one part - treat as street
+        result = {
+            'street': address,
+            'city': '',
+            'state': '',
+            'zip': '',
+            'line1': address,
+            'line2': ''
+        }
     
-    return {'line1': line1, 'line2': line2}
-
-
-def prompt_manual_address() -> Dict[str, str]:
-    """
-    Prompt user to enter address manually.
-    
-    Returns dict with addr_name, addr_line1, addr_line2, phone.
-    """
-    log_function_entry("prompt_manual_address")
-    logger.info("Prompting user for manual address entry")
-    
-    print("\n--- Manual Address Entry ---")
-    print("Enter address details (press Enter to skip a field):\n")
-    
-    addr_name = input("Business Name for Address: ").strip()
-    addr_line1 = input("Address Line 1 (street): ").strip()
-    addr_line2 = input("Address Line 2 (city, state zip): ").strip()
-    phone = input("Phone (optional): ").strip()
-    
-    logger.debug(f"User entered manual address: name='{addr_name}', line1='{addr_line1}', line2='{addr_line2}', phone='{phone}' ")
-    
-    result = {
-        'addr_name': addr_name,
-        'addr_line1': addr_line1,
-        'addr_line2': addr_line2,
-        'phone': phone,
-        'source': 'manual'
-    }
-
-
-def format_address_for_display(address: Dict) -> str:
-    """Format address dict for display."""
-    log_function_entry("format_address_for_display")
-    
-    lines = []
-    
-    if address.get('addr_name'):
-        lines.append(address['addr_name'])
-    if address.get('addr_line1'):
-        lines.append(address['addr_line1'])
-    if address.get('addr_line2'):
-        lines.append(address['addr_line2'])
-    if address.get('phone'):
-        lines.append(f"Phone: {address['phone']}")
-    
-    result = '\n'.join(lines) if lines else "(No address)"
-    logger.debug(f"Formatted address for display: {len(lines)} lines")
-    log_function_exit("format_address_for_display", f"{len(lines)} lines")
-    
+    logger.debug(f"Parsed address: street='{result['street']}', city='{result['city']}', state='{result['state']}', zip='{result['zip']}'")
+    log_function_exit("_parse_formatted_address", "success")
     return result
+
+
+

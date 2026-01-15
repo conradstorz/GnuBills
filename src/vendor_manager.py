@@ -161,7 +161,12 @@ class VendorManager:
         }
     
 def create_new_vendor(self, search_name: str, display_name: str = None) -> str:
-    """Enhanced vendor creation with comprehensive address logging."""
+    """Enhanced vendor creation with comprehensive address logging.
+    
+    NOTE: For interactive address entry with full features, use the
+    address_lookup_gui.py tool instead. This function provides basic
+    Google Places lookup for command-line usage.
+    """
     
     logger.info(f"Creating new vendor: search='{search_name}', display='{display_name}'")
 
@@ -172,16 +177,22 @@ def create_new_vendor(self, search_name: str, display_name: str = None) -> str:
     print(f"Creating new vendor: {display_name}")
     print('='*60)
     
-    # Address lookup with detailed logging
+    # Try Google Places lookup
     logger.debug(f"Starting address lookup for: '{search_name}'")
-    address = address_lookup.lookup_address(search_name)
+    address = None
     
-    if address:
-        logger.info(f"✅ Address lookup successful for '{search_name}'")
-        logger.debug(f"Complete address data found:")
-        for key, value in address.items():
-            logger.debug(f"  {key}: '{value}'" if value else f"  {key}: <EMPTY>")
-    else:
+    try:
+        result = address_lookup.lookup_google_places(search_name)
+        if result:
+            address = result
+            logger.info(f"✅ Address lookup successful for '{search_name}'")
+            logger.debug(f"Complete address data found:")
+            for key, value in address.items():
+                logger.debug(f"  {key}: '{value}'" if value else f"  {key}: <EMPTY>")
+    except Exception as e:
+        logger.error(f"Address lookup failed: {e}")
+    
+    if not address:
         logger.warning(f"❌ Address lookup FAILED for '{search_name}' - using empty address")
         address = {}
         
@@ -199,15 +210,21 @@ def create_new_vendor(self, search_name: str, display_name: str = None) -> str:
     
     if not address:
         print("\nNo address found or rejected.")
-        logger.debug("No address available - prompting for manual entry")
-        if confirm_proceed("Enter address manually?"):
+        print("For interactive address entry, use: uv run python src/address_lookup_gui.py")
+        logger.debug("No address available - offering manual entry")
+        if confirm_proceed("Enter address manually (basic entry)?"):
             logger.info("User chose manual address entry")
-            manual = address_lookup.prompt_manual_address()
+            print("\nEnter address details (press Enter to skip a field):")
+            addr_name = input("Business Name for Address: ").strip()
+            addr_line1 = input("Address Line 1 (street): ").strip()
+            addr_line2 = input("Address Line 2 (city, state zip): ").strip()
+            phone = input("Phone (optional): ").strip()
+            
             address = {
-                'name': manual.get('addr_name') or display_name,
-                'addr_line1': manual.get('addr_line1', ''),
-                'addr_line2': manual.get('addr_line2', ''),
-                'phone': manual.get('phone', ''),
+                'name': addr_name or display_name,
+                'addr_line1': addr_line1,
+                'addr_line2': addr_line2,
+                'phone': phone,
                 'source': 'manual'
             }
             logger.debug(f"Manual address entered: {address}")

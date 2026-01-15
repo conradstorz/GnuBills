@@ -15,9 +15,9 @@ sys.path.append(str(Path(__file__).parent.parent))
 from address_lookup import (
     AddressLookupError,
     _parse_formatted_address,
-    format_address_for_display,
     _get_google_place_phone
 )
+from utils import format_address_for_display
 
 
 class TestParseFormattedAddress:
