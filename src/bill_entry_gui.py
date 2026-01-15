@@ -483,9 +483,9 @@ class SimpleBillEntryGUI:
         self.vendor_details_text.config(state="disabled")
     
     def _launch_address_lookup(self):
-        """Launch the address lookup GUI (vendor manager) with selected vendor if available."""
+        """Launch the vendor manager GUI with selected vendor if available."""
         try:
-            script_path = Path(__file__).parent / "address_lookup_gui.py"
+            script_path = Path(__file__).parent / "vendor_manager_gui.py"
             
             # Get selected vendor from the bills queue
             vendor_name = None
