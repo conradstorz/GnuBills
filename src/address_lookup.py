@@ -227,15 +227,22 @@ def _get_google_place_phone(place_id: str) -> Optional[str]:
         return None
 
 
-def lookup_openstreetmap(business_name: str, locality: str = None) -> Optional[Dict]:
+def lookup_openstreetmap(business_name: str, locality: str = None, return_all: bool = False) -> Optional[Dict]:
     """
     Search for a business using OpenStreetMap Nominatim API.
     
     This is the free fallback option.
     
+    Args:
+        business_name: Business name to search for
+        locality: Location/city to search in (defaults to config.DEFAULT_LOCALITY)
+        return_all: If True, returns a list of all results instead of just the best match
+    
     Returns same structure as lookup_google_places.
+    If return_all=True, returns a list of dicts instead.
+    Returns None (or empty list) if not found or API error.
     """
-    log_function_entry("lookup_openstreetmap", business_name=business_name, locality=locality)
+    log_function_entry("lookup_openstreetmap", business_name=business_name, locality=locality, return_all=return_all)
     
     if locality is None:
         locality = config.DEFAULT_LOCALITY
@@ -311,35 +318,48 @@ def lookup_openstreetmap(business_name: str, locality: str = None) -> Optional[D
         if not results:
             logger.info("No results within search radius")
             log_function_exit("lookup_openstreetmap", None)
-            return None
+            return [] if return_all else None
         
+        # Helper function to parse a single OSM result
+        def parse_osm_result(r):
+            address = r.get('address', {})
+            
+            # Build address lines
+            house_number = address.get('house_number', '')
+            road = address.get('road', '')
+            line1 = f"{house_number} {road}".strip()
+            
+            city = address.get('city') or address.get('town') or address.get('village', '')
+            state = address.get('state', '')
+            postcode = address.get('postcode', '')
+            
+            line2 = f"{city}, {state} {postcode}".strip()
+            
+            return {
+                'name': r.get('display_name', '').split(',')[0],
+                'formatted_address': r.get('display_name', ''),
+                'addr_line1': line1,
+                'addr_line2': line2,
+                'phone': None,  # Nominatim doesn't provide phone
+                'lat': float(r.get('lat', 0)),
+                'lng': float(r.get('lon', 0)),
+                'place_id': r.get('place_id'),
+                'distance': r.get('_distance'),
+                'source': 'openstreetmap'
+            }
+        
+        # If return_all is True, process all results and return them
+        if return_all:
+            all_results = [parse_osm_result(r) for r in results]
+            logger.info(f"OpenStreetMap lookup returned {len(all_results)} results for '{business_name}'")
+            log_function_exit("lookup_openstreetmap", f"{len(all_results)} results")
+            return all_results
+        
+        # Original behavior: return only the best result
         best = results[0]
         logger.debug(f"Selected best result: '{best.get('display_name', '')}'")
-        address = best.get('address', {})
-        
-        # Build address lines
-        house_number = address.get('house_number', '')
-        road = address.get('road', '')
-        line1 = f"{house_number} {road}".strip()
-        
-        city = address.get('city') or address.get('town') or address.get('village', '')
-        state = address.get('state', '')
-        postcode = address.get('postcode', '')
-        
-        line2 = f"{city}, {state} {postcode}".strip()
-        logger.debug(f"Parsed address: line1='{line1}', line2='{line2}'")
-        
-        result = {
-            'name': best.get('display_name', '').split(',')[0],
-            'formatted_address': best.get('display_name', ''),
-            'addr_line1': line1,
-            'addr_line2': line2,
-            'phone': None,  # Nominatim doesn't provide phone
-            'lat': float(best.get('lat', 0)),
-            'lng': float(best.get('lon', 0)),
-            'place_id': best.get('place_id'),
-            'source': 'openstreetmap'
-        }
+        result = parse_osm_result(best)
+        logger.debug(f"Parsed address: line1='{result['addr_line1']}', line2='{result['addr_line2']}'")
         
         logger.info(f"OpenStreetMap lookup successful for '{business_name}': {result['name']}")
         log_function_exit("lookup_openstreetmap", "success")
@@ -351,7 +371,465 @@ def lookup_openstreetmap(business_name: str, locality: str = None) -> Optional[D
         return None
 
 
+def parse_address_smart(address: str) -> Dict[str, str]:
+    """
+    Smart address parser using token scoring approach.
+    
+    Breaks the address string into tokens, scores each token based on
+    what it most likely represents (zip, street, city, state, phone, name),
+    then assembles the final address components.
+    
+    Returns:
+        Dict with 'street', 'city', 'state', 'zip', 'phone', 'name', 'line1', 'line2' keys
+    """
+    import re
+    from typing import List, Tuple
+    
+    log_function_entry("parse_address_smart", address=address[:100] if address else None)
+    
+    result = {
+        'street': '', 'city': '', 'state': '', 'zip': '', 
+        'phone': '', 'name': '', 'line1': '', 'line2': ''
+    }
+    
+    if not address:
+        log_function_exit("parse_address_smart", "empty")
+        return result
+    
+    # Clean up the address
+    address = ' '.join(address.split())
+    
+    # Remove common suffixes
+    for suffix in [', USA', ', US', ', United States', ', usa', ', us']:
+        if address.endswith(suffix):
+            address = address[:-len(suffix)]
+    
+    # State definitions
+    state_abbrevs = {
+        'AL', 'AK', 'AZ', 'AR', 'CA', 'CO', 'CT', 'DE', 'FL', 'GA',
+        'HI', 'ID', 'IL', 'IN', 'IA', 'KS', 'KY', 'LA', 'ME', 'MD',
+        'MA', 'MI', 'MN', 'MS', 'MO', 'MT', 'NE', 'NV', 'NH', 'NJ',
+        'NM', 'NY', 'NC', 'ND', 'OH', 'OK', 'OR', 'PA', 'RI', 'SC',
+        'SD', 'TN', 'TX', 'UT', 'VT', 'VA', 'WA', 'WV', 'WI', 'WY', 'DC'
+    }
+    
+    state_names = {
+        'ALABAMA': 'AL', 'ALASKA': 'AK', 'ARIZONA': 'AZ', 'ARKANSAS': 'AR',
+        'CALIFORNIA': 'CA', 'COLORADO': 'CO', 'CONNECTICUT': 'CT', 'DELAWARE': 'DE',
+        'FLORIDA': 'FL', 'GEORGIA': 'GA', 'HAWAII': 'HI', 'IDAHO': 'ID',
+        'ILLINOIS': 'IL', 'INDIANA': 'IN', 'IOWA': 'IA', 'KANSAS': 'KS',
+        'KENTUCKY': 'KY', 'LOUISIANA': 'LA', 'MAINE': 'ME', 'MARYLAND': 'MD',
+        'MASSACHUSETTS': 'MA', 'MICHIGAN': 'MI', 'MINNESOTA': 'MN', 'MISSISSIPPI': 'MS',
+        'MISSOURI': 'MO', 'MONTANA': 'MT', 'NEBRASKA': 'NE', 'NEVADA': 'NV',
+        'NEW HAMPSHIRE': 'NH', 'NEW JERSEY': 'NJ', 'NEW MEXICO': 'NM', 'NEW YORK': 'NY',
+        'NORTH CAROLINA': 'NC', 'NORTH DAKOTA': 'ND', 'OHIO': 'OH', 'OKLAHOMA': 'OK',
+        'OREGON': 'OR', 'PENNSYLVANIA': 'PA', 'RHODE ISLAND': 'RI', 'SOUTH CAROLINA': 'SC',
+        'SOUTH DAKOTA': 'SD', 'TENNESSEE': 'TN', 'TEXAS': 'TX', 'UTAH': 'UT',
+        'VERMONT': 'VT', 'VIRGINIA': 'VA', 'WASHINGTON': 'WA', 'WEST VIRGINIA': 'WV',
+        'WISCONSIN': 'WI', 'WYOMING': 'WY'
+    }
+    
+    street_suffixes = {
+        'STREET', 'ST', 'AVENUE', 'AVE', 'ROAD', 'RD', 'BOULEVARD', 'BLVD',
+        'DRIVE', 'DR', 'LANE', 'LN', 'COURT', 'CT', 'CIRCLE', 'CIR',
+        'PARKWAY', 'PKWY', 'WAY', 'PLACE', 'PL', 'TRAIL', 'TRL',
+        'HIGHWAY', 'HWY', 'PIKE', 'RUN', 'LOOP', 'PATH'
+    }
+    
+    # Split by commas first to get major segments
+    segments = [s.strip() for s in address.split(',') if s.strip()]
+    
+    # Score each segment
+    segment_scores = []
+    for seg_idx, segment in enumerate(segments):
+        tokens = segment.split()
+        score = {
+            'segment': segment,
+            'index': seg_idx,
+            'is_zip': 0,
+            'is_street': 0,
+            'is_state': 0,
+            'is_city': 0,
+            'is_phone': 0,
+            'is_name': 0,
+            'tokens': tokens
+        }
+        
+        # Check for ZIP code (5 digits or 5+4)
+        if re.search(r'\b\d{5}(-\d{4})?\b', segment):
+            score['is_zip'] = 100
+            # Extract the ZIP
+            zip_match = re.search(r'\b(\d{5}(-\d{4})?)\b', segment)
+            if zip_match:
+                score['zip_value'] = zip_match.group(1)
+        
+        # Check for phone number
+        phone_patterns = [
+            r'\(\d{3}\)\s*\d{3}-\d{4}',  # (123) 456-7890
+            r'\d{3}-\d{3}-\d{4}',         # 123-456-7890
+            r'\d{3}\.\d{3}\.\d{4}',       # 123.456.7890
+            r'\d{10}'                      # 1234567890
+        ]
+        for pattern in phone_patterns:
+            if re.search(pattern, segment):
+                score['is_phone'] = 100
+                break
+        
+        # Check for state (abbreviation or full name)
+        segment_upper = segment.upper()
+        tokens_upper = [t.upper() for t in tokens]
+        
+        for token in tokens_upper:
+            if token in state_abbrevs:
+                score['is_state'] = 90
+                score['state_value'] = token
+                break
+            if token in state_names:
+                score['is_state'] = 90
+                score['state_value'] = state_names[token]
+                break
+        
+        # Check for multi-word state names
+        if score['is_state'] == 0:
+            for i in range(len(tokens) - 1):
+                two_word = f"{tokens_upper[i]} {tokens_upper[i + 1]}"
+                if two_word in state_names:
+                    score['is_state'] = 90
+                    score['state_value'] = state_names[two_word]
+                    break
+        
+        # Check for street address (contains number + street suffix)
+        has_number = any(re.search(r'\d+', token) for token in tokens)
+        has_street_suffix = any(token.upper() in street_suffixes for token in tokens)
+        
+        if has_number:
+            score['is_street'] += 40
+            if has_street_suffix:
+                score['is_street'] += 40
+            elif len(tokens) >= 2:  # Number + street name without suffix
+                score['is_street'] += 20
+        
+        # Check for city (proper noun, not a state, no numbers)
+        if not has_number and score['is_state'] == 0 and score['is_zip'] == 0:
+            # Likely a city if it's a proper noun
+            if tokens and tokens[0][0].isupper():
+                score['is_city'] = 30 + (len(tokens) * 10)  # Multi-word cities get higher score
+        
+        # Check for business name (at the beginning, proper nouns)
+        if seg_idx == 0:
+            if tokens and tokens[0][0].isupper() and not has_number:
+                score['is_name'] = 50 + (len(tokens) * 5)
+        
+        segment_scores.append(score)
+        logger.debug(f"Segment {seg_idx} '{segment}': zip={score['is_zip']}, street={score['is_street']}, "
+                    f"state={score['is_state']}, city={score['is_city']}, phone={score['is_phone']}, name={score['is_name']}")
+    
+    # Extract components based on highest scores
+    # ZIP code - prefer segments that ONLY contain ZIP (not mixed with street number)
+    zip_segments = [s for s in segment_scores if s['is_zip'] > 50]
+    if zip_segments:
+        # Prefer pure ZIP segments (high zip score, low street score)
+        pure_zip = [s for s in zip_segments if s['is_street'] < 50]
+        if pure_zip:
+            result['zip'] = pure_zip[-1].get('zip_value', '')  # Take last (most likely to be actual ZIP)
+        else:
+            result['zip'] = zip_segments[-1].get('zip_value', '')
+    
+    # Phone
+    phone_segments = [s for s in segment_scores if s['is_phone'] > 50]
+    if phone_segments:
+        result['phone'] = phone_segments[0]['segment']
+    
+    # State
+    state_segments = [s for s in segment_scores if s['is_state'] > 50]
+    if state_segments:
+        result['state'] = state_segments[0].get('state_value', '')
+    
+    # Street address - combine consecutive segments that together form an address
+    # Look for: number segment + street name segment, or complete street address
+    street_segments = sorted([s for s in segment_scores if s['is_street'] > 20], 
+                            key=lambda x: x['is_street'], reverse=True)
+    
+    if street_segments:
+        best_street = street_segments[0]
+        result['street'] = best_street['segment']
+        
+        # Check if previous segment is just a number (house number separated by comma)
+        if best_street['index'] > 0:
+            prev_seg = segment_scores[best_street['index'] - 1]
+            # If previous segment is ONLY digits (house number), combine them
+            if prev_seg['segment'].isdigit():
+                result['street'] = f"{prev_seg['segment']} {best_street['segment']}"
+                logger.debug(f"Combined house number with street: {result['street']}")
+    
+    # If we only found a number as street, look for street name in next segment
+    if result['street'] and result['street'].isdigit():
+        street_num_idx = next((s['index'] for s in segment_scores if s['segment'] == result['street']), -1)
+        if street_num_idx >= 0 and street_num_idx < len(segment_scores) - 1:
+            next_seg = segment_scores[street_num_idx + 1]
+            # If next segment looks like a street name (no zip, no state, has city-like score or neutral)
+            if (next_seg['is_zip'] == 0 and next_seg['is_state'] == 0 and 
+                not next_seg['segment'].isdigit()):
+                result['street'] = f"{result['street']} {next_seg['segment']}"
+                logger.debug(f"Extended street number with name: {result['street']}")
+                # Remove this segment from city consideration
+                next_seg['is_city'] = 0
+    
+    # City - segment with high city score that's not street or state
+    # Track which segments are already used
+    used_segments = set()
+    if result['street']:
+        # Mark segments used in street
+        for s in segment_scores:
+            if s['segment'] in result['street']:
+                used_segments.add(s['index'])
+    
+    city_candidates = [s for s in segment_scores 
+                      if s['is_city'] > 20 
+                      and s['index'] not in used_segments
+                      and s['is_state'] < 50
+                      and s['is_zip'] == 0]
+    if city_candidates:
+        # Prefer city that comes after street but before state
+        street_idx = max([s['index'] for s in segment_scores if s['index'] in used_segments], default=-1)
+        state_idx = next((s['index'] for s in segment_scores if s['is_state'] > 50), 999)
+        
+        between_candidates = [c for c in city_candidates if street_idx < c['index'] < state_idx]
+        if between_candidates:
+            # Prefer higher-scored cities, but avoid "County" names if there's a better option
+            non_county = [c for c in between_candidates if 'county' not in c['segment'].lower()]
+            if non_county:
+                result['city'] = sorted(non_county, key=lambda x: x['is_city'], reverse=True)[0]['segment']
+            else:
+                result['city'] = between_candidates[0]['segment']
+        else:
+            result['city'] = city_candidates[0]['segment']
+    
+    # Business name - first segment if it has high name score
+    if segment_scores and segment_scores[0]['is_name'] > 30:
+        result['name'] = segment_scores[0]['segment']
+    
+    # Build line1 and line2
+    result['line1'] = result['street']
+    line2_parts = []
+    if result['city']:
+        line2_parts.append(result['city'])
+    if result['state']:
+        if line2_parts:
+            line2_parts.append(result['state'])
+        else:
+            line2_parts.append(result['state'])
+    if result['zip']:
+        line2_parts.append(result['zip'])
+    
+    if len(line2_parts) >= 2 and result['state']:
+        # Format: "City, State ZIP"
+        city_part = ', '.join([p for p in line2_parts if p != result['state'] and p != result['zip']])
+        if city_part and result['state'] and result['zip']:
+            result['line2'] = f"{city_part}, {result['state']} {result['zip']}"
+        elif city_part and result['state']:
+            result['line2'] = f"{city_part}, {result['state']}"
+        else:
+            result['line2'] = ' '.join(line2_parts)
+    else:
+        result['line2'] = ' '.join(line2_parts)
+    
+    logger.debug(f"Parsed: street='{result['street']}', city='{result['city']}', "
+                f"state='{result['state']}', zip='{result['zip']}', name='{result['name']}'")
+    log_function_exit("parse_address_smart", "success")
+    return result
+
+
+def parse_address(address: str) -> Dict[str, str]:
+    """
+    Robust address parser that handles multiple formats.
+    
+    Handles formats like:
+    - "123 Main St, City, State ZIP" (Standard format)
+    - "Business Name, 123 Main St, City, State ZIP, Country" (OSM display_name)
+    - "123 Main Street, City State ZIP"
+    - Various other comma-separated formats
+    
+    Returns:
+        Dict with 'street', 'city', 'state', 'zip', 'line1', 'line2' keys
+    """
+    import re
+    
+    log_function_entry("parse_address", address=address[:100] if address else None)
+    
+    result = {'street': '', 'city': '', 'state': '', 'zip': '', 'line1': '', 'line2': ''}
+    
+    if not address:
+        logger.debug("Empty address provided")
+        log_function_exit("parse_address", "empty")
+        return result
+    
+    # Remove extra whitespace
+    address = ' '.join(address.split())
+    
+    # Split by commas first
+    parts = [p.strip() for p in address.split(',') if p.strip()]
+    
+    # Remove "USA", "US", "United States" from end
+    if parts and parts[-1].lower() in ('usa', 'us', 'united states'):
+        parts = parts[:-1]
+    
+    if not parts:
+        log_function_exit("parse_address", "no parts")
+        return result
+    
+    # Extract ZIP code from the last parts (more likely to be actual ZIP)
+    # Search backwards to avoid street numbers
+    for part in reversed(parts):
+        zip_match = re.search(r'\b(\d{5}(?:-\d{4})?)\b', part)
+        if zip_match:
+            result['zip'] = zip_match.group(1)
+            logger.debug(f"Found ZIP: {result['zip']}")
+            break
+    
+    # Common US state abbreviations and full names (uppercase for comparison)
+    states = {
+        'AL', 'AK', 'AZ', 'AR', 'CA', 'CO', 'CT', 'DE', 'FL', 'GA',
+        'HI', 'ID', 'IL', 'IN', 'IA', 'KS', 'KY', 'LA', 'ME', 'MD',
+        'MA', 'MI', 'MN', 'MS', 'MO', 'MT', 'NE', 'NV', 'NH', 'NJ',
+        'NM', 'NY', 'NC', 'ND', 'OH', 'OK', 'OR', 'PA', 'RI', 'SC',
+        'SD', 'TN', 'TX', 'UT', 'VT', 'VA', 'WA', 'WV', 'WI', 'WY', 'DC'
+    }
+    
+    # Map full state names to abbreviations
+    state_names = {
+        'ALABAMA': 'AL', 'ALASKA': 'AK', 'ARIZONA': 'AZ', 'ARKANSAS': 'AR',
+        'CALIFORNIA': 'CA', 'COLORADO': 'CO', 'CONNECTICUT': 'CT', 'DELAWARE': 'DE',
+        'FLORIDA': 'FL', 'GEORGIA': 'GA', 'HAWAII': 'HI', 'IDAHO': 'ID',
+        'ILLINOIS': 'IL', 'INDIANA': 'IN', 'IOWA': 'IA', 'KANSAS': 'KS',
+        'KENTUCKY': 'KY', 'LOUISIANA': 'LA', 'MAINE': 'ME', 'MARYLAND': 'MD',
+        'MASSACHUSETTS': 'MA', 'MICHIGAN': 'MI', 'MINNESOTA': 'MN', 'MISSISSIPPI': 'MS',
+        'MISSOURI': 'MO', 'MONTANA': 'MT', 'NEBRASKA': 'NE', 'NEVADA': 'NV',
+        'NEW HAMPSHIRE': 'NH', 'NEW JERSEY': 'NJ', 'NEW MEXICO': 'NM', 'NEW YORK': 'NY',
+        'NORTH CAROLINA': 'NC', 'NORTH DAKOTA': 'ND', 'OHIO': 'OH', 'OKLAHOMA': 'OK',
+        'OREGON': 'OR', 'PENNSYLVANIA': 'PA', 'RHODE ISLAND': 'RI', 'SOUTH CAROLINA': 'SC',
+        'SOUTH DAKOTA': 'SD', 'TENNESSEE': 'TN', 'TEXAS': 'TX', 'UTAH': 'UT',
+        'VERMONT': 'VT', 'VIRGINIA': 'VA', 'WASHINGTON': 'WA', 'WEST VIRGINIA': 'WV',
+        'WISCONSIN': 'WI', 'WYOMING': 'WY'
+    }
+    
+    # Find the street address (part containing numbers)
+    street_idx = None
+    for idx, part in enumerate(parts):
+        if re.search(r'\d+', part):  # Contains a number
+            street_idx = idx
+            result['street'] = part
+            logger.debug(f"Found street at index {idx}: {part}")
+            break
+    
+    # If no street found with numbers, use first part
+    if street_idx is None and parts:
+        street_idx = 0
+        result['street'] = parts[0]
+        logger.debug(f"No numbered street found, using first part: {parts[0]}")
+    
+    # Find state in remaining parts
+    state_idx = None
+    for idx in range(street_idx + 1 if street_idx is not None else 0, len(parts)):
+        part_upper = parts[idx].upper()
+        part_words = part_upper.split()
+        
+        # Check for state abbreviations in words
+        for word in part_words:
+            if word in states:
+                result['state'] = word
+                state_idx = idx
+                logger.debug(f"Found state abbreviation at index {idx}: {word}")
+                break
+        
+        # Check each word against state names
+        if state_idx is None:
+            for word in part_words:
+                if word in state_names:
+                    result['state'] = state_names[word]
+                    state_idx = idx
+                    logger.debug(f"Found state name at index {idx}: {word} -> {result['state']}")
+                    break
+        
+        # Check for multi-word state names (e.g., "New York", "North Carolina")
+        if state_idx is None:
+            for i in range(len(part_words) - 1):
+                two_word = f"{part_words[i]} {part_words[i + 1]}"
+                if two_word in state_names:
+                    result['state'] = state_names[two_word]
+                    state_idx = idx
+                    logger.debug(f"Found two-word state name at index {idx}: {two_word} -> {result['state']}")
+                    break
+        
+        if state_idx is not None:
+            break
+    
+    # Extract city based on position relative to street and state
+    if state_idx is not None and street_idx is not None:
+        # City is between street and state
+        if state_idx == street_idx + 1:
+            # State is in same part as city - "City State ZIP" or just in next part
+            # Check if current part has both city and state
+            city_state_part = parts[state_idx]
+            city_words = []
+            for word in city_state_part.split():
+                if word.upper() not in states and not re.match(r'\d{5}', word):
+                    city_words.append(word)
+            if city_words:
+                result['city'] = ' '.join(city_words)
+                logger.debug(f"Found city in same part as state: {result['city']}")
+        elif state_idx > street_idx + 1:
+            # City is in the part between street and state
+            result['city'] = parts[street_idx + 1]
+            logger.debug(f"Found city between street and state: {result['city']}")
+    elif street_idx is not None and len(parts) > street_idx + 1:
+        # No state found, use part after street as city
+        candidate_city = parts[street_idx + 1]
+        # Remove any state abbreviations from it
+        city_words = []
+        for word in candidate_city.split():
+            if word.upper() not in states and not re.match(r'\d{5}', word):
+                city_words.append(word)
+        if city_words:
+            result['city'] = ' '.join(city_words)
+            logger.debug(f"Found city after street (no state): {result['city']}")
+    
+    # Build line1 and line2
+    result['line1'] = result['street']
+    line2_parts = []
+    if result['city']:
+        line2_parts.append(result['city'])
+    if result['state']:
+        if line2_parts:
+            line2_parts.append(result['state'])
+        else:
+            line2_parts.append(result['state'])
+    if result['zip']:
+        line2_parts.append(result['zip'])
+    
+    if len(line2_parts) >= 2 and line2_parts[-2] in states:
+        # Format: "City, State ZIP"
+        result['line2'] = f"{', '.join(line2_parts[:-2])}, {line2_parts[-2]} {line2_parts[-1]}" if len(line2_parts) > 2 else f"{line2_parts[-2]} {line2_parts[-1]}"
+    else:
+        result['line2'] = ' '.join(line2_parts)
+    
+    logger.debug(f"Parsed address: street='{result['street']}', city='{result['city']}', state='{result['state']}', zip='{result['zip']}'")
+    log_function_exit("parse_address", "success")
+    return result
+
+
 def _parse_formatted_address(address: str) -> Dict[str, str]:
+    """
+    Parse a formatted address string into granular components.
+    
+    Now uses the smart scoring-based parser.
+    Maintained for backward compatibility.
+    """
+    return parse_address_smart(address)
+
+
+# Original implementation preserved for reference
+def _parse_formatted_address_original(address: str) -> Dict[str, str]:
     """
     Parse a formatted address string into granular components.
     

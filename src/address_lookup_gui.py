@@ -408,14 +408,12 @@ class AddressLookupGUI:
             self.root.update()
             
             try:
-                from address_lookup import lookup_openstreetmap
-                osm_result = lookup_openstreetmap(vendor_name)
+                osm_results = lookup_openstreetmap(vendor_name, return_all=True)
                 
-                if osm_result:
-                    # Convert single result to list format for consistency
-                    results = [osm_result]
+                if osm_results:
+                    results = osm_results
                     source = "OpenStreetMap"
-                    logger.info(f"OpenStreetMap found result for '{vendor_name}'")
+                    logger.info(f"OpenStreetMap found {len(osm_results)} result(s) for '{vendor_name}'")
                     
             except Exception as e:
                 logger.error(f"Error searching OpenStreetMap: {e}")
@@ -502,17 +500,30 @@ class AddressLookupGUI:
         self.loading = True
         
         try:
-            # Parse the address
-            addr_parts = _parse_formatted_address(result.get('formatted_address', ''))
+            # Check if the result already has parsed address components
+            # (e.g., from OSM's structured address data)
+            if result.get('addr_line1') or result.get('addr_line2'):
+                # Use pre-parsed address from the lookup function
+                street = result.get('addr_line1', '')
+                addr_line2 = result.get('addr_line2', '')
+                
+                # Parse addr_line2 to get city, state, zip
+                # Format is usually "City, State ZIP"
+                addr_parts = _parse_formatted_address(addr_line2)
+                city = addr_parts.get('city', '')
+                state = addr_parts.get('state', '')
+                zip_code = addr_parts.get('zip', '')
+            else:
+                # Parse the formatted_address for all components
+                addr_parts = _parse_formatted_address(result.get('formatted_address', ''))
+                street = addr_parts.get('street', '')
+                city = addr_parts.get('city', '')
+                state = addr_parts.get('state', '')
+                zip_code = addr_parts.get('zip', '')
             
             # Populate fields
             self.addr_name_var.set(result.get('name', self.vendor_name_var.get()))
-            self.addr_line1_var.set(addr_parts.get('street', ''))
-            
-            # Build addr_line2 from city, state, zip
-            city = addr_parts.get('city', '')
-            state = addr_parts.get('state', '')
-            zip_code = addr_parts.get('zip', '')
+            self.addr_line1_var.set(street)
             
             self.city_var.set(city)
             self.state_var.set(state)
