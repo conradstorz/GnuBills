@@ -25,7 +25,7 @@ from loguru import logger
 sys.path.insert(0, str(Path(__file__).parent))
 
 import config
-from utils import parse_input_line
+from utils import parse_input_line, fuzzy_match_vendor
 from logging_setup import setup_logging_for_script, log_function_entry, log_function_exit, log_stage
 import vendor_manager
 import gnucash_db
@@ -222,6 +222,12 @@ class SimpleBillEntryGUI:
         self.vendor_stats_var = tk.StringVar()
         self.vendor_stats_var.set("Vendors: Loading...")
         
+        # Vendor autocomplete state
+        self.vendor_mgr = None
+        self.autocomplete_window = None
+        self.autocomplete_listbox = None
+        self.vendor_matches = []
+        
         # Verify/create AP account at startup
         try:
             ap_guid = gnucash_db.ensure_ap_account_exists()
@@ -264,6 +270,12 @@ class SimpleBillEntryGUI:
         self.vendor_entry = ttk.Entry(entry_frame, width=50, font=('TkDefaultFont', 10))
         self.vendor_entry.grid(row=0, column=1, sticky="ew", padx=(10, 0), pady=5)
         self.vendor_entry.focus()
+        
+        # Bind events for real-time autocomplete
+        self.vendor_entry.bind('<KeyRelease>', self._on_vendor_keyrelease)
+        self.vendor_entry.bind('<FocusOut>', self._on_vendor_focusout)
+        self.vendor_entry.bind('<Down>', self._on_vendor_down)
+        self.vendor_entry.bind('<Return>', self._on_vendor_return)
         
         # Amount
         ttk.Label(entry_frame, text="Amount:").grid(row=1, column=0, sticky="w", pady=5)
@@ -517,6 +529,191 @@ class SimpleBillEntryGUI:
             self.vendor_stats_var.set("Vendors: Error loading stats")
         
         log_function_exit("SimpleBillEntryGUI._load_current_bills")
+    
+    def _get_vendor_manager(self):
+        """Lazy-load vendor manager for autocomplete."""
+        if self.vendor_mgr is None:
+            try:
+                self.vendor_mgr = vendor_manager.VendorManager()
+            except Exception as e:
+                logger.error(f"Failed to load vendor manager: {e}")
+        return self.vendor_mgr
+    
+    def _on_vendor_keyrelease(self, event):
+        """Handle key release in vendor entry for autocomplete."""
+        # Ignore navigation keys
+        if event.keysym in ('Up', 'Down', 'Left', 'Right', 'Escape', 'Return', 'Tab'):
+            return
+        
+        search_text = self.vendor_entry.get().strip()
+        
+        # Hide autocomplete if text is too short
+        if len(search_text) < 2:
+            self._hide_autocomplete()
+            return
+        
+        # Find matching vendors
+        self._show_vendor_matches(search_text)
+    
+    def _on_vendor_down(self, event):
+        """Handle down arrow to move to autocomplete list."""
+        if self.autocomplete_listbox and self.autocomplete_listbox.winfo_viewable():
+            self.autocomplete_listbox.focus_set()
+            if self.autocomplete_listbox.size() > 0:
+                self.autocomplete_listbox.selection_clear(0, tk.END)
+                self.autocomplete_listbox.selection_set(0)
+                self.autocomplete_listbox.activate(0)
+            return 'break'
+    
+    def _on_vendor_return(self, event):
+        """Handle Enter key in vendor entry."""
+        if self.autocomplete_listbox and self.autocomplete_listbox.winfo_viewable():
+            # If autocomplete is showing, select first item
+            if self.autocomplete_listbox.size() > 0:
+                self._select_autocomplete_item(0)
+            return 'break'
+    
+    def _on_vendor_focusout(self, event):
+        """Hide autocomplete when vendor entry loses focus."""
+        # Delay hiding to allow clicking on autocomplete list
+        self.root.after(200, self._hide_autocomplete)
+    
+    def _show_vendor_matches(self, search_text):
+        """Show autocomplete matches for vendor search."""
+        vm = self._get_vendor_manager()
+        if not vm:
+            return
+        
+        try:
+            # Get all vendor names and their display names
+            vendor_names = []
+            vendors_dict = vm.vendors.get('vendors', {})
+            
+            # Use fuzzy matching to find relevant vendors
+            best_key, best_score, matches = fuzzy_match_vendor(
+                search_text, 
+                vendors_dict,
+                threshold=50  # Lower threshold for autocomplete
+            )
+            
+            # Get unique vendor display names from matches
+            seen = set()
+            for vendor_key, score in matches:
+                if vendor_key in vendors_dict:
+                    display_name = vendors_dict[vendor_key].get('display_name', vendor_key)
+                    if display_name not in seen:
+                        vendor_names.append((display_name, score))
+                        seen.add(display_name)
+            
+            # Also check GnuCash vendors for exact/prefix matches
+            try:
+                gc_vendors = vm.gnucash_vendors
+                search_lower = search_text.lower()
+                for gv in gc_vendors:
+                    name = gv['name']
+                    if search_lower in name.lower() and name not in seen:
+                        # Calculate a simple score based on position
+                        score = 90 if name.lower().startswith(search_lower) else 70
+                        vendor_names.append((name, score))
+                        seen.add(name)
+            except Exception as e:
+                logger.debug(f"Could not search GnuCash vendors: {e}")
+            
+            # Sort by score descending, limit to top 10
+            vendor_names.sort(key=lambda x: x[1], reverse=True)
+            vendor_names = vendor_names[:10]
+            
+            if vendor_names:
+                self._display_autocomplete([name for name, score in vendor_names])
+            else:
+                self._hide_autocomplete()
+                
+        except Exception as e:
+            logger.error(f"Error finding vendor matches: {e}")
+            self._hide_autocomplete()
+    
+    def _display_autocomplete(self, matches):
+        """Display autocomplete dropdown with matching vendors."""
+        self.vendor_matches = matches
+        
+        # Create autocomplete window if it doesn't exist
+        if not self.autocomplete_window:
+            self.autocomplete_window = tk.Toplevel(self.root)
+            self.autocomplete_window.wm_overrideredirect(True)
+            self.autocomplete_window.withdraw()
+            
+            # Create listbox
+            frame = ttk.Frame(self.autocomplete_window, relief="solid", borderwidth=1)
+            frame.pack(fill="both", expand=True)
+            
+            self.autocomplete_listbox = tk.Listbox(
+                frame,
+                height=min(len(matches), 10),
+                font=('TkDefaultFont', 10),
+                activestyle='dotbox',
+                relief="flat"
+            )
+            self.autocomplete_listbox.pack(fill="both", expand=True)
+            
+            # Bind selection events
+            self.autocomplete_listbox.bind('<Button-1>', self._on_autocomplete_click)
+            self.autocomplete_listbox.bind('<Return>', lambda e: self._on_autocomplete_select(None))
+            self.autocomplete_listbox.bind('<Double-Button-1>', lambda e: self._on_autocomplete_select(None))
+            self.autocomplete_listbox.bind('<Escape>', lambda e: self._hide_autocomplete())
+            self.autocomplete_listbox.bind('<Up>', self._on_autocomplete_up)
+        
+        # Clear and populate listbox
+        self.autocomplete_listbox.delete(0, tk.END)
+        for match in matches:
+            self.autocomplete_listbox.insert(tk.END, match)
+        
+        # Update height
+        self.autocomplete_listbox.config(height=min(len(matches), 10))
+        
+        # Position window below vendor entry
+        x = self.vendor_entry.winfo_rootx()
+        y = self.vendor_entry.winfo_rooty() + self.vendor_entry.winfo_height()
+        width = self.vendor_entry.winfo_width()
+        
+        self.autocomplete_window.wm_geometry(f"{width}x{min(len(matches) * 25, 250)}+{x}+{y}")
+        self.autocomplete_window.deiconify()
+        self.autocomplete_window.lift()
+    
+    def _hide_autocomplete(self):
+        """Hide the autocomplete dropdown."""
+        if self.autocomplete_window:
+            self.autocomplete_window.withdraw()
+    
+    def _on_autocomplete_click(self, event):
+        """Handle click on autocomplete item."""
+        # Get the index of the clicked item
+        index = self.autocomplete_listbox.nearest(event.y)
+        self._select_autocomplete_item(index)
+    
+    def _on_autocomplete_select(self, event):
+        """Handle Enter/double-click on autocomplete item."""
+        selection = self.autocomplete_listbox.curselection()
+        if selection:
+            self._select_autocomplete_item(selection[0])
+    
+    def _on_autocomplete_up(self, event):
+        """Handle up arrow in autocomplete - return to entry if at top."""
+        if self.autocomplete_listbox.curselection():
+            index = self.autocomplete_listbox.curselection()[0]
+            if index == 0:
+                self.vendor_entry.focus_set()
+                self._hide_autocomplete()
+                return 'break'
+    
+    def _select_autocomplete_item(self, index):
+        """Select an item from autocomplete list."""
+        if 0 <= index < len(self.vendor_matches):
+            selected_vendor = self.vendor_matches[index]
+            self.vendor_entry.delete(0, tk.END)
+            self.vendor_entry.insert(0, selected_vendor)
+            self._hide_autocomplete()
+            # Move focus to next field
+            self.amount_entry.focus_set()
     
     def _edit_selected_bill(self):
         """Edit the selected bill."""
