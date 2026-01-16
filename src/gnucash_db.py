@@ -2103,6 +2103,13 @@ def create_posted_bill(
     # Date formatting for GnuCash - use detected format
     date_posted = format_gnucash_date(bill_date)
     date_entered = format_gnucash_timestamp()
+    date_posted_gdate = bill_date.strftime('%Y%m%d')  # YYYYMMDD format for gdate slots
+    
+    # Get vendor name for transaction description
+    with get_connection() as conn:
+        cursor = conn.execute("SELECT name FROM vendors WHERE guid = ?", (vendor_guid,))
+        vendor_row = cursor.fetchone()
+        vendor_name = vendor_row['name'] if vendor_row else "Unknown Vendor"
     
     with get_connection(readonly=False) as conn:
         # Create the lot (tracks amounts owed)
@@ -2112,16 +2119,26 @@ def create_posted_bill(
         """, (lot_guid, ap_guid))
         
         # Create lot slots to link lot to invoice (required by GnuCash)
-        # Slot type 9 = GUID reference, type 4 = string
-        conn.execute("""
-            INSERT INTO slots (obj_guid, name, slot_type, guid_val)
-            VALUES (?, 'gncInvoice', 9, ?)
-        """, (lot_guid, bill_guid))
+        # CRITICAL: Use KVP frame structure as documented
+        lot_frame_guid = generate_guid()
         
+        # Lot title slot
         conn.execute("""
             INSERT INTO slots (obj_guid, name, slot_type, string_val)
             VALUES (?, 'title', 4, ?)
         """, (lot_guid, f"Bill {bill_id}"))
+        
+        # Lot gncInvoice frame slot (type 9 = KVP frame)
+        conn.execute("""
+            INSERT INTO slots (obj_guid, name, slot_type, guid_val)
+            VALUES (?, 'gncInvoice', 9, ?)
+        """, (lot_guid, lot_frame_guid))
+        
+        # Nested invoice-guid within the frame (type 5 = GUID)
+        conn.execute("""
+            INSERT INTO slots (obj_guid, name, slot_type, guid_val)
+            VALUES (?, 'gncInvoice/invoice-guid', 5, ?)
+        """, (lot_frame_guid, bill_guid))
         
         # Create the invoice/bill record
         conn.execute("""
@@ -2138,14 +2155,60 @@ def create_posted_bill(
             generate_guid()  # Empty billto
         ))
         
-        # Create the transaction
+        # Create credit-note slot on invoice (type 1 = int64, value 0 = not a credit note)
+        conn.execute("""
+            INSERT INTO slots (obj_guid, name, slot_type, int64_val)
+            VALUES (?, 'credit-note', 1, 0)
+        """, (bill_guid,))
+        
+        # Create the transaction (description should be VENDOR NAME, not memo)
         conn.execute("""
             INSERT INTO transactions (
                 guid, currency_guid, num, post_date, enter_date, description
             ) VALUES (?, ?, ?, ?, ?, ?)
         """, (
-            txn_guid, usd_guid, bill_id, date_posted, date_entered, memo
+            txn_guid, usd_guid, bill_id, date_posted, date_entered, vendor_name
         ))
+        
+        # Create transaction slots (CRITICAL for GnuCash to recognize as invoice)
+        txn_frame_guid = generate_guid()
+        
+        # trans-txn-type = "I" identifies this as an Invoice/Bill posting
+        conn.execute("""
+            INSERT INTO slots (obj_guid, name, slot_type, string_val)
+            VALUES (?, 'trans-txn-type', 4, 'I')
+        """, (txn_guid,))
+        
+        # trans-read-only prevents manual editing
+        conn.execute("""
+            INSERT INTO slots (obj_guid, name, slot_type, string_val)
+            VALUES (?, 'trans-read-only', 4, 'Generated from an invoice. Try unposting the invoice.')
+        """, (txn_guid,))
+        
+        # date-posted in gdate format (type 10 = gdate, stored as string YYYYMMDD)
+        conn.execute("""
+            INSERT INTO slots (obj_guid, name, slot_type, string_val)
+            VALUES (?, 'date-posted', 10, ?)
+        """, (txn_guid, date_posted_gdate))
+        
+        # trans-date-due (type 6 = timespec, stored as string timestamp)
+        due_date_timespec = due_date.strftime('%Y-%m-%d %H:%M:%S')
+        conn.execute("""
+            INSERT INTO slots (obj_guid, name, slot_type, string_val)
+            VALUES (?, 'trans-date-due', 6, ?)
+        """, (txn_guid, due_date_timespec))
+        
+        # gncInvoice frame slot (type 9 = KVP frame)
+        conn.execute("""
+            INSERT INTO slots (obj_guid, name, slot_type, guid_val)
+            VALUES (?, 'gncInvoice', 9, ?)
+        """, (txn_guid, txn_frame_guid))
+        
+        # Nested invoice-guid within the frame (type 5 = GUID)
+        conn.execute("""
+            INSERT INTO slots (obj_guid, name, slot_type, guid_val)
+            VALUES (?, 'gncInvoice/invoice-guid', 5, ?)
+        """, (txn_frame_guid, bill_guid))
         
         # Create expense split (debit - positive)
         conn.execute("""
@@ -2175,6 +2238,7 @@ def create_posted_bill(
         ))
         
         # Create the invoice entry
+        # CRITICAL: Use 'bill' column for vendor bills, NOT 'invoice' column
         # Use schema discovery for column names that may vary between versions
         discount_num_col = _get_column('entries', 'i_discount_num')
         discount_denom_col = _get_column('entries', 'i_discount_denom')
@@ -2191,22 +2255,22 @@ def create_posted_bill(
                 b_acct, b_price_num, b_price_denom,
                 b_taxable, b_taxincluded, b_taxtable,
                 b_paytype, billable, billto_type, billto_guid,
-                order_guid, invoice
+                order_guid, bill, invoice
             ) VALUES (
                 ?, ?, ?, ?, '',
-                1, 1,
-                ?, ?, ?, 0, 1, '', '',
+                ?, ?,
+                NULL, 0, 1, 0, 1, NULL, NULL,
                 0, 0, NULL,
                 ?, ?, ?,
                 0, 0, NULL,
                 0, 0, 0, NULL,
-                NULL, ?
+                NULL, ?, NULL
             )
         """
         
         conn.execute(entry_sql, (
             entry_guid, date_posted, date_entered, memo,
-            expense_account_guid, amount_num, amount_denom,
+            amount_num, amount_denom,
             expense_account_guid, amount_num, amount_denom,
             bill_guid
         ))
