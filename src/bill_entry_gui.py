@@ -410,8 +410,8 @@ class SimpleBillEntryGUI:
             self.date_entry.focus()
             return
         
-        # Create bill line
-        bill_line = f"{vendor_name}\t{amount:.2f}\t{memo}\t{date_str}\n"
+        # Create bill line (comma-separated to match parse_input_line format)
+        bill_line = f"{vendor_name}, {amount:.2f}, {memo}, {date_str}\n"
         
         # Append to bills file
         bills_file = Path(config.PROJECT_ROOT) / "data" / "bills_to_process.txt"

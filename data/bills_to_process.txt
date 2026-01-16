@@ -8,4 +8,4 @@
 # Bob's Plumbing, 275.50, Pipe repair
 # City Water, 89.25, Monthly service, 2024-01-15
 
-The Slice Restaurant, 564.32, no memo does it work?
+the slice, 226.00, Jukebox Commission 4/28/2025 - 1/6/2026, 2026-01-15
