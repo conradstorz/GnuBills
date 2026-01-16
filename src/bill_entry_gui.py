@@ -989,6 +989,17 @@ class SimpleBillEntryGUI:
                         progress.append_text("")
                         progress.append_text("✓ Bills are ready in GnuCash for payment!")
                         progress.append_text("  Open GnuCash -> Business -> Vendor -> Pay Bill")
+                        
+                        # Clear the bills file after successful processing
+                        if success:
+                            try:
+                                bills_file.unlink(missing_ok=True)
+                                progress.append_text("")
+                                progress.append_text("✓ Bills file cleared")
+                                logger.info("Cleared bills_to_process.txt after successful processing")
+                            except Exception as e:
+                                logger.error(f"Failed to clear bills file: {e}")
+                                progress.append_text(f"⚠️  Could not clear bills file: {e}")
                     
                     # Update UI on main thread
                     self.root.after(0, lambda: progress.set_complete(success))
