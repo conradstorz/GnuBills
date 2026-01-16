@@ -32,10 +32,14 @@ def process_bill(
     vendor_name: str,
     amount: float,
     memo: str,
-    bill_date: date
+    bill_date: date,
+    checking_account_guid: str
 ) -> bool:
     """
-    Process a single bill entry.
+    Process a single bill entry following the 4-step workflow:
+    1. Create unposted bill
+    2. Post the bill
+    3. Pay the bill
     
     Returns True if successful, False otherwise.
     """
@@ -77,7 +81,7 @@ def process_bill(
                 logger.info(f"Successfully created vendor: {vendor_data.get('display_name')}")
             else:
                 logger.error(f"Failed to create vendor: {vendor_name}")
-                print("  Failed to create vendor.")
+                print("  ✗ Failed to create vendor")
                 log_function_exit("process_bill", False)
                 return False
         else:
@@ -93,43 +97,72 @@ def process_bill(
         logger.debug(f"Expense account GUID: {expense_acct_guid}")
     except ValueError as e:
         log_error_with_context(e, "Failed to get expense account", vendor_name=vendor_name)
-        print(f"  ERROR: {e}")
+        print(f"  ✗ ERROR: {e}")
         log_function_exit("process_bill", False)
         return False
     
-    # Create the posted bill
-    logger.debug("Creating posted bill in GnuCash")
+    # Get vendor GUID
+    vendor_guid = vendor_data.get('gnucash_guid')
+    if not vendor_guid:
+        logger.debug("No vendor GUID cached, searching in GnuCash by name")
+        gc_vendor = gnucash_db.find_vendor_by_name(vendor_data.get('display_name'))
+        if gc_vendor:
+            vendor_guid = gc_vendor['guid']
+            logger.debug(f"Found vendor GUID in GnuCash: {vendor_guid}")
+        else:
+            logger.error(f"Could not find vendor GUID for: {vendor_data.get('display_name')}")
+            print(f"  ✗ ERROR: Could not find vendor GUID")
+            log_function_exit("process_bill", False)
+            return False
+    
+    # Follow the 3-step workflow documented in snapshots
     try:
-        vendor_guid = vendor_data.get('gnucash_guid')
-        if not vendor_guid:
-            logger.debug("No vendor GUID cached, searching in GnuCash by name")
-            # Try to find in GnuCash by name
-            gc_vendor = gnucash_db.find_vendor_by_name(vendor_data.get('display_name'))
-            if gc_vendor:
-                vendor_guid = gc_vendor['guid']
-                logger.debug(f"Found vendor GUID in GnuCash: {vendor_guid}")
-            else:
-                logger.error(f"Could not find vendor GUID for: {vendor_data.get('display_name')}")
-                print(f"  ERROR: Could not find vendor GUID")
-                log_function_exit("process_bill", False)
-                return False
-        
-        bill_guid = gnucash_db.create_posted_bill(
+        # STEP 1: Create unposted bill with entry
+        print(f"\n  Step 1/3: Creating bill...", end=" ", flush=True)
+        logger.debug("Step 1: Creating unposted bill")
+        bill_guid = gnucash_db.create_bill(
             vendor_guid=vendor_guid,
             expense_account_guid=expense_acct_guid,
             amount=amount,
             memo=memo,
-            bill_date=bill_date
+            bill_date=bill_date,
+            verify=True
         )
+        print("✓")
+        logger.info(f"Bill created: GUID={bill_guid}")
         
-        logger.info(f"Successfully created bill: GUID={bill_guid}, amount={format_currency(amount)}")
-        print(f"\n✓ Created bill for {format_currency(amount)}")
+        # STEP 2: Post the bill
+        print(f"  Step 2/3: Posting bill...", end=" ", flush=True)
+        logger.debug("Step 2: Posting bill")
+        lot_guid = gnucash_db.post_bill(
+            bill_guid=bill_guid,
+            post_date=bill_date,
+            due_date=bill_date,
+            verify=True
+        )
+        print("✓")
+        logger.info(f"Bill posted: lot_guid={lot_guid}")
+        
+        # STEP 3: Pay the bill
+        print(f"  Step 3/3: Paying bill...", end=" ", flush=True)
+        logger.debug("Step 3: Paying bill")
+        payment_txn_guid = gnucash_db.pay_bill(
+            bill_guid=bill_guid,
+            checking_account_guid=checking_account_guid,
+            payment_date=bill_date,
+            memo=memo,  # Pass memo to payment - appears in check register
+            verify=True
+        )
+        print("✓")
+        logger.info(f"Bill paid: payment_txn_guid={payment_txn_guid}")
+        
+        print(f"\n✓ Successfully processed bill for {format_currency(amount)}")
         log_function_exit("process_bill", True)
         return True
         
     except Exception as e:
-        log_error_with_context(e, "Error creating posted bill", vendor_name=vendor_name, amount=amount)
-        print(f"  ERROR: {e}")
+        log_error_with_context(e, "Error processing bill", vendor_name=vendor_name, amount=amount)
+        print(f"\n  ✗ ERROR: {e}")
         log_function_exit("process_bill", False)
         return False
 
@@ -176,6 +209,36 @@ def process_input_file(input_path: Path) -> dict:
     if not confirm_proceed("Process these bills?"):
         return {'total': len(bills), 'success': 0, 'failed': 0, 'skipped': len(bills)}
     
+    # Select checking account for payments
+    print_separator()
+    print("\nSelect checking account to pay bills from:")
+    checking_accounts = gnucash_db.get_checking_accounts()
+    
+    if not checking_accounts:
+        print("  ERROR: No checking accounts found in GnuCash")
+        print("  Please create a checking account first.")
+        return {'total': len(bills), 'success': 0, 'failed': 0, 'skipped': len(bills)}
+    
+    for i, account in enumerate(checking_accounts, 1):
+        print(f"  {i}. {account['name']}")
+    
+    while True:
+        try:
+            choice = input(f"\nSelect account (1-{len(checking_accounts)}): ").strip()
+            idx = int(choice) - 1
+            if 0 <= idx < len(checking_accounts):
+                checking_account = checking_accounts[idx]
+                checking_account_guid = checking_account['guid']
+                print(f"  ✓ Selected: {checking_account['name']}")
+                break
+            else:
+                print(f"  Please enter a number between 1 and {len(checking_accounts)}")
+        except ValueError:
+            print("  Please enter a valid number")
+        except KeyboardInterrupt:
+            print("\n\nCancelled by user.")
+            return {'total': len(bills), 'success': 0, 'failed': 0, 'skipped': len(bills)}
+    
     # Process each bill
     vendor_manager = VendorManager()
     
@@ -188,7 +251,8 @@ def process_input_file(input_path: Path) -> dict:
                 bill['vendor_name'],
                 bill['amount'],
                 bill['memo'],
-                bill['date']
+                bill['date'],
+                checking_account_guid
             )
             
             if success:
@@ -344,9 +408,10 @@ def main():
         print(f"  Skipped:     {results['skipped']}")
         
         if results['success'] > 0:
-            logger.info("Bills ready for payment in GnuCash")
-            print(f"\n  ✓ Bills are ready in GnuCash for payment!")
-            print(f"    Open GnuCash -> Business -> Vendor -> Pay Bill")
+            logger.info("Bills created, posted, and paid in GnuCash")
+            print(f"\n  ✓ {results['success']} bill(s) created, posted, and paid!")
+            print(f"    Bills are now visible in GnuCash")
+            print(f"    Check transactions appear in the check register with memos")
         
         exit_code = 0 if results['failed'] == 0 else 1
         logger.info(f"Bill processor exiting with code: {exit_code}")

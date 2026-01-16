@@ -2039,7 +2039,7 @@ def pay_bill(
 # LEGACY FUNCTION (kept for backwards compatibility, but deprecated)
 # =============================================================================
 
-def create_posted_bill(
+def create_posted_bill_DEPRECATED(
     vendor_guid: str,
     expense_account_guid: str,
     amount: float,
@@ -2049,7 +2049,10 @@ def create_posted_bill(
     verify: bool = True
 ) -> str:
     """
-    Create a posted bill (vendor invoice) in GnuCash.
+    DEPRECATED: Use create_bill() + post_bill() + pay_bill() instead.
+    
+    This function only creates and posts bills, but does NOT pay them.
+    The new workflow requires calling all three steps to fully process bills.
     
     This creates:
     1. An invoice record
@@ -2068,8 +2071,9 @@ def create_posted_bill(
     Returns the bill GUID.
     Raises WriteVerificationError if verification fails.
     """
-    log_function_entry("create_posted_bill", vendor_guid=vendor_guid[:8], 
+    log_function_entry("create_posted_bill_DEPRECATED", vendor_guid=vendor_guid[:8], 
                        expense_account_guid=expense_account_guid[:8], amount=amount, memo=memo[:50])
+    logger.warning("DEPRECATED: create_posted_bill_DEPRECATED called - use create_bill() + post_bill() + pay_bill() instead")
     logger.info(f"Creating posted bill: amount=${amount}, memo='{memo[:50]}'")
     
     if bill_date is None:

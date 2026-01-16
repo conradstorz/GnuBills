@@ -1145,21 +1145,38 @@ class SimpleBillEntryGUI:
                                 # Use the user-selected expense account for all bills
                                 expense_acct_guid = expense_guid
                                 
-                                # Create the bill
-                                bill_guid = gnucash_db.create_posted_bill(
-                                    vendor_guid=vendor_guid,
-                                    expense_account_guid=expense_acct_guid,
-                                    amount=amount,
-                                    memo=memo,
-                                    bill_date=bill_date
-                                )
-                                
-                                if bill_guid:
-                                    progress.append_text(f"  ✓ Bill created successfully ({format_currency(amount)})")
+                                # Create, post, and pay the bill (3-step workflow)
+                                try:
+                                    # Step 1: Create the bill
+                                    progress.append_text(f"  Step 1/3: Creating bill...")
+                                    bill_guid = gnucash_db.create_bill(
+                                        vendor_guid=vendor_guid,
+                                        expense_account_guid=expense_acct_guid,
+                                        amount=amount,
+                                        memo=memo,
+                                        bill_date=bill_date,
+                                        verify=True
+                                    )
+                                    
+                                    # Step 2: Post the bill
+                                    progress.append_text(f"  Step 2/3: Posting bill...")
+                                    gnucash_db.post_bill(bill_guid, verify=True)
+                                    
+                                    # Step 3: Pay the bill
+                                    progress.append_text(f"  Step 3/3: Paying bill...")
+                                    gnucash_db.pay_bill(
+                                        bill_guid=bill_guid,
+                                        checking_account_guid=checking_guid,
+                                        memo=memo,
+                                        verify=True
+                                    )
+                                    
+                                    progress.append_text(f"  ✓ Bill created, posted, and paid ({format_currency(amount)})")
                                     results['success'] += 1
                                     successful_bills.append(bill)  # Track for removal from file
-                                else:
-                                    progress.append_text(f"  ✗ Failed to create bill")
+                                    
+                                except Exception as e:
+                                    progress.append_text(f"  ✗ Failed: {e}")
                                     results['failed'] += 1
                             else:
                                 progress.append_text(f"  ⚠️  Vendor not found - skipping")
@@ -1186,8 +1203,9 @@ class SimpleBillEntryGUI:
                     
                     if results['success'] > 0:
                         progress.append_text("")
-                        progress.append_text("✓ Bills are ready in GnuCash for payment!")
-                        progress.append_text("  Open GnuCash -> Business -> Vendor -> Pay Bill")
+                        progress.append_text(f"✓ {results['success']} bill(s) created, posted, and paid!")
+                        progress.append_text("  Bills are now visible in GnuCash")
+                        progress.append_text("  Check transactions appear in the check register with memos")
                         
                         # Remove successfully created bills from the file
                         try:
