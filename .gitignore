@@ -35,3 +35,9 @@ Thumbs.db
 # Testing
 .pytest_cache/
 .hypothesis/
+htmlcov/
+.coverage
+
+# User data files (created at runtime)
+data/bills_to_process.txt
+data/*.gnucash
