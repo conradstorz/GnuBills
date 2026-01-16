@@ -1110,6 +1110,7 @@ class SimpleBillEntryGUI:
                     # Process bills (non-interactive mode)
                     vendor_manager = VendorManager()
                     results = {'total': len(bills), 'success': 0, 'failed': 0, 'skipped': 0}
+                    successful_bills = []  # Track successfully created bills
                     
                     for bill in bills:
                         try:
@@ -1156,6 +1157,7 @@ class SimpleBillEntryGUI:
                                 if bill_guid:
                                     progress.append_text(f"  ✓ Bill created successfully ({format_currency(amount)})")
                                     results['success'] += 1
+                                    successful_bills.append(bill)  # Track for removal from file
                                 else:
                                     progress.append_text(f"  ✗ Failed to create bill")
                                     results['failed'] += 1
@@ -1187,16 +1189,51 @@ class SimpleBillEntryGUI:
                         progress.append_text("✓ Bills are ready in GnuCash for payment!")
                         progress.append_text("  Open GnuCash -> Business -> Vendor -> Pay Bill")
                         
-                        # Clear the bills file after successful processing
-                        if success:
-                            try:
+                        # Remove successfully created bills from the file
+                        try:
+                            if success:
+                                # All bills succeeded - delete the entire file
                                 bills_file.unlink(missing_ok=True)
                                 progress.append_text("")
-                                progress.append_text("✓ Bills file cleared")
-                                logger.info("Cleared bills_to_process.txt after successful processing")
-                            except Exception as e:
-                                logger.error(f"Failed to clear bills file: {e}")
-                                progress.append_text(f"⚠️  Could not clear bills file: {e}")
+                                progress.append_text("✓ All bills processed - file cleared")
+                                logger.info("Cleared bills_to_process.txt - all bills processed")
+                            elif successful_bills:
+                                # Some bills succeeded - rewrite file with only failed/skipped bills
+                                progress.append_text("")
+                                progress.append_text(f"✓ Removing {len(successful_bills)} successful bill(s) from queue...")
+                                
+                                # Read original file
+                                with open(bills_file, 'r', encoding='utf-8') as f:
+                                    all_lines = f.readlines()
+                                
+                                # Create set of successful bill identifiers for fast lookup
+                                successful_set = set()
+                                for bill in successful_bills:
+                                    # Use vendor_name, amount, date as unique identifier
+                                    key = (bill['vendor_name'], bill['amount'], bill['date'])
+                                    successful_set.add(key)
+                                
+                                # Keep only lines that don't match successful bills
+                                remaining_lines = []
+                                for line in all_lines:
+                                    parsed = parse_input_line(line)
+                                    if parsed:
+                                        key = (parsed['vendor_name'], parsed['amount'], parsed['date'])
+                                        if key not in successful_set:
+                                            remaining_lines.append(line)
+                                    else:
+                                        # Keep comments and empty lines
+                                        remaining_lines.append(line)
+                                
+                                # Rewrite file with remaining bills
+                                with open(bills_file, 'w', encoding='utf-8') as f:
+                                    f.writelines(remaining_lines)
+                                
+                                progress.append_text(f"✓ File updated - {len(remaining_lines)} line(s) remain")
+                                logger.info(f"Removed {len(successful_bills)} successful bills from bills_to_process.txt")
+                        except Exception as e:
+                            logger.error(f"Failed to update bills file: {e}")
+                            progress.append_text(f"⚠️  Could not update bills file: {e}")
                     
                     # Update UI on main thread
                     self.root.after(0, lambda: progress.set_complete(success))
