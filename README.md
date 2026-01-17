@@ -8,7 +8,7 @@ Automate vendor bill entry with address lookup for GnuCash.
 
 ```cmd
 cd D:\Users\Conrad\Documents\GnuCash\bill_processor
-python src\bill_entry_gui.py
+uv run python src\bill_entry_gui.py
 ```
 
 The GUI provides:
@@ -31,7 +31,7 @@ The GUI provides:
 2. **Run the processor**:
 
    ```cmd
-   python src\bill_processor.py
+   uv run python src\bill_processor.py
    ```
 
 3. **Review and confirm** the proposed bills
@@ -67,16 +67,19 @@ On first run, the system will:
 
 ## Project Documentation
 
-See `docs\PROJECT_HISTORY.md` for full design history and specifications.
+**Note:** Full development documentation including `PROJECT_HISTORY.md`, `GNUCASH_SQLITE_BILL_WORKFLOW.md`, and test files are maintained in the `development` branch for reference.
 
 ## Requirements
 
 - Python 3.11+
 - GnuCash with SQLite backend
 - Internet connection (for address lookups)
+- [uv](https://github.com/astral-sh/uv) - Modern Python package manager
 
 Install dependencies:
 
 ```cmd
-pip install -r requirements.txt
+uv sync
 ```
+
+This will install all required packages from `pyproject.toml`.
