@@ -5,6 +5,10 @@ Edit these settings for your environment.
 
 import os
 from pathlib import Path
+from dotenv import load_dotenv
+
+# Load environment variables from .env file
+load_dotenv()
 
 # =============================================================================
 # PATHS
@@ -75,14 +79,12 @@ DEFAULT_CURRENCY = "USD"
 # Google Places API (most accurate, requires API key)
 # 
 # HOW TO GET A GOOGLE PLACES API KEY:
-# 1. Go to: https://console.cloud.google.com/
-# 2. Create a new project (or select existing)
-# 3. Enable "Places API" in API Library
-# 4. Go to "Credentials" and create API key
-# 5. (Recommended) Restrict key to Places API only
-# 6. Paste your key below:
+# Run the setup script: python setup_google_api.py
+# Or see GOOGLE_API_SETUP.md for manual setup instructions
 #
-GOOGLE_PLACES_API_KEY = "AIzaSyBxKOVuQLNuxnsVhIuQNADABE9On8lEUOQ"  # Paste your API key here (leave empty to use OpenStreetMap only)
+# The API key is stored in the .env file (NOT in this config file for security)
+# Get it from environment variable, default to empty string
+GOOGLE_PLACES_API_KEY = os.getenv("GOOGLE_PLACES_API_KEY", "")
 
 # OpenStreetMap Nominatim (free fallback, no key needed)
 # Automatically used when Google API key is not configured

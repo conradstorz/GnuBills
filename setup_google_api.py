@@ -160,7 +160,7 @@ def test_api_key(api_key, test_location="Louisville, KY"):
 
 def update_config_file(api_key):
     """
-    Update the config.py file with the API key.
+    Save the API key to .env file (secure storage).
     
     Args:
         api_key: The Google Places API key to save
@@ -168,38 +168,48 @@ def update_config_file(api_key):
     Returns:
         bool: True if successful, False otherwise
     """
-    config_path = Path(__file__).parent / "src" / "config.py"
-    
-    if not config_path.exists():
-        print_error(f"Config file not found at: {config_path}")
-        return False
+    env_path = Path(__file__).parent / ".env"
+    env_example_path = Path(__file__).parent / ".env.example"
     
     try:
-        # Read the current config
-        with open(config_path, 'r', encoding='utf-8') as f:
-            content = f.read()
+        # Read existing .env file if it exists, otherwise start from .env.example
+        env_lines = []
+        if env_path.exists():
+            with open(env_path, 'r', encoding='utf-8') as f:
+                env_lines = f.readlines()
+        elif env_example_path.exists():
+            with open(env_example_path, 'r', encoding='utf-8') as f:
+                env_lines = f.readlines()
         
-        # Find and replace the API key line
-        pattern = r'GOOGLE_PLACES_API_KEY\s*=\s*["\'][^"\']*["\']'
-        replacement = f'GOOGLE_PLACES_API_KEY = "{api_key}"'
+        # Update or add the API key
+        key_found = False
+        new_lines = []
+        for line in env_lines:
+            if line.strip().startswith('GOOGLE_PLACES_API_KEY=') or line.strip().startswith('#GOOGLE_PLACES_API_KEY='):
+                new_lines.append(f'GOOGLE_PLACES_API_KEY={api_key}\n')
+                key_found = True
+            else:
+                new_lines.append(line)
         
-        if re.search(pattern, content):
-            new_content = re.sub(pattern, replacement, content)
-            
-            # Write back to file
-            with open(config_path, 'w', encoding='utf-8') as f:
-                f.write(new_content)
-            
-            print_success(f"Updated config file: {config_path}")
-            return True
-        else:
-            print_error("Could not find GOOGLE_PLACES_API_KEY in config file")
-            print_info("You may need to manually add the following line to config.py:")
-            print(f"  {replacement}")
-            return False
-            
+        # If key wasn't found, add it
+        if not key_found:
+            if new_lines and not new_lines[-1].endswith('\n'):
+                new_lines.append('\n')
+            new_lines.append(f'\n# Google Places API Key (from Google Cloud Console)\n')
+            new_lines.append(f'GOOGLE_PLACES_API_KEY={api_key}\n')
+        
+        # Write back to .env file
+        with open(env_path, 'w', encoding='utf-8') as f:
+            f.writelines(new_lines)
+        
+        print_success(f"API key saved to: {env_path}")
+        print_info("The .env file is in .gitignore and won't be committed to git")
+        return True
+        
     except Exception as e:
-        print_error(f"Error updating config file: {e}")
+        print_error(f"Error saving to .env file: {e}")
+        print_info(f"You can manually create a .env file with:")
+        print(f"  GOOGLE_PLACES_API_KEY={api_key}")
         return False
 
 
@@ -377,16 +387,16 @@ Would you like to save the API key anyway and test it later?
     # Step 7: Save to Config
     print_step(7, "Save API Key to Configuration")
     print("""
-Now we'll save your API key to the config file so the Bill Processor
-can use it automatically.
+Now we'll save your API key to a secure .env file so the Bill Processor
+can use it automatically. The .env file is NOT committed to git.
 """)
     
     if update_config_file(api_key):
         print_success("Configuration updated successfully!")
     else:
         print_warning("Automatic config update failed")
-        print_info(f"Please manually add this line to src/config.py:")
-        print(f'\n  GOOGLE_PLACES_API_KEY = "{api_key}"\n')
+        print_info(f"Please manually create a .env file with:")
+        print(f'\n  GOOGLE_PLACES_API_KEY={api_key}\n')
     
     # Final Summary
     print_header("Setup Complete!")
@@ -413,8 +423,8 @@ addresses and phone numbers automatically.
 
 {Colors.BOLD}To disable Google Places API later:{Colors.END}
 
-  Edit src/config.py and set:
-    GOOGLE_PLACES_API_KEY = ""
+  Remove or comment out the line in .env file:
+    # GOOGLE_PLACES_API_KEY=your-key-here
 
 {Colors.CYAN}Happy billing!{Colors.END}
 """)
