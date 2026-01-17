@@ -5,6 +5,10 @@ Edit these settings for your environment.
 
 import os
 from pathlib import Path
+from dotenv import load_dotenv
+
+# Load environment variables from .env file
+load_dotenv()
 
 # =============================================================================
 # PATHS
@@ -14,8 +18,8 @@ from pathlib import Path
 PROJECT_ROOT = Path(r"D:\Users\Conrad\Documents\GnuCash\bill_processor")
 
 # GnuCash database file (SQLite format)
-# Change this to your actual .gnucash file
-GNUCASH_DB_PATH = Path(r"D:\Users\Conrad\Documents\GnuCash\gnuCash414\CFSIV_Sqlite3_database.gnucash")
+# Using local test database copy for development
+GNUCASH_DB_PATH = PROJECT_ROOT / "data" / "CFSIV_Sqlite3_database_test.gnucash"
 
 # Vendor database JSON file
 VENDOR_DB_PATH = PROJECT_ROOT / "data" / "vendor_database.json"
@@ -35,7 +39,8 @@ LOCALITY_STATE = "KY"
 LOCALITY_COUNTRY = "US"
 
 # Search radius in miles for address lookups
-SEARCH_RADIUS_MILES = 100
+# Note: Google Places API (New) max radius is 50,000 meters (~31 miles)
+SEARCH_RADIUS_MILES = 30
 
 # Your approximate coordinates (Louisville, KY downtown)
 # Used for distance calculations and "pick closest" logic
@@ -75,14 +80,12 @@ DEFAULT_CURRENCY = "USD"
 # Google Places API (most accurate, requires API key)
 # 
 # HOW TO GET A GOOGLE PLACES API KEY:
-# 1. Go to: https://console.cloud.google.com/
-# 2. Create a new project (or select existing)
-# 3. Enable "Places API" in API Library
-# 4. Go to "Credentials" and create API key
-# 5. (Recommended) Restrict key to Places API only
-# 6. Paste your key below:
+# Run the setup script: python setup_google_api.py
+# Or see GOOGLE_API_SETUP.md for manual setup instructions
 #
-GOOGLE_PLACES_API_KEY = ""  # Paste your API key here (leave empty to use OpenStreetMap only)
+# The API key is stored in the .env file (NOT in this config file for security)
+# Get it from environment variable, default to empty string
+GOOGLE_PLACES_API_KEY = os.getenv("GOOGLE_PLACES_API_KEY", "")
 
 # OpenStreetMap Nominatim (free fallback, no key needed)
 # Automatically used when Google API key is not configured

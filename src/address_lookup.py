@@ -82,10 +82,14 @@ def _filter_results_by_name_match(results: list, original_search: str, min_word_
     
     filtered = []
     for result in results:
-        # Get the name from the result
+        # Get the name from the result - handle both old and new API structures
         name = result.get('name', '').lower()
-        display_name = result.get('display_name', '').lower()
-        formatted_address = result.get('formatted_address', '').lower()
+        display_name_obj = result.get('displayName', {})
+        if isinstance(display_name_obj, dict):
+            display_name = display_name_obj.get('text', '').lower()
+        else:
+            display_name = str(display_name_obj).lower()
+        formatted_address = result.get('formatted_address', result.get('formattedAddress', '')).lower()
         
         # Combine all text to search
         combined_text = f"{name} {display_name} {formatted_address}"
@@ -146,36 +150,38 @@ def lookup_google_places(business_name: str, locality: str = None, return_all: b
         progress_callback(f"Searching Google: {business_name}...")
     
     try:
-        # Text Search API
-        url = "https://maps.googleapis.com/maps/api/place/textsearch/json"
-        params = {
-            'query': query,
-            'key': config.GOOGLE_PLACES_API_KEY,
-            'type': 'establishment'
+        # Use new Places API (New) - Text Search endpoint
+        url = "https://places.googleapis.com/v1/places:searchText"
+        headers = {
+            'Content-Type': 'application/json',
+            'X-Goog-Api-Key': config.GOOGLE_PLACES_API_KEY,
+            'X-Goog-FieldMask': 'places.displayName,places.formattedAddress,places.location,places.id,places.nationalPhoneNumber,places.internationalPhoneNumber,places.addressComponents'
+        }
+        body = {
+            'textQuery': query
         }
         
         # Add location bias if configured
         if config.CENTER_LAT and config.CENTER_LON:
-            params['location'] = f"{config.CENTER_LAT},{config.CENTER_LON}"
-            radius_meters = config.SEARCH_RADIUS_MILES * 1609  # Convert to meters
-            params['radius'] = radius_meters
-            logger.debug(f"Adding location bias: {params['location']}, radius: {radius_meters}m")
+            body['locationBias'] = {
+                'circle': {
+                    'center': {
+                        'latitude': config.CENTER_LAT,
+                        'longitude': config.CENTER_LON
+                    },
+                    'radius': config.SEARCH_RADIUS_MILES * 1609  # Convert to meters
+                }
+            }
+            logger.debug(f"Adding location bias: center=({config.CENTER_LAT},{config.CENTER_LON}), radius={config.SEARCH_RADIUS_MILES} miles")
         
-        log_api_call("Google Places", "textsearch", query=query[:50])
-        response = requests.get(url, params=params, timeout=10)
+        log_api_call("Google Places (New)", "searchText", query=query[:50])
+        response = requests.post(url, headers=headers, json=body, timeout=10)
         response.raise_for_status()
         data = response.json()
         
-        status = data.get('status')
-        logger.debug(f"Google Places API response status: {status}")
-        
-        if status != 'OK':
-            logger.info(f"Google Places search unsuccessful: {status}")
-            log_function_exit("lookup_google_places", None)
-            return None
-        
-        results = data.get('results', [])
-        logger.debug(f"Google Places found {len(results)} results")
+        # New API returns 'places' array instead of 'results'
+        results = data.get('places', [])
+        logger.debug(f"Google Places API (New) found {len(results)} results")
         
         if not results:
             logger.info("No results from Google Places, trying fuzzy matching")
@@ -186,27 +192,26 @@ def lookup_google_places(business_name: str, locality: str = None, return_all: b
                     progress_callback(f"Trying: {fuzzy_term}...")
                 logger.debug(f"Trying fuzzy search term: '{fuzzy_term}'")
                 fuzzy_query = f"{fuzzy_term} {locality}"
-                params['query'] = fuzzy_query
+                body['textQuery'] = fuzzy_query
                 
-                log_api_call("Google Places", "textsearch (fuzzy)", query=fuzzy_query[:50])
-                response = requests.get(url, params=params, timeout=10)
+                log_api_call("Google Places (New)", "searchText (fuzzy)", query=fuzzy_query[:50])
+                response = requests.post(url, headers=headers, json=body, timeout=10)
                 response.raise_for_status()
                 data = response.json()
                 
-                if data.get('status') == 'OK':
-                    results = data.get('results', [])
-                    if results:
-                        logger.info(f"Fuzzy search successful with term '{fuzzy_term}', found {len(results)} results")
-                        # Filter to keep only results matching multiple words from original search
-                        if len(business_name.split()) > 1:
-                            results = _filter_results_by_name_match(results, business_name, min_word_matches=2)
-                            if results:
-                                logger.info(f"After name filtering: {len(results)} results match multiple words")
-                            else:
-                                logger.info("Name filtering removed all results, trying next fuzzy term")
-                                results = []
-                                continue
-                        break
+                results = data.get('places', [])
+                if results:
+                    logger.info(f"Fuzzy search successful with term '{fuzzy_term}', found {len(results)} results")
+                    # Filter to keep only results matching multiple words from original search
+                    if len(business_name.split()) > 1:
+                        results = _filter_results_by_name_match(results, business_name, min_word_matches=2)
+                        if results:
+                            logger.info(f"After name filtering: {len(results)} results match multiple words")
+                        else:
+                            logger.info("Name filtering removed all results, trying next fuzzy term")
+                            results = []
+                            continue
+                    break
             
             if not results:
                 logger.info("No results from Google Places even with fuzzy matching")
@@ -219,18 +224,22 @@ def lookup_google_places(business_name: str, locality: str = None, return_all: b
             max_distance = config.SEARCH_RADIUS_MILES * 3  # More permissive
             filtered = []
             for r in results:
-                loc = r.get('geometry', {}).get('location', {})
+                # New API structure: location is in r.location instead of r.geometry.location
+                loc = r.get('location', {})
                 if loc:
                     dist = calculate_distance_miles(
                         config.CENTER_LAT, config.CENTER_LON,
-                        loc.get('lat', 0), loc.get('lng', 0)
+                        loc.get('latitude', 0), loc.get('longitude', 0)
                     )
                     if dist <= max_distance:
                         r['_distance'] = dist
                         filtered.append(r)
-                        logger.debug(f"Including result '{r.get('name')}' at {dist:.1f} miles")
+                        # New API: displayName.text instead of name
+                        place_name = r.get('displayName', {}).get('text', 'Unknown')
+                        logger.debug(f"Including result '{place_name}' at {dist:.1f} miles")
                     else:
-                        logger.debug(f"Excluding result '{r.get('name')}' at {dist:.1f} miles (too far, max={max_distance})")
+                        place_name = r.get('displayName', {}).get('text', 'Unknown')
+                        logger.debug(f"Excluding result '{place_name}' at {dist:.1f} miles (too far, max={max_distance})")
             results = sorted(filtered, key=lambda x: x.get('_distance', 999))
             logger.debug(f"After distance filtering: {len(results)} results")
             
@@ -248,18 +257,19 @@ def lookup_google_places(business_name: str, locality: str = None, return_all: b
         if return_all:
             all_results = []
             for r in results:
-                formatted_addr = r.get('formatted_address', '')
+                # New API structure
+                formatted_addr = r.get('formattedAddress', '')
                 addr_parts = _parse_formatted_address(formatted_addr)
                 
                 result = {
-                    'name': r.get('name'),
+                    'name': r.get('displayName', {}).get('text'),
                     'formatted_address': formatted_addr,
                     'addr_line1': addr_parts.get('line1', ''),
                     'addr_line2': addr_parts.get('line2', ''),
-                    'phone': None,  # Phone lookup is expensive, only do it when selected
-                    'lat': r.get('geometry', {}).get('location', {}).get('lat'),
-                    'lng': r.get('geometry', {}).get('location', {}).get('lng'),
-                    'place_id': r.get('place_id'),
+                    'phone': r.get('nationalPhoneNumber') or r.get('internationalPhoneNumber'),  # Phone included in search response
+                    'lat': r.get('location', {}).get('latitude'),
+                    'lng': r.get('location', {}).get('longitude'),
+                    'place_id': r.get('id'),
                     'distance': r.get('_distance'),
                     'source': 'google'
                 }
@@ -271,32 +281,34 @@ def lookup_google_places(business_name: str, locality: str = None, return_all: b
         
         # Original behavior: return only the best result
         best = results[0]
-        logger.debug(f"Selected best result: '{best.get('name')}' at {best.get('formatted_address')}")
+        place_name = best.get('displayName', {}).get('text')
+        place_addr = best.get('formattedAddress')
+        logger.debug(f"Selected best result: '{place_name}' at {place_addr}")
         
-        # Get place details for phone number
-        phone = None
-        if config.GOOGLE_PLACES_API_KEY:
-            logger.debug(f"Getting phone number for place_id: {best.get('place_id')}")
-            phone = _get_google_place_phone(best.get('place_id'))
+        # Phone number is now included in the search response
+        phone = best.get('nationalPhoneNumber') or best.get('internationalPhoneNumber')
+        if not phone and config.GOOGLE_PLACES_API_KEY:
+            logger.debug(f"Phone not in search results, would need separate Place Details call")
+            phone = _get_google_place_phone(best.get('id'))
             if phone:
                 logger.debug(f"Found phone number: {phone}")
             else:
                 logger.debug("No phone number found")
         
         # Parse address
-        formatted_addr = best.get('formatted_address', '')
+        formatted_addr = best.get('formattedAddress', '')
         logger.debug(f"Parsing formatted address: {formatted_addr}")
         addr_parts = _parse_formatted_address(formatted_addr)
         
         result = {
-            'name': best.get('name'),
+            'name': place_name,
             'formatted_address': formatted_addr,
             'addr_line1': addr_parts.get('line1', ''),
             'addr_line2': addr_parts.get('line2', ''),
             'phone': phone,
-            'lat': best.get('geometry', {}).get('location', {}).get('lat'),
-            'lng': best.get('geometry', {}).get('location', {}).get('lng'),
-            'place_id': best.get('place_id'),
+            'lat': best.get('location', {}).get('latitude'),
+            'lng': best.get('location', {}).get('longitude'),
+            'place_id': best.get('id'),
             'source': 'google'
         }
         

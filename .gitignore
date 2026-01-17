@@ -22,7 +22,14 @@ build/
 
 # Local configuration
 *.local
+
+# Environment variables (contains API keys and secrets!)
 .env
+!.env.example
+
+# API keys and sensitive config
+# Note: config.py contains API keys - be careful not to commit secrets
+# Consider using environment variables for production
 
 # Logs
 *.log
