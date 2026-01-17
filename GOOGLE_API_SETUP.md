@@ -1,6 +1,8 @@
 # Google Places API Setup
 
-This directory contains a script to help you set up Google Places API access for automatic vendor address lookups.
+This directory contains a script to help you set up Google Places API (New) access for automatic vendor address lookups.
+
+**IMPORTANT:** You must enable the **"Places API (New)"** not the legacy "Places API" in Google Cloud Console.
 
 ## Quick Start
 
@@ -33,14 +35,18 @@ If you prefer to set up manually:
 
 1. Go to [Google Cloud Console](https://console.cloud.google.com/)
 2. Create a new project or select existing one
-3. Enable the "Places API" for your project
+3. Enable the **"Places API (New)"** for your project (NOT the legacy "Places API")
+   - Search for "Places API (New)" in the API Library
+   - Make sure it says "(New)" - there are two different APIs!
 4. Create an API key in "Credentials"
-5. (Recommended) Restrict the key to only "Places API"
+5. (Recommended) Restrict the key to only "Places API (New)"
 6. Copy your API key
 7. Edit `src/config.py` and paste your key:
    ```python
    GOOGLE_PLACES_API_KEY = "your-api-key-here"
    ```
+
+**Note:** The legacy "Places API" will not work. You must use "Places API (New)".
 
 ## Testing Your Setup
 

@@ -94,7 +94,7 @@ def validate_api_key(api_key):
 
 def test_api_key(api_key, test_location="Louisville, KY"):
     """
-    Test the API key by making a simple request to Google Places API.
+    Test the API key by making a simple request to Google Places API (New).
     
     Args:
         api_key: The Google Places API key to test
@@ -105,47 +105,50 @@ def test_api_key(api_key, test_location="Louisville, KY"):
     """
     print_info(f"Testing API key with a search for 'Kroger' near {test_location}...")
     
-    url = "https://maps.googleapis.com/maps/api/place/textsearch/json"
-    params = {
-        'query': f'Kroger {test_location}',
-        'key': api_key
+    # Use the new Places API (New) - Text Search endpoint
+    url = "https://places.googleapis.com/v1/places:searchText"
+    headers = {
+        'Content-Type': 'application/json',
+        'X-Goog-Api-Key': api_key,
+        'X-Goog-FieldMask': 'places.displayName,places.formattedAddress,places.id'
+    }
+    body = {
+        'textQuery': f'Kroger {test_location}'
     }
     
     try:
-        response = requests.get(url, params=params, timeout=10)
+        response = requests.post(url, headers=headers, json=body, timeout=10)
         data = response.json()
         
-        status = data.get('status', 'UNKNOWN')
-        
-        if status == 'OK':
-            results = data.get('results', [])
-            if results:
-                result = results[0]
-                name = result.get('name', 'Unknown')
-                address = result.get('formatted_address', 'Unknown')
-                print_success(f"API key is working! Found: {name}")
-                print(f"  Address: {address}")
-                return True, "API key validated successfully"
+        # New API returns different structure - check for places array
+        if 'places' in data and len(data['places']) > 0:
+            place = data['places'][0]
+            name = place.get('displayName', {}).get('text', 'Unknown')
+            address = place.get('formattedAddress', 'Unknown')
+            print_success(f"API key is working! Found: {name}")
+            print(f"  Address: {address}")
+            return True, "API key validated successfully"
+        elif 'error' in data:
+            # New API returns errors differently
+            error = data['error']
+            error_msg = error.get('message', 'No error message provided')
+            status_code = error.get('code', response.status_code)
+            
+            if status_code == 403:
+                print_error(f"API key was rejected: {error_msg}")
+                return False, f"Request denied: {error_msg}"
+            elif status_code == 429:
+                print_warning("API quota exceeded")
+                return False, "Query limit exceeded"
             else:
-                print_warning("API returned OK but no results found")
-                return True, "API key works but returned no results"
-                
-        elif status == 'REQUEST_DENIED':
-            error_msg = data.get('error_message', 'No error message provided')
-            print_error(f"API key was rejected: {error_msg}")
-            return False, f"Request denied: {error_msg}"
-            
-        elif status == 'INVALID_REQUEST':
-            print_error("Invalid request format")
-            return False, "Invalid request"
-            
-        elif status == 'OVER_QUERY_LIMIT':
-            print_warning("API quota exceeded")
-            return False, "Query limit exceeded"
-            
+                print_error(f"API error ({status_code}): {error_msg}")
+                return False, f"Error {status_code}: {error_msg}"
+        elif response.status_code != 200:
+            print_error(f"HTTP {response.status_code}: {response.text}")
+            return False, f"HTTP error {response.status_code}"
         else:
-            print_error(f"Unexpected status: {status}")
-            return False, f"Unexpected status: {status}"
+            print_warning("API returned success but no results found")
+            return True, "API key works but returned no results"
             
     except requests.RequestException as e:
         print_error(f"Network error while testing API key: {e}")
@@ -227,9 +230,9 @@ address lookups. For personal use, you likely won't exceed the free tier.
     print_step(1, "Open Google Cloud Console")
     print("""
 We'll start by opening the Google Cloud Console where you can create a new
-project and enable the Places API.
+project and enable the Places API. After that webpage opens return here to continue.
 """)
-    
+    AIzaSyBxKOVuQLNuxnsVhIuQNADABE9On8lEUOQ
     open_browser = get_user_input("Open Google Cloud Console in browser? (yes/no)", "yes").lower()
     if open_browser in ['yes', 'y']:
         print_info("Opening https://console.cloud.google.com/")
@@ -258,21 +261,29 @@ dropdown instead.
     wait_for_user()
     
     # Step 3: Enable Places API
-    print_step(3, "Enable the Places API")
-    print("""
-Now we need to enable the Places API for your project:
+    print_step(3, "Enable the Places API (New)")
+    print(f"""
+{Colors.BOLD}{Colors.YELLOW}IMPORTANT: Enable "Places API (New)" not the legacy "Places API"{Colors.END}
+
+Now we need to enable the NEW Places API for your project:
 
 1. In the Google Cloud Console, use the search bar at the top
-2. Type "Places API" and press Enter
-3. Click on "Places API" in the search results
-4. Click the "ENABLE" button
-5. Wait for the API to be enabled (usually takes a few seconds)
+2. Type "Places API (New)" and press Enter
+3. Look for {Colors.BOLD}"Places API (New)"{Colors.END} - make sure it says "(New)"!
+4. Click on "Places API (New)" in the search results
+5. Click the "ENABLE" button
+6. Wait for the API to be enabled (usually takes a few seconds)
+
+{Colors.YELLOW}Note: There are TWO different APIs:{Colors.END}
+  • {Colors.GREEN}"Places API (New)"{Colors.END} ← Use this one! (newer, better)
+  • "Places API" ← Legacy version, will NOT work with this app
 """)
     
-    open_places = get_user_input("Open Places API page in browser? (yes/no)", "yes").lower()
+    open_places = get_user_input("Open Places API (New) page in browser? (yes/no)", "yes").lower()
     if open_places in ['yes', 'y']:
-        print_info("Opening Places API page...")
-        webbrowser.open("https://console.cloud.google.com/marketplace/product/google/places-backend.googleapis.com")
+        print_info("Opening Places API (New) page...")
+        # Direct link to new Places API
+        webbrowser.open("https://console.cloud.google.com/apis/library/places-backend.googleapis.com")
         time.sleep(2)
     
     wait_for_user()
@@ -291,7 +302,7 @@ Now let's create an API key for authentication:
 
 To restrict your key (recommended):
   a. Under "API restrictions", select "Restrict key"
-  b. In the dropdown, select "Places API"
+  b. In the dropdown, search for and select "Places API (New)"
   c. Click "Save"
 """)
     

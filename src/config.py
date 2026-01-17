@@ -82,7 +82,7 @@ DEFAULT_CURRENCY = "USD"
 # 5. (Recommended) Restrict key to Places API only
 # 6. Paste your key below:
 #
-GOOGLE_PLACES_API_KEY = ""  # Paste your API key here (leave empty to use OpenStreetMap only)
+GOOGLE_PLACES_API_KEY = "AIzaSyBxKOVuQLNuxnsVhIuQNADABE9On8lEUOQ"  # Paste your API key here (leave empty to use OpenStreetMap only)
 
 # OpenStreetMap Nominatim (free fallback, no key needed)
 # Automatically used when Google API key is not configured
