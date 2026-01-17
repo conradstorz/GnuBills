@@ -242,7 +242,7 @@ address lookups. For personal use, you likely won't exceed the free tier.
 We'll start by opening the Google Cloud Console where you can create a new
 project and enable the Places API. After that webpage opens return here to continue.
 """)
-    AIzaSyBxKOVuQLNuxnsVhIuQNADABE9On8lEUOQ
+
     open_browser = get_user_input("Open Google Cloud Console in browser? (yes/no)", "yes").lower()
     if open_browser in ['yes', 'y']:
         print_info("Opening https://console.cloud.google.com/")
@@ -270,62 +270,43 @@ dropdown instead.
     
     wait_for_user()
     
-    # Step 3: Enable Places API
-    print_step(3, "Enable the Places API (New)")
+    # Step 3: Enable Places API and Create API Key
+    print_step(3, "Enable the Places API (New) and Create API Key")
     print(f"""
 {Colors.BOLD}{Colors.YELLOW}IMPORTANT: Enable "Places API (New)" not the legacy "Places API"{Colors.END}
 
-Now we need to enable the NEW Places API for your project:
+We'll now enable the API and create credentials in one workflow:
 
 1. In the Google Cloud Console, use the search bar at the top
 2. Type "Places API (New)" and press Enter
 3. Look for {Colors.BOLD}"Places API (New)"{Colors.END} - make sure it says "(New)"!
 4. Click on "Places API (New)" in the search results
-5. Click the "ENABLE" button
-6. Wait for the API to be enabled (usually takes a few seconds)
+5. Click the {Colors.BOLD}"ENABLE"{Colors.END} button
+6. After enabling, you'll see the API page with an "CREATE CREDENTIALS" button
+7. Click {Colors.BOLD}"CREATE CREDENTIALS"{Colors.END}
+8. Select "API key" from the options
+9. A dialog will appear with your new API key - {Colors.BOLD}COPY IT NOW!{Colors.END}
 
 {Colors.YELLOW}Note: There are TWO different APIs:{Colors.END}
   • {Colors.GREEN}"Places API (New)"{Colors.END} ← Use this one! (newer, better)
   • "Places API" ← Legacy version, will NOT work with this app
+
+{Colors.BOLD}Optional but recommended:{Colors.END} After copying your key, click "RESTRICT KEY"
+  • Under "API restrictions", select "Restrict key"
+  • Search for and select "Places API (New)"
+  • Click "Save"
 """)
     
-    open_places = get_user_input("Open Places API (New) page in browser? (yes/no)", "yes").lower()
-    if open_places in ['yes', 'y']:
-        print_info("Opening Places API (New) page...")
-        # Direct link to new Places API
-        webbrowser.open("https://console.cloud.google.com/apis/library/places-backend.googleapis.com")
+    open_console = get_user_input("Open Google Cloud Console in browser? (yes/no)", "yes").lower()
+    if open_console in ['yes', 'y']:
+        print_info("Opening Google Cloud Console API Library...")
+        webbrowser.open("https://console.cloud.google.com/apis/library")
         time.sleep(2)
     
     wait_for_user()
     
-    # Step 4: Create API Key
-    print_step(4, "Create an API Key")
-    print("""
-Now let's create an API key for authentication:
-
-1. In the Google Cloud Console, go to "APIs & Services" > "Credentials"
-   (use the navigation menu ☰ on the left)
-2. Click "+ CREATE CREDENTIALS" at the top
-3. Select "API key" from the dropdown
-4. A dialog will appear with your new API key - COPY IT NOW!
-5. (Optional but recommended) Click "RESTRICT KEY" to secure it
-
-To restrict your key (recommended):
-  a. Under "API restrictions", select "Restrict key"
-  b. In the dropdown, search for and select "Places API (New)"
-  c. Click "Save"
-""")
-    
-    open_credentials = get_user_input("Open Credentials page in browser? (yes/no)", "yes").lower()
-    if open_credentials in ['yes', 'y']:
-        print_info("Opening Credentials page...")
-        webbrowser.open("https://console.cloud.google.com/apis/credentials")
-        time.sleep(2)
-    
-    wait_for_user()
-    
-    # Step 5: Enter API Key
-    print_step(5, "Enter Your API Key")
+    # Step 4: Enter API Key
+    print_step(4, "Enter Your API Key")
     print("""
 Please paste your Google Places API key below.
 
@@ -357,11 +338,11 @@ It's typically 39 characters long and starts with "AIza".
         api_key = key_input
         break
     
-    # Step 6: Test API Key
-    print_step(6, "Test Your API Key")
+    # Step 5: Test API Key
+    print_step(5, "Test Your API Key")
     print("""
 Let's verify that your API key works by making a test request to the
-Google Places API.
+Google Places API (New).
 """)
     
     test_now = get_user_input("Test the API key now? (yes/no)", "yes").lower()
@@ -373,7 +354,7 @@ Google Places API.
             print_info("""
 Common issues:
   • API key not yet active (can take a few minutes after creation)
-  • Places API not enabled for your project
+  • Wrong API enabled - make sure you enabled "Places API (New)" not legacy version
   • API key restrictions are too strict
   • Billing not enabled (required even for free tier)
 
@@ -384,8 +365,8 @@ Would you like to save the API key anyway and test it later?
                 print("\nSetup cancelled. You can run this script again later.")
                 return
     
-    # Step 7: Save to Config
-    print_step(7, "Save API Key to Configuration")
+    # Step 6: Save to Config
+    print_step(6, "Save API Key to Configuration")
     print("""
 Now we'll save your API key to a secure .env file so the Bill Processor
 can use it automatically. The .env file is NOT committed to git.
