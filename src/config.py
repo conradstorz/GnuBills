@@ -39,7 +39,8 @@ LOCALITY_STATE = "KY"
 LOCALITY_COUNTRY = "US"
 
 # Search radius in miles for address lookups
-SEARCH_RADIUS_MILES = 100
+# Note: Google Places API (New) max radius is 50,000 meters (~31 miles)
+SEARCH_RADIUS_MILES = 30
 
 # Your approximate coordinates (Louisville, KY downtown)
 # Used for distance calculations and "pick closest" logic

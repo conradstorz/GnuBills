@@ -1,24 +1,67 @@
 # Google Places API Setup
 
-This directory contains a script to help you set up Google Places API (New) access for automatic vendor address lookups.
+This directory contains an **end-to-end verification and setup tool** for Google Places API (New) access, which enables automatic vendor address lookups.
 
 **IMPORTANT:** You must enable the **"Places API (New)"** not the legacy "Places API" in Google Cloud Console.
 
+## Features
+
+🔍 **Intelligent Verification** - Auto-detects what's already configured  
+🎯 **Hybrid Approach** - Only sets up what's missing  
+🧪 **Full Integration Testing** - Tests the complete chain from .env → config → API  
+🔧 **Detailed Diagnostics** - Pinpoints exact failure points with troubleshooting steps  
+✅ **Exit Codes** - Perfect for CI/CD pipelines  
+📊 **Comprehensive Reporting** - 8-step verification with clear status
+
 ## Quick Start
 
-Run the interactive setup script:
+Run the interactive setup and verification tool:
 
 ```bash
-python setup_google_api.py
+uv run python setup_google_api.py
 ```
 
-The script will:
-1. ✓ Open Google Cloud Console in your browser
-2. ✓ Guide you through creating a project
-3. ✓ Help you enable the Places API
-4. ✓ Walk you through creating an API key
-5. ✓ Test your API key
-6. ✓ Automatically save it to your config
+The tool will:
+1. ✓ **Verify** your existing configuration automatically
+2. ✓ **Detect** which components are already set up  
+3. ✓ **Guide** you through setup for only the missing pieces
+4. ✓ **Test** the complete integration end-to-end
+5. ✓ **Troubleshoot** with detailed diagnostic steps
+
+### Verification Only Mode
+
+To check your current configuration without making changes:
+
+```bash
+uv run python setup_google_api.py --verify-only
+```
+
+This runs comprehensive checks on:
+- .env file existence and API key presence
+- API key format and validity
+- Google Places API connectivity
+- config.py integration
+- Full address lookup functionality
+- Google Cloud project and API status (if gcloud CLI available)
+
+Exit code: 0 if fully configured, 1 if issues found
+
+## What Gets Verified
+
+The tool performs **9 comprehensive checks**:
+
+1. **✓ Python dependencies** - Checks all required packages are installed
+2. **✓ .env file exists** - Checks for secure credential storage
+3. **✓ API key in .env** - Verifies GOOGLE_PLACES_API_KEY is set
+4. **✓ API key format** - Validates key structure and format
+5. **✓ API key works** - Tests authentication with Google Places API
+6. **✓ config.py integration** - Ensures config loads the key correctly
+7. **✓ Address lookup** - Tests full end-to-end functionality
+8. **✓ gcloud CLI** (optional) - Detects Google Cloud CLI if installed
+9. **✓ Places API enabled** (optional) - Verifies API status in project
+
+**Smart Detection**: The tool distinguishes between dependency issues and Google API configuration issues, providing appropriate guidance for each.
+
 
 ## Why Google Places API?
 
@@ -41,11 +84,12 @@ If you prefer to set up manually:
 4. Create an API key in "Credentials"
 5. (Recommended) Restrict the key to only "Places API (New)"
 6. Copy your API key
-7. Create a `.env` file in the project root (copy from `.env.example`):
+7. Create a `.env` file in the project root:
    ```bash
-   cp .env.example .env
+   # Create .env file and add your key
+   echo "GOOGLE_PLACES_API_KEY=your-api-key-here" > .env
    ```
-8. Add your key to `.env`:
+8. Or manually add your key to `.env`:
    ```
    GOOGLE_PLACES_API_KEY=your-api-key-here
    ```
@@ -70,25 +114,74 @@ You should see address details returned from Google Places API.
 
 ## Troubleshooting
 
-**"REQUEST_DENIED" error:**
-- Make sure Places API is enabled for your project
-- Check that billing is enabled (required even for free tier)
-- Wait a few minutes after creating the API key
+The tool provides **detailed troubleshooting steps** for each failure. Common issues:
+
+**"REQUEST_DENIED" or 403 error:**
+- Verify you enabled "Places API (New)" not the legacy "Places API"
+- Check API key restrictions in Google Cloud Console
+- Ensure billing is enabled (required even for free tier)
+- Wait a few minutes if you just created the API key
+- Verify the API key isn't restricted to different APIs
+
+**"API key expired" error:**
+- Create a new API key in Google Cloud Console
+- Update the .env file with the new key
+- Run verification to confirm: `uv run python setup_google_api.py --verify-only`
 
 **"OVER_QUERY_LIMIT" error:**
 - You've exceeded your quota
 - Check usage at [Google Cloud Console > Billing](https://console.cloud.google.com/billing)
+- Quota resets at midnight Pacific Time
 
 **Address lookups still using OpenStreetMap:**
 - Check logs at `logs/bill_processor.log`
-- Verify your API key is in `src/config.py`
-- Make sure the key is not empty string
+- Run verification: `uv run python setup_google_api.py --verify-only`
+- Look for specific failure point in the 9-step check
+- Follow the troubleshooting steps provided by the tool
+
+**Config.py doesn't load the API key:**
+- Ensure .env is in the project root directory
+- Verify python-dotenv is installed: `uv add python-dotenv` or `uv sync`
+- Try restarting your terminal/IDE to reload environment
+- Check for syntax errors in .env (no quotes needed around key)
+
 
 ## Monitoring Usage
 
 Monitor your API usage and costs:
 - [API Dashboard](https://console.cloud.google.com/apis/dashboard)
 - [Billing](https://console.cloud.google.com/billing)
+
+**Quick health check:**
+```bash
+uv run python setup_google_api.py --verify-only
+```
+
+This will report the complete status in seconds.
+
+## Advanced Usage
+
+### CI/CD Integration
+
+Use verification mode in continuous integration:
+
+```bash
+# In your CI script
+uv run python setup_google_api.py --verify-only
+if [ $? -eq 0 ]; then
+    echo "Google Places API configured correctly"
+else
+    echo "Google Places API configuration issues detected"
+    exit 1
+fi
+```
+
+### Debugging Integration Issues
+
+The tool tests the complete chain:
+1. .env file → 2. config.py → 3. address_lookup.py → 4. Google API
+
+Run with verification to pinpoint where the chain breaks.
 
 ## Disabling Google Places API
 
