@@ -41,12 +41,19 @@ If you prefer to set up manually:
 4. Create an API key in "Credentials"
 5. (Recommended) Restrict the key to only "Places API (New)"
 6. Copy your API key
-7. Edit `src/config.py` and paste your key:
-   ```python
-   GOOGLE_PLACES_API_KEY = "your-api-key-here"
+7. Create a `.env` file in the project root (copy from `.env.example`):
+   ```bash
+   cp .env.example .env
+   ```
+8. Add your key to `.env`:
+   ```
+   GOOGLE_PLACES_API_KEY=your-api-key-here
    ```
 
-**Note:** The legacy "Places API" will not work. You must use "Places API (New)".
+**Note:** 
+- The legacy "Places API" will not work. You must use "Places API (New)".
+- The `.env` file is in `.gitignore` and will NOT be committed to git (secure!)
+- Never commit API keys to version control!
 
 ## Testing Your Setup
 
@@ -87,16 +94,20 @@ Monitor your API usage and costs:
 
 To disable and use only OpenStreetMap:
 
-Edit `src/config.py`:
-```python
-GOOGLE_PLACES_API_KEY = ""  # Empty string = disabled
-```
+1. Edit `.env` file
+2. Comment out or remove the API key line:
+   ```
+   # GOOGLE_PLACES_API_KEY=
+   ```
+
+Or simply delete the `.env` file.
 
 ## Privacy & Security
 
-- Your API key is stored locally in `src/config.py`
-- Never commit your API key to version control (it's in `.gitignore`)
-- Consider restricting your API key to only Places API
+- Your API key is stored in `.env` file (NOT in config.py)
+- `.env` is in `.gitignore` and will never be committed to version control
+- Keep your `.env` file secure and never share it
+- Consider restricting your API key to only Places API (New)
 - Consider adding application restrictions (HTTP referrer, IP address)
 
 ## Cost Estimates
