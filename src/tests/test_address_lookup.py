@@ -350,29 +350,26 @@ class TestMockedAPILookups:
     @patch('address_lookup.config.DEFAULT_LOCALITY', 'Springfield, IL')
     @patch('address_lookup.config.CENTER_LAT', None)
     @patch('address_lookup.config.CENTER_LON', None)
-    @patch('address_lookup.requests.get')
-    def test_google_places_lookup_success(self, mock_get):
+    @patch('address_lookup.requests.post')
+    def test_google_places_lookup_success(self, mock_post):
         """Test successful Google Places lookup"""
         from address_lookup import lookup_google_places
         
         # Mock successful API response
         mock_response = Mock()
         mock_response.json.return_value = {
-            'status': 'OK',
-            'results': [{
-                'name': 'Acme Electric',
-                'formatted_address': '123 Main St, Springfield, IL 62701',
-                'geometry': {
-                    'location': {
-                        'lat': 39.8,
-                        'lng': -89.6
-                    }
+            'places': [{
+                'displayName': {'text': 'Acme Electric'},
+                'formattedAddress': '123 Main St, Springfield, IL 62701',
+                'location': {
+                    'latitude': 39.8,
+                    'longitude': -89.6
                 },
-                'place_id': 'test_place_id_123'
+                'id': 'test_place_id_123'
             }]
         }
         mock_response.raise_for_status = Mock()
-        mock_get.return_value = mock_response
+        mock_post.return_value = mock_response
         
         result = lookup_google_places("Acme Electric")
         
@@ -383,18 +380,17 @@ class TestMockedAPILookups:
     
     @patch('address_lookup.config.GOOGLE_PLACES_API_KEY', 'test_key')
     @patch('address_lookup.config.DEFAULT_LOCALITY', 'Springfield, IL')
-    @patch('address_lookup.requests.get')
-    def test_google_places_no_results(self, mock_get):
+    @patch('address_lookup.requests.post')
+    def test_google_places_no_results(self, mock_post):
         """Test Google Places when no results found"""
         from address_lookup import lookup_google_places
         
         mock_response = Mock()
         mock_response.json.return_value = {
-            'status': 'ZERO_RESULTS',
-            'results': []
+            'places': []
         }
         mock_response.raise_for_status = Mock()
-        mock_get.return_value = mock_response
+        mock_post.return_value = mock_response
         
         result = lookup_google_places("Nonexistent Business")
         
@@ -413,38 +409,37 @@ class TestMockedAPILookups:
     @patch('address_lookup.config.DEFAULT_LOCALITY', 'Louisville, KY')
     @patch('address_lookup.config.CENTER_LAT', None)
     @patch('address_lookup.config.CENTER_LON', None)
-    @patch('address_lookup.requests.get')
-    def test_google_places_return_all_true(self, mock_get):
+    @patch('address_lookup.requests.post')
+    def test_google_places_return_all_true(self, mock_post):
         """Test Google Places with return_all=True returns list of all results"""
         from address_lookup import lookup_google_places
         
         # Mock multiple results
         mock_response = Mock()
         mock_response.json.return_value = {
-            'status': 'OK',
-            'results': [
+            'places': [
                 {
-                    'name': 'Home Depot - Main St',
-                    'formatted_address': '123 Main St, Louisville, KY 40202',
-                    'geometry': {'location': {'lat': 38.25, 'lng': -85.76}},
-                    'place_id': 'place_1'
+                    'displayName': {'text': 'Home Depot - Main St'},
+                    'formattedAddress': '123 Main St, Louisville, KY 40202',
+                    'location': {'latitude': 38.25, 'longitude': -85.76},
+                    'id': 'place_1'
                 },
                 {
-                    'name': 'Home Depot - Oak Ave',
-                    'formatted_address': '456 Oak Ave, Louisville, KY 40204',
-                    'geometry': {'location': {'lat': 38.26, 'lng': -85.75}},
-                    'place_id': 'place_2'
+                    'displayName': {'text': 'Home Depot - Oak Ave'},
+                    'formattedAddress': '456 Oak Ave, Louisville, KY 40204',
+                    'location': {'latitude': 38.26, 'longitude': -85.75},
+                    'id': 'place_2'
                 },
                 {
-                    'name': 'Home Depot - Elm St',
-                    'formatted_address': '789 Elm St, Louisville, KY 40205',
-                    'geometry': {'location': {'lat': 38.27, 'lng': -85.74}},
-                    'place_id': 'place_3'
+                    'displayName': {'text': 'Home Depot - Elm St'},
+                    'formattedAddress': '789 Elm St, Louisville, KY 40205',
+                    'location': {'latitude': 38.27, 'longitude': -85.74},
+                    'id': 'place_3'
                 }
             ]
         }
         mock_response.raise_for_status = Mock()
-        mock_get.return_value = mock_response
+        mock_post.return_value = mock_response
         
         results = lookup_google_places("Home Depot", return_all=True)
         
@@ -470,18 +465,17 @@ class TestMockedAPILookups:
     
     @patch('address_lookup.config.GOOGLE_PLACES_API_KEY', 'test_key')
     @patch('address_lookup.config.DEFAULT_LOCALITY', 'Louisville, KY')
-    @patch('address_lookup.requests.get')
-    def test_google_places_return_all_no_results(self, mock_get):
+    @patch('address_lookup.requests.post')
+    def test_google_places_return_all_no_results(self, mock_post):
         """Test Google Places with return_all=True when no results found"""
         from address_lookup import lookup_google_places
         
         mock_response = Mock()
         mock_response.json.return_value = {
-            'status': 'ZERO_RESULTS',
-            'results': []
+            'places': []
         }
         mock_response.raise_for_status = Mock()
-        mock_get.return_value = mock_response
+        mock_post.return_value = mock_response
         
         results = lookup_google_places("Nonexistent", return_all=True)
         
@@ -493,32 +487,31 @@ class TestMockedAPILookups:
     @patch('address_lookup.config.DEFAULT_LOCALITY', 'Louisville, KY')
     @patch('address_lookup.config.CENTER_LAT', None)
     @patch('address_lookup.config.CENTER_LON', None)
-    @patch('address_lookup.requests.get')
-    def test_google_places_return_all_false_returns_single(self, mock_get):
+    @patch('address_lookup.requests.post')
+    def test_google_places_return_all_false_returns_single(self, mock_post):
         """Test Google Places with return_all=False returns only best result"""
         from address_lookup import lookup_google_places
         
         # Mock multiple results
         mock_response = Mock()
         mock_response.json.return_value = {
-            'status': 'OK',
-            'results': [
+            'places': [
                 {
-                    'name': 'Best Match',
-                    'formatted_address': '123 Main St, Louisville, KY 40202',
-                    'geometry': {'location': {'lat': 38.25, 'lng': -85.76}},
-                    'place_id': 'place_1'
+                    'displayName': {'text': 'Best Match'},
+                    'formattedAddress': '123 Main St, Louisville, KY 40202',
+                    'location': {'latitude': 38.25, 'longitude': -85.76},
+                    'id': 'place_1'
                 },
                 {
-                    'name': 'Second Match',
-                    'formatted_address': '456 Oak Ave, Louisville, KY 40204',
-                    'geometry': {'location': {'lat': 38.26, 'lng': -85.75}},
-                    'place_id': 'place_2'
+                    'displayName': {'text': 'Second Match'},
+                    'formattedAddress': '456 Oak Ave, Louisville, KY 40204',
+                    'location': {'latitude': 38.26, 'longitude': -85.75},
+                    'id': 'place_2'
                 }
             ]
         }
         mock_response.raise_for_status = Mock()
-        mock_get.return_value = mock_response
+        mock_post.return_value = mock_response
         
         # Need to mock the phone lookup too
         with patch('address_lookup._get_google_place_phone', return_value=None):

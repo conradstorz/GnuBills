@@ -12,7 +12,6 @@ sys.path.append(str(Path(__file__).parent.parent))
 
 from utils import (
     strip_vendor_name,
-    make_expense_account_name,
     parse_input_line,
     fuzzy_match_vendor,
     format_currency,
@@ -65,24 +64,6 @@ class TestStripVendorName:
         result = strip_vendor_name("Café électrique")
         assert "caf" in result
         assert result.replace("_", "").isalnum()
-
-
-class TestMakeExpenseAccountName:
-    """Test make_expense_account_name() function"""
-    
-    def test_adds_prefix(self):
-        """Test that expense account name includes prefix"""
-        result = make_expense_account_name("Test Vendor")
-        assert result.startswith("cmsnpd_")
-        assert "test_vendor" in result
-    
-    def test_uses_strip_vendor_name(self):
-        """Test that it uses strip_vendor_name internally"""
-        result1 = make_expense_account_name("Acme Inc")
-        result2 = make_expense_account_name("Acme Corp")
-        # Both should produce same account name after stripping suffixes
-        assert result1 == "cmsnpd_acme"
-        assert result2 == "cmsnpd_acme"
 
 
 class TestParseInputLine:
@@ -355,17 +336,6 @@ class TestPropertyBasedUtils:
             assert isinstance(result, str)
         except Exception as e:
             pytest.fail(f"strip_vendor_name crashed on input '{name}': {e}")
-    
-    @settings(max_examples=50)
-    @given(st.text())
-    def test_make_expense_account_name_never_crashes(self, name):
-        """Test that make_expense_account_name never crashes"""
-        try:
-            result = make_expense_account_name(name)
-            assert isinstance(result, str)
-            assert result.startswith("cmsnpd_")
-        except Exception as e:
-            pytest.fail(f"make_expense_account_name crashed on input '{name}': {e}")
     
     @settings(max_examples=50)
     @given(st.floats(min_value=-1e10, max_value=1e10, allow_nan=False, allow_infinity=False))
