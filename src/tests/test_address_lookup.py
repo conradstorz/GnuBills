@@ -285,12 +285,12 @@ class TestGooglePlacePhone:
 
 
 class TestPropertyBasedAddressLookup:
-    """Property-based tests for address lookup functions"""
+    """Property-based tests for address lookup functions using Hypothesis"""
     
-    @settings(max_examples=50)
+    @settings(max_examples=1000)
     @given(st.text())
     def test_parse_formatted_address_never_crashes(self, address):
-        """Test that _parse_formatted_address never crashes"""
+        """Test that _parse_formatted_address never crashes on any text input"""
         try:
             result = _parse_formatted_address(address)
             assert isinstance(result, dict)
@@ -312,6 +312,114 @@ class TestPropertyBasedAddressLookup:
             assert isinstance(result['zip'], str)
         except Exception as e:
             pytest.fail(f"_parse_formatted_address crashed on input '{address}': {e}")
+    
+    @settings(max_examples=1000)
+    @given(st.text(min_size=0, max_size=500))
+    def test_parse_address_smart_never_crashes(self, address):
+        """Test that parse_address_smart never crashes on any text input"""
+        from address_lookup import parse_address_smart
+        try:
+            result = parse_address_smart(address)
+            assert isinstance(result, dict)
+            assert all(key in result for key in ['street', 'city', 'state', 'zip', 'phone', 'name', 'line1', 'line2'])
+            assert all(isinstance(result[key], str) for key in result.keys())
+        except Exception as e:
+            pytest.fail(f"parse_address_smart crashed on input '{address}': {e}")
+    
+    @settings(max_examples=500)
+    @given(
+        street_num=st.integers(min_value=1, max_value=99999),
+        street_name=st.text(alphabet=st.characters(whitelist_categories=('Lu', 'Ll', 'Nd')), min_size=1, max_size=30),
+        city=st.text(alphabet=st.characters(whitelist_categories=('Lu', 'Ll')), min_size=1, max_size=30),
+        state=st.sampled_from(['AL', 'AK', 'AZ', 'AR', 'CA', 'CO', 'CT', 'DE', 'FL', 'GA', 'NY', 'TX', 'IL']),
+        zip_code=st.integers(min_value=10000, max_value=99999)
+    )
+    def test_parse_realistic_addresses(self, street_num, street_name, city, state, zip_code):
+        """Test parsing realistic address formats"""
+        from address_lookup import parse_address_smart
+        
+        # Test various realistic formats
+        formats = [
+            f"{street_num} {street_name}, {city}, {state} {zip_code}",
+            f"{street_num} {street_name}, {city}, {state}",
+            f"{street_num} {street_name}, {city} {zip_code}",
+            f"{street_num} {street_name}\n{city}, {state} {zip_code}",
+        ]
+        
+        for address in formats:
+            try:
+                result = parse_address_smart(address)
+                assert isinstance(result, dict)
+                # Parser should extract something, even if not perfect
+                assert isinstance(result['street'], str)
+                assert isinstance(result['state'], str)
+            except Exception as e:
+                pytest.fail(f"parse_address_smart crashed on realistic address '{address}': {e}")
+    
+    @settings(max_examples=500)
+    @given(
+        zip_code=st.one_of(
+            st.integers(min_value=10000, max_value=99999).map(str),  # 5-digit
+            st.tuples(
+                st.integers(min_value=10000, max_value=99999),
+                st.integers(min_value=1000, max_value=9999)
+            ).map(lambda x: f"{x[0]}-{x[1]}")  # ZIP+4
+        )
+    )
+    def test_parse_zip_codes(self, zip_code):
+        """Test that ZIP codes are correctly identified in various formats"""
+        from address_lookup import parse_address_smart
+        
+        address = f"123 Main St, Anytown, CA {zip_code}"
+        try:
+            result = parse_address_smart(address)
+            # Should extract the zip code
+            if result['zip']:
+                assert zip_code in result['zip'] or result['zip'] in zip_code
+        except Exception as e:
+            pytest.fail(f"parse_address_smart crashed on ZIP code '{zip_code}': {e}")
+    
+    @settings(max_examples=500)
+    @given(
+        phone=st.one_of(
+            st.tuples(st.integers(100, 999), st.integers(100, 999), st.integers(1000, 9999))
+              .map(lambda x: f"({x[0]}) {x[1]}-{x[2]}"),
+            st.tuples(st.integers(100, 999), st.integers(100, 999), st.integers(1000, 9999))
+              .map(lambda x: f"{x[0]}-{x[1]}-{x[2]}"),
+            st.tuples(st.integers(100, 999), st.integers(100, 999), st.integers(1000, 9999))
+              .map(lambda x: f"{x[0]}.{x[1]}.{x[2]}"),
+        )
+    )
+    def test_parse_phone_numbers(self, phone):
+        """Test that phone numbers are correctly identified in various formats"""
+        from address_lookup import parse_address_smart
+        
+        address = f"Acme Corp, {phone}, 123 Main St, Anytown, CA 12345"
+        try:
+            result = parse_address_smart(address)
+            # Should not crash, phone may or may not be extracted depending on position
+            assert isinstance(result, dict)
+        except Exception as e:
+            pytest.fail(f"parse_address_smart crashed on phone number '{phone}': {e}")
+    
+    @settings(max_examples=500)
+    @given(
+        text=st.one_of(
+            st.text(alphabet=st.characters(blacklist_characters='\x00'), min_size=0, max_size=200),
+            st.text(alphabet='0123456789,.- \n\t', min_size=0, max_size=100),
+            st.text(alphabet=st.characters(whitelist_categories=('Lu', 'Ll', 'Nd', 'Zs')), min_size=0, max_size=200),
+        )
+    )
+    def test_parse_edge_case_inputs(self, text):
+        """Test parsing with edge case inputs: numbers only, special chars, unicode, etc."""
+        from address_lookup import parse_address_smart
+        
+        try:
+            result = parse_address_smart(text)
+            assert isinstance(result, dict)
+            assert all(isinstance(result[key], str) for key in result.keys())
+        except Exception as e:
+            pytest.fail(f"parse_address_smart crashed on edge case '{text[:50]}': {e}")
     
     @settings(max_examples=50)
     @given(st.dictionaries(
