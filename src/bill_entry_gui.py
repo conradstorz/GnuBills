@@ -228,6 +228,12 @@ class SimpleBillEntryGUI:
         self.autocomplete_listbox = None
         self.vendor_matches = []
         
+        # STEP 0: Check if database is locked BEFORE anything else
+        if not self._check_database_lock():
+            # Database is locked - error shown, exit
+            logger.error("Database lock check failed - exiting")
+            return
+        
         # Verify/create AP account at startup
         try:
             ap_guid = gnucash_db.ensure_ap_account_exists()
@@ -248,7 +254,60 @@ class SimpleBillEntryGUI:
         self.root.bind('<Control-s>', lambda e: self._save_bill())
         self.root.bind('<Control-n>', lambda e: self._clear_form())
         
+        # Bind cleanup on window close
+        self.root.protocol("WM_DELETE_WINDOW", self._on_closing)
+        
         log_function_exit("SimpleBillEntryGUI.__init__")
+    
+    def _on_closing(self):
+        """Handle window close - release database lock."""
+        logger.info("Application closing - releasing database lock")
+        gnucash_db.release_lock()
+        self.root.destroy()
+    
+    def _check_database_lock(self) -> bool:
+        """
+        Check if GnuCash database is locked, and acquire our own lock if available.
+        
+        This MUST be called before ANY database access.
+        
+        Returns:
+            True if database is accessible and lock acquired
+            False if database is locked (GnuCash or another instance running)
+        """
+        # First, try to clean any stale locks from crashed BillProcessor instances
+        # on this machine (this handles abnormal termination like Ctrl+C)
+        if gnucash_db.clean_stale_lock():
+            logger.info("Cleaned up stale lock from previous crashed session")
+        
+        # Now check if database is still locked (by GnuCash or another instance)
+        is_locked, hostname, pid = gnucash_db.is_gnucash_locked()
+        if is_locked:
+            logger.error(f"GnuCash database is LOCKED by {hostname} (PID {pid})")
+            messagebox.showerror(
+                "Database is Locked",
+                f"The GnuCash database is currently locked.\n\n"
+                f"Please close GnuCash or other instances of this application.\n\n"
+                f"Locked by: {hostname}\n"
+                f"Process ID: {pid}"
+            )
+            # Exit the application completely
+            self.root.destroy()
+            return False
+        
+        # Database is available - acquire our lock
+        if not gnucash_db.acquire_lock():
+            logger.error("Failed to acquire database lock")
+            messagebox.showerror(
+                "Lock Error",
+                "Failed to acquire database lock.\n\n"
+                "The database may have been locked by another process."
+            )
+            self.root.destroy()
+            return False
+        
+        logger.info("Database lock check: PASSED - lock acquired")
+        return True
     
     def _create_widgets(self):
         """Create the main GUI elements."""
