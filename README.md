@@ -1,85 +1,129 @@
 # GnuCash Bill Processor
 
-Automate vendor bill entry with address lookup for GnuCash.
+**Simplify vendor bill management in GnuCash** - Automatically create complete vendor records with addresses and streamline the bill/post/pay workflow.
+
+## Why Use This Tool?
+
+### Problem 1: Creating Complete Vendor Records is Tedious
+Manually entering vendor names and addresses in GnuCash is time-consuming and error-prone. This tool:
+- **Automatically looks up vendor addresses** using Google Places API
+- **Creates complete vendor records** with full mailing addresses
+- **Saves time** - no more typing addresses manually
+
+### Problem 2: Printing Checks with Addresses Requires the Bill/Post/Pay Process
+GnuCash can only print vendor addresses on checks if you use the full bill workflow:
+1. Create a vendor bill
+2. Post the bill (creates accounts payable entry)
+3. Pay the bill (creates the check transaction)
+
+**This tool automates all three steps**, making it easy to:
+- ✓ Create bills with proper vendor records
+- ✓ Post bills to accounts payable
+- ✓ Generate payment transactions ready for check printing
+- ✓ Print checks with complete mailing addresses
+
+Without this tool, you'd need to manually execute this multi-step process in GnuCash for every bill.
+
+---
 
 ## Quick Start
 
-### Option 1: GUI Entry (Recommended)
+### Installation
+
+1. **Install uv** (modern Python package manager):
+   ```cmd
+   # On Windows with PowerShell
+   powershell -c "irm https://astral.sh/uv/install.ps1 | iex"
+   ```
+
+2. **Clone this repository** and install dependencies:
+   ```cmd
+   cd path\to\bill_processor
+   uv sync
+   ```
+
+3. **Configure the database path** in `src\config.py`:
+   ```python
+   GNUCASH_DB_PATH = Path(r"C:\path\to\your\database.gnucash")
+   ```
+
+4. **(Optional) Set up Google Places API** for automatic address lookup:
+   ```cmd
+   uv run python setup_google_api.py
+   ```
+   See `docs/GOOGLE_API_SETUP.md` for detailed instructions.
+
+---
+
+### Running the Bill Entry GUI
 
 ```cmd
-cd D:\Users\Conrad\Documents\GnuCash\bill_processor
 uv run python src\bill_entry_gui.py
 ```
 
-The GUI provides:
+The GUI makes it easy to:
+- Enter vendor bills with real-time autocomplete
+- Preview your bills queue before processing
+- Process all bills with one click (create → post → pay)
 
-- **Real-time fuzzy matching** as you type vendor names
-- **Tab completion** from known vendors
-- **Live preview** of bills queue
-- **Edit/remove** entries before processing
+**Important:** Make sure GnuCash is **closed** before running this tool (database lock protection is enforced).
 
-### Option 2: Manual Entry
+---
 
-1. **Edit your bills file**: `data\bills_to_process.txt`
+## How It Works
 
-   ```text
-   Acme Electric, 150.00, January service
-   Louisville Water, 75.50
-   Bob's Plumbing, 340.00, Kitchen repair, 2026-01-15
-   ```
+### Simple Workflow
 
-2. **Run the processor**:
+1. **Enter bills** using the GUI or text file
+2. **Vendor lookup** - Tool finds or creates vendors with addresses
+3. **One-click processing** - Bills are created, posted, and paid in GnuCash
+4. **Print checks** - Open GnuCash and print checks with addresses
 
-   ```cmd
-   uv run python src\bill_processor.py
-   ```
+### Input Format
 
-3. **Review and confirm** the proposed bills
-
-4. **Open GnuCash** to process payments and print checks
-
-## Input Format
+Bills can be entered as simple text (GUI or `data\bills_to_process.txt`):
 
 ```text
-vendor_name, amount, memo, date
+Acme Electric, 150.00, January service
+Louisville Water, 75.50
+Bob's Plumbing, 340.00, Kitchen repair, 2026-01-15
 ```
 
-- `vendor_name` - Required. Business name (fuzzy matched)
-- `amount` - Required. Bill amount
-- `memo` - Optional. Defaults to "no memo"
-- `date` - Optional. Defaults to today. Format: YYYY-MM-DD
+Format: `vendor_name, amount, memo, date`
+- **vendor_name** - Required (fuzzy matched)
+- **amount** - Required
+- **memo** - Optional (defaults to "no memo")
+- **date** - Optional (defaults to today, format: YYYY-MM-DD)
+
+---
 
 ## Configuration
 
-Edit `src\config.py` to change:
+Edit `src\config.py` for:
 
-- GnuCash database path
-- Your locality for address searches
-- API keys for address lookup
+- **GnuCash database path** - Point to your `.gnucash` SQLite file
+- **Your locality** - City/state for address searches (e.g., "Louisville, KY")
+- **Google API key** - For automatic address lookups (optional but recommended)
 
-## First Run
-
-On first run, the system will:
-
-1. Create `data\vendor_database.json`
-2. Prompt you to confirm settings
-3. Guide you through any missing configuration
-
-## Project Documentation
-
-**Note:** Full development documentation including `PROJECT_HISTORY.md`, `GNUCASH_SQLITE_BILL_WORKFLOW.md`, and test files are maintained in the `development` branch for reference.
+---
 
 ## Requirements
 
-- Python 3.11+
-- GnuCash with SQLite backend
-- Internet connection (for address lookups)
-- [uv](https://github.com/astral-sh/uv) - Modern Python package manager
+- **Python 3.11+**
+- **GnuCash 4.x or 5.x** with SQLite backend
+- **uv** package manager ([installation](https://github.com/astral-sh/uv))
+- Internet connection for address lookups
 
-Install dependencies:
+---
 
-```cmd
-uv sync
-```
+## Additional Documentation
 
-This will install all required packages from `pyproject.toml`.
+- `docs/GOOGLE_API_SETUP.md` - Setting up address lookup
+- `docs/GNUCASH_SQLITE_BILL_WORKFLOW.md` - How the bill/post/pay process works
+- `docs/vendor-sync-readme.md` - Syncing vendors between JSON and GnuCash
+
+---
+
+## License
+
+This is personal-use software. Use at your own risk. Always backup your GnuCash database before use.
