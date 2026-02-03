@@ -35,6 +35,11 @@ build/
 *.log
 logs/
 
+# Private data - DO NOT COMMIT
+data/vendor_database.json
+data/*.gnucash
+data/bills_to_process.txt
+
 # OS files
 Thumbs.db
 .DS_Store
