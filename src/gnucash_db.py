@@ -1569,7 +1569,7 @@ def create_bill(
             
             conn.execute(entry_sql, (
                 entry_guid, date_opened, date_entered, memo,
-                amount_num, amount_denom,
+                1, 1,  # quantity should always be 1
                 expense_account_guid, amount_num, amount_denom, bill_guid
             ))
             
@@ -1970,9 +1970,9 @@ def pay_bill(
                     reconcile_state, reconcile_date,
                     value_num, value_denom, quantity_num, quantity_denom,
                     lot_guid
-                ) VALUES (?, ?, ?, '', 'Payment', 'n', '', ?, ?, ?, ?, ?)
+                ) VALUES (?, ?, ?, ?, 'Payment', 'n', '', ?, ?, ?, ?, ?)
             """, (
-                split_ap_guid, payment_txn_guid, ap_account_guid,
+                split_ap_guid, payment_txn_guid, ap_account_guid, memo,
                 amount_num, amount_denom, amount_num, amount_denom,
                 bill_lot_guid  # Links to the BILL's lot, not payment lot!
             ))
@@ -1984,9 +1984,9 @@ def pay_bill(
                     reconcile_state, reconcile_date,
                     value_num, value_denom, quantity_num, quantity_denom,
                     lot_guid
-                ) VALUES (?, ?, ?, '', 'Payment', 'n', '', ?, ?, ?, ?, NULL)
+                ) VALUES (?, ?, ?, ?, 'Payment', 'n', '', ?, ?, ?, ?, NULL)
             """, (
-                split_checking_guid, payment_txn_guid, checking_account_guid,
+                split_checking_guid, payment_txn_guid, checking_account_guid, memo,
                 -amount_num, amount_denom, -amount_num, amount_denom
             ))
             
