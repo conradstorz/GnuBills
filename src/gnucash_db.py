@@ -379,19 +379,37 @@ def _is_process_running(pid: int) -> bool:
         True if process is running, False otherwise
     """
     import os
+    import sys
     
     if pid <= 0:
         return False
     
-    try:
-        # On Windows and Unix, sending signal 0 checks if process exists
-        os.kill(pid, 0)
-        return True
-    except OSError:
-        return False
-    except Exception:
-        # If we can't check, assume it might be running
-        return True
+    # Windows requires different approach - os.kill(pid, 0) doesn't work reliably
+    if sys.platform == 'win32':
+        try:
+            import psutil
+            return psutil.pid_exists(pid)
+        except ImportError:
+            # Fallback: try Windows-specific approach using tasklist
+            import subprocess
+            try:
+                output = subprocess.check_output(['tasklist', '/FI', f'PID eq {pid}'], 
+                                                stderr=subprocess.DEVNULL)
+                return str(pid) in output.decode()
+            except Exception:
+                # If we can't check, assume it's running to be safe
+                logger.warning(f"Cannot verify if PID {pid} is running on Windows - assuming running for safety")
+                return True
+    else:
+        # Unix/Linux: signal 0 works fine
+        try:
+            os.kill(pid, 0)
+            return True
+        except OSError:
+            return False
+        except Exception:
+            # If we can't check, assume it might be running
+            return True
 
 
 def _get_lock_hostname() -> str:
