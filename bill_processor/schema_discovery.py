@@ -32,7 +32,7 @@ from typing import Dict, List, Optional, Tuple, Any
 from dataclasses import dataclass, field, asdict
 from loguru import logger
 
-import config
+from bill_processor import config
 
 
 # Path to schema cache file
@@ -271,7 +271,7 @@ class SchemaDiscovery:
     def _validate_vendor_references(self):
         """Validate vendor JSON references against GnuCash database."""
         try:
-            from vendor_sync import validate_and_fix_vendor_references
+            from bill_processor.vendor_sync import validate_and_fix_vendor_references
             
             logger.debug("Validating vendor references...")
             result = validate_and_fix_vendor_references(auto_fix=True, verbose=False)

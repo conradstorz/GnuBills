@@ -8,16 +8,12 @@ import pytest
 from unittest.mock import Mock, patch, MagicMock
 from hypothesis import given, strategies as st, settings
 
-import sys
-from pathlib import Path
-sys.path.append(str(Path(__file__).parent.parent))
-
-from address_lookup import (
+from bill_processor.address_lookup import (
     AddressLookupError,
     _parse_formatted_address,
     _get_google_place_phone
 )
-from utils import format_address_for_display
+from bill_processor.utils import format_address_for_display
 
 
 class TestParseFormattedAddress:
@@ -226,8 +222,8 @@ class TestFormatAddressForDisplay:
 class TestGooglePlacePhone:
     """Test _get_google_place_phone() with mocking"""
     
-    @patch('address_lookup.config.GOOGLE_PLACES_API_KEY', 'test_key')
-    @patch('address_lookup.requests.get')
+    @patch('bill_processor.address_lookup.config.GOOGLE_PLACES_API_KEY', 'test_key')
+    @patch('bill_processor.address_lookup.requests.get')
     def test_successful_phone_retrieval(self, mock_get):
         """Test successful phone number retrieval"""
         # Mock successful API response
@@ -245,8 +241,8 @@ class TestGooglePlacePhone:
         assert phone == '(555) 123-4567'
         assert mock_get.called
     
-    @patch('address_lookup.config.GOOGLE_PLACES_API_KEY', 'test_key')
-    @patch('address_lookup.requests.get')
+    @patch('bill_processor.address_lookup.config.GOOGLE_PLACES_API_KEY', 'test_key')
+    @patch('bill_processor.address_lookup.requests.get')
     def test_no_phone_in_response(self, mock_get):
         """Test when API returns no phone number"""
         mock_response = Mock()
@@ -258,7 +254,7 @@ class TestGooglePlacePhone:
         
         assert phone is None
     
-    @patch('address_lookup.config.GOOGLE_PLACES_API_KEY', None)
+    @patch('bill_processor.address_lookup.config.GOOGLE_PLACES_API_KEY', None)
     def test_no_api_key(self):
         """Test behavior when API key is not configured"""
         phone = _get_google_place_phone('test_place_id')
@@ -272,8 +268,8 @@ class TestGooglePlacePhone:
         phone = _get_google_place_phone(None)
         assert phone is None
     
-    @patch('address_lookup.config.GOOGLE_PLACES_API_KEY', 'test_key')
-    @patch('address_lookup.requests.get')
+    @patch('bill_processor.address_lookup.config.GOOGLE_PLACES_API_KEY', 'test_key')
+    @patch('bill_processor.address_lookup.requests.get')
     def test_api_request_exception(self, mock_get):
         """Test handling of API request exceptions"""
         import requests
@@ -317,7 +313,7 @@ class TestPropertyBasedAddressLookup:
     @given(st.text(min_size=0, max_size=500))
     def test_parse_address_smart_never_crashes(self, address):
         """Test that parse_address_smart never crashes on any text input"""
-        from address_lookup import parse_address_smart
+        from bill_processor.address_lookup import parse_address_smart
         try:
             result = parse_address_smart(address)
             assert isinstance(result, dict)
@@ -336,7 +332,7 @@ class TestPropertyBasedAddressLookup:
     )
     def test_parse_realistic_addresses(self, street_num, street_name, city, state, zip_code):
         """Test parsing realistic address formats"""
-        from address_lookup import parse_address_smart
+        from bill_processor.address_lookup import parse_address_smart
         
         # Test various realistic formats
         formats = [
@@ -368,7 +364,7 @@ class TestPropertyBasedAddressLookup:
     )
     def test_parse_zip_codes(self, zip_code):
         """Test that ZIP codes are correctly identified in various formats"""
-        from address_lookup import parse_address_smart
+        from bill_processor.address_lookup import parse_address_smart
         
         address = f"123 Main St, Anytown, CA {zip_code}"
         try:
@@ -392,7 +388,7 @@ class TestPropertyBasedAddressLookup:
     )
     def test_parse_phone_numbers(self, phone):
         """Test that phone numbers are correctly identified in various formats"""
-        from address_lookup import parse_address_smart
+        from bill_processor.address_lookup import parse_address_smart
         
         address = f"Acme Corp, {phone}, 123 Main St, Anytown, CA 12345"
         try:
@@ -412,7 +408,7 @@ class TestPropertyBasedAddressLookup:
     )
     def test_parse_edge_case_inputs(self, text):
         """Test parsing with edge case inputs: numbers only, special chars, unicode, etc."""
-        from address_lookup import parse_address_smart
+        from bill_processor.address_lookup import parse_address_smart
         
         try:
             result = parse_address_smart(text)
@@ -456,14 +452,14 @@ class TestAddressLookupError:
 class TestMockedAPILookups:
     """Test API lookup functions with comprehensive mocking"""
     
-    @patch('address_lookup.config.GOOGLE_PLACES_API_KEY', 'test_key')
-    @patch('address_lookup.config.DEFAULT_LOCALITY', 'Springfield, IL')
-    @patch('address_lookup.config.CENTER_LAT', None)
-    @patch('address_lookup.config.CENTER_LON', None)
-    @patch('address_lookup.requests.post')
+    @patch('bill_processor.address_lookup.config.GOOGLE_PLACES_API_KEY', 'test_key')
+    @patch('bill_processor.address_lookup.config.DEFAULT_LOCALITY', 'Springfield, IL')
+    @patch('bill_processor.address_lookup.config.CENTER_LAT', None)
+    @patch('bill_processor.address_lookup.config.CENTER_LON', None)
+    @patch('bill_processor.address_lookup.requests.post')
     def test_google_places_lookup_success(self, mock_post):
         """Test successful Google Places lookup"""
-        from address_lookup import lookup_google_places
+        from bill_processor.address_lookup import lookup_google_places
         
         # Mock successful API response
         mock_response = Mock()
@@ -488,12 +484,12 @@ class TestMockedAPILookups:
         assert result['source'] == 'google'
         assert result['place_id'] == 'test_place_id_123'
     
-    @patch('address_lookup.config.GOOGLE_PLACES_API_KEY', 'test_key')
-    @patch('address_lookup.config.DEFAULT_LOCALITY', 'Springfield, IL')
-    @patch('address_lookup.requests.post')
+    @patch('bill_processor.address_lookup.config.GOOGLE_PLACES_API_KEY', 'test_key')
+    @patch('bill_processor.address_lookup.config.DEFAULT_LOCALITY', 'Springfield, IL')
+    @patch('bill_processor.address_lookup.requests.post')
     def test_google_places_no_results(self, mock_post):
         """Test Google Places when no results found"""
-        from address_lookup import lookup_google_places
+        from bill_processor.address_lookup import lookup_google_places
         
         mock_response = Mock()
         mock_response.json.return_value = {
@@ -506,23 +502,23 @@ class TestMockedAPILookups:
         
         assert result is None
     
-    @patch('address_lookup.config.GOOGLE_PLACES_API_KEY', None)
+    @patch('bill_processor.address_lookup.config.GOOGLE_PLACES_API_KEY', None)
     def test_google_places_no_api_key(self):
         """Test Google Places when API key not configured"""
-        from address_lookup import lookup_google_places
+        from bill_processor.address_lookup import lookup_google_places
         
         result = lookup_google_places("Test Business")
         
         assert result is None
     
-    @patch('address_lookup.config.GOOGLE_PLACES_API_KEY', 'test_key')
-    @patch('address_lookup.config.DEFAULT_LOCALITY', 'Louisville, KY')
-    @patch('address_lookup.config.CENTER_LAT', None)
-    @patch('address_lookup.config.CENTER_LON', None)
-    @patch('address_lookup.requests.post')
+    @patch('bill_processor.address_lookup.config.GOOGLE_PLACES_API_KEY', 'test_key')
+    @patch('bill_processor.address_lookup.config.DEFAULT_LOCALITY', 'Louisville, KY')
+    @patch('bill_processor.address_lookup.config.CENTER_LAT', None)
+    @patch('bill_processor.address_lookup.config.CENTER_LON', None)
+    @patch('bill_processor.address_lookup.requests.post')
     def test_google_places_return_all_true(self, mock_post):
         """Test Google Places with return_all=True returns list of all results"""
-        from address_lookup import lookup_google_places
+        from bill_processor.address_lookup import lookup_google_places
         
         # Mock multiple results
         mock_response = Mock()
@@ -573,12 +569,12 @@ class TestMockedAPILookups:
             assert 'place_id' in result
             assert result['source'] == 'google'
     
-    @patch('address_lookup.config.GOOGLE_PLACES_API_KEY', 'test_key')
-    @patch('address_lookup.config.DEFAULT_LOCALITY', 'Louisville, KY')
-    @patch('address_lookup.requests.post')
+    @patch('bill_processor.address_lookup.config.GOOGLE_PLACES_API_KEY', 'test_key')
+    @patch('bill_processor.address_lookup.config.DEFAULT_LOCALITY', 'Louisville, KY')
+    @patch('bill_processor.address_lookup.requests.post')
     def test_google_places_return_all_no_results(self, mock_post):
         """Test Google Places with return_all=True when no results found"""
-        from address_lookup import lookup_google_places
+        from bill_processor.address_lookup import lookup_google_places
         
         mock_response = Mock()
         mock_response.json.return_value = {
@@ -593,14 +589,14 @@ class TestMockedAPILookups:
         # But empty list with return_all=True
         assert results is None or results == []
     
-    @patch('address_lookup.config.GOOGLE_PLACES_API_KEY', 'test_key')
-    @patch('address_lookup.config.DEFAULT_LOCALITY', 'Louisville, KY')
-    @patch('address_lookup.config.CENTER_LAT', None)
-    @patch('address_lookup.config.CENTER_LON', None)
-    @patch('address_lookup.requests.post')
+    @patch('bill_processor.address_lookup.config.GOOGLE_PLACES_API_KEY', 'test_key')
+    @patch('bill_processor.address_lookup.config.DEFAULT_LOCALITY', 'Louisville, KY')
+    @patch('bill_processor.address_lookup.config.CENTER_LAT', None)
+    @patch('bill_processor.address_lookup.config.CENTER_LON', None)
+    @patch('bill_processor.address_lookup.requests.post')
     def test_google_places_return_all_false_returns_single(self, mock_post):
         """Test Google Places with return_all=False returns only best result"""
-        from address_lookup import lookup_google_places
+        from bill_processor.address_lookup import lookup_google_places
         
         # Mock multiple results
         mock_response = Mock()
@@ -624,7 +620,7 @@ class TestMockedAPILookups:
         mock_post.return_value = mock_response
         
         # Need to mock the phone lookup too
-        with patch('address_lookup._get_google_place_phone', return_value=None):
+        with patch('bill_processor.address_lookup._get_google_place_phone', return_value=None):
             result = lookup_google_places("Test", return_all=False)
         
         # Should return a dict (single result), not a list
@@ -636,15 +632,15 @@ class TestMockedAPILookups:
 class TestOpenStreetMapLookup:
     """Test lookup_openstreetmap() with mocking"""
     
-    @patch('address_lookup.config.DEFAULT_LOCALITY', 'Louisville, KY')
-    @patch('address_lookup.config.CENTER_LAT', None)
-    @patch('address_lookup.config.CENTER_LON', None)
-    @patch('address_lookup.config.OSM_USER_AGENT', 'TestAgent/1.0')
-    @patch('address_lookup.time.sleep')  # Skip the rate limiting sleep
-    @patch('address_lookup.requests.get')
+    @patch('bill_processor.address_lookup.config.DEFAULT_LOCALITY', 'Louisville, KY')
+    @patch('bill_processor.address_lookup.config.CENTER_LAT', None)
+    @patch('bill_processor.address_lookup.config.CENTER_LON', None)
+    @patch('bill_processor.address_lookup.config.OSM_USER_AGENT', 'TestAgent/1.0')
+    @patch('bill_processor.address_lookup.time.sleep')  # Skip the rate limiting sleep
+    @patch('bill_processor.address_lookup.requests.get')
     def test_openstreetmap_success(self, mock_get, mock_sleep):
         """Test successful OpenStreetMap lookup"""
-        from address_lookup import lookup_openstreetmap
+        from bill_processor.address_lookup import lookup_openstreetmap
         
         mock_response = Mock()
         mock_response.json.return_value = [
@@ -677,13 +673,13 @@ class TestOpenStreetMapLookup:
         # Verify rate limiting sleep was called
         assert mock_sleep.called
     
-    @patch('address_lookup.config.DEFAULT_LOCALITY', 'Louisville, KY')
-    @patch('address_lookup.config.OSM_USER_AGENT', 'TestAgent/1.0')
-    @patch('address_lookup.time.sleep')
-    @patch('address_lookup.requests.get')
+    @patch('bill_processor.address_lookup.config.DEFAULT_LOCALITY', 'Louisville, KY')
+    @patch('bill_processor.address_lookup.config.OSM_USER_AGENT', 'TestAgent/1.0')
+    @patch('bill_processor.address_lookup.time.sleep')
+    @patch('bill_processor.address_lookup.requests.get')
     def test_openstreetmap_no_results(self, mock_get, mock_sleep):
         """Test OpenStreetMap when no results found"""
-        from address_lookup import lookup_openstreetmap
+        from bill_processor.address_lookup import lookup_openstreetmap
         
         mock_response = Mock()
         mock_response.json.return_value = []
@@ -694,16 +690,16 @@ class TestOpenStreetMapLookup:
         
         assert result is None
     
-    @patch('address_lookup.config.DEFAULT_LOCALITY', 'Louisville, KY')
-    @patch('address_lookup.config.CENTER_LAT', 38.2527)
-    @patch('address_lookup.config.CENTER_LON', -85.7585)
-    @patch('address_lookup.config.SEARCH_RADIUS_MILES', 25)
-    @patch('address_lookup.config.OSM_USER_AGENT', 'TestAgent/1.0')
-    @patch('address_lookup.time.sleep')
-    @patch('address_lookup.requests.get')
+    @patch('bill_processor.address_lookup.config.DEFAULT_LOCALITY', 'Louisville, KY')
+    @patch('bill_processor.address_lookup.config.CENTER_LAT', 38.2527)
+    @patch('bill_processor.address_lookup.config.CENTER_LON', -85.7585)
+    @patch('bill_processor.address_lookup.config.SEARCH_RADIUS_MILES', 25)
+    @patch('bill_processor.address_lookup.config.OSM_USER_AGENT', 'TestAgent/1.0')
+    @patch('bill_processor.address_lookup.time.sleep')
+    @patch('bill_processor.address_lookup.requests.get')
     def test_openstreetmap_with_distance_filter(self, mock_get, mock_sleep):
         """Test OpenStreetMap with distance filtering"""
-        from address_lookup import lookup_openstreetmap
+        from bill_processor.address_lookup import lookup_openstreetmap
         
         # Mock results - one close, one far
         mock_response = Mock()
@@ -742,13 +738,13 @@ class TestOpenStreetMapLookup:
         assert result is not None
         assert 'Near St' in result['addr_line1']
     
-    @patch('address_lookup.config.DEFAULT_LOCALITY', 'Louisville, KY')
-    @patch('address_lookup.config.OSM_USER_AGENT', 'TestAgent/1.0')
-    @patch('address_lookup.time.sleep')
-    @patch('address_lookup.requests.get')
+    @patch('bill_processor.address_lookup.config.DEFAULT_LOCALITY', 'Louisville, KY')
+    @patch('bill_processor.address_lookup.config.OSM_USER_AGENT', 'TestAgent/1.0')
+    @patch('bill_processor.address_lookup.time.sleep')
+    @patch('bill_processor.address_lookup.requests.get')
     def test_openstreetmap_request_exception(self, mock_get, mock_sleep):
         """Test OpenStreetMap handles request exceptions"""
-        from address_lookup import lookup_openstreetmap
+        from bill_processor.address_lookup import lookup_openstreetmap
         import requests
         
         mock_get.side_effect = requests.RequestException("Network error")
@@ -757,13 +753,13 @@ class TestOpenStreetMapLookup:
         
         assert result is None
     
-    @patch('address_lookup.config.DEFAULT_LOCALITY', None)
-    @patch('address_lookup.config.OSM_USER_AGENT', 'TestAgent/1.0')
-    @patch('address_lookup.time.sleep')
-    @patch('address_lookup.requests.get')
+    @patch('bill_processor.address_lookup.config.DEFAULT_LOCALITY', None)
+    @patch('bill_processor.address_lookup.config.OSM_USER_AGENT', 'TestAgent/1.0')
+    @patch('bill_processor.address_lookup.time.sleep')
+    @patch('bill_processor.address_lookup.requests.get')
     def test_openstreetmap_uses_default_locality(self, mock_get, mock_sleep):
         """Test that OpenStreetMap uses DEFAULT_LOCALITY when locality not provided"""
-        from address_lookup import lookup_openstreetmap
+        from bill_processor.address_lookup import lookup_openstreetmap
         
         # Set up to succeed but we just want to check the call
         mock_response = Mock()

@@ -9,7 +9,7 @@ from typing import Optional, Tuple, List
 from thefuzz import fuzz, process
 from loguru import logger
 
-import config
+from bill_processor import config
 
 
 def strip_vendor_name(name: str) -> str:

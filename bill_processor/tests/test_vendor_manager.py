@@ -11,11 +11,7 @@ import json
 import tempfile
 import shutil
 
-import sys
-from pathlib import Path
-sys.path.append(str(Path(__file__).parent.parent))
-
-from vendor_manager import VendorManager
+from bill_processor.vendor_manager import VendorManager
 
 
 class TestVendorManagerInit:
@@ -25,7 +21,7 @@ class TestVendorManagerInit:
         """Test that VendorManager creates new database if file doesn't exist"""
         test_db_path = tmp_path / "test_vendors.json"
         
-        with patch('vendor_manager.config.VENDOR_DATABASE_PATH', test_db_path):
+        with patch('bill_processor.vendor_manager.config.VENDOR_DATABASE_PATH', test_db_path):
             manager = VendorManager()
             
             assert test_db_path.exists()
@@ -50,7 +46,7 @@ class TestVendorManagerInit:
         }
         test_db_path.write_text(json.dumps(existing_data))
         
-        with patch('vendor_manager.config.VENDOR_DATABASE_PATH', test_db_path):
+        with patch('bill_processor.vendor_manager.config.VENDOR_DATABASE_PATH', test_db_path):
             manager = VendorManager()
             
             assert 'test_vendor' in manager.vendors['vendors']
@@ -80,14 +76,14 @@ class TestVendorManagerFindVendor:
             }
         }
     
-    @patch('vendor_manager.gnucash_db.get_all_vendors')
+    @patch('bill_processor.vendor_manager.gnucash_db.get_all_vendors')
     def test_find_by_alias(self, mock_get_vendors, tmp_path):
         """Test finding vendor by alias"""
         test_db_path = tmp_path / "vendors.json"
         test_db_path.write_text(json.dumps(self.test_vendors))
         mock_get_vendors.return_value = []
         
-        with patch('vendor_manager.config.VENDOR_DATABASE_PATH', test_db_path):
+        with patch('bill_processor.vendor_manager.config.VENDOR_DATABASE_PATH', test_db_path):
             manager = VendorManager()
             vendor, match_type = manager.find_vendor("acme")
             
@@ -95,43 +91,43 @@ class TestVendorManagerFindVendor:
             assert match_type == 'alias'
             assert vendor['display_name'] == 'Acme Electric'
     
-    @patch('vendor_manager.gnucash_db.get_all_vendors')
+    @patch('bill_processor.vendor_manager.gnucash_db.get_all_vendors')
     def test_find_by_exact_name(self, mock_get_vendors, tmp_path):
         """Test finding vendor by exact name"""
         test_db_path = tmp_path / "vendors.json"
         test_db_path.write_text(json.dumps(self.test_vendors))
         mock_get_vendors.return_value = []
         
-        with patch('vendor_manager.config.VENDOR_DATABASE_PATH', test_db_path):
+        with patch('bill_processor.vendor_manager.config.VENDOR_DATABASE_PATH', test_db_path):
             manager = VendorManager()
             vendor, match_type = manager.find_vendor("Acme Electric")
             
             assert vendor is not None
             assert match_type == 'exact'
     
-    @patch('vendor_manager.gnucash_db.get_all_vendors')
-    @patch('vendor_manager.config.FUZZY_MATCH_THRESHOLD', 80)
+    @patch('bill_processor.vendor_manager.gnucash_db.get_all_vendors')
+    @patch('bill_processor.vendor_manager.config.FUZZY_MATCH_THRESHOLD', 80)
     def test_find_by_fuzzy_match(self, mock_get_vendors, tmp_path):
         """Test finding vendor by fuzzy matching"""
         test_db_path = tmp_path / "vendors.json"
         test_db_path.write_text(json.dumps(self.test_vendors))
         mock_get_vendors.return_value = []
         
-        with patch('vendor_manager.config.VENDOR_DATABASE_PATH', test_db_path):
+        with patch('bill_processor.vendor_manager.config.VENDOR_DATABASE_PATH', test_db_path):
             manager = VendorManager()
             vendor, match_type = manager.find_vendor("Acme Elec")
             
             # Should find "Acme Electric" by fuzzy match
             assert vendor is not None or match_type == 'not_found'  # Depends on threshold
     
-    @patch('vendor_manager.gnucash_db.get_all_vendors')
+    @patch('bill_processor.vendor_manager.gnucash_db.get_all_vendors')
     def test_find_not_found(self, mock_get_vendors, tmp_path):
         """Test finding nonexistent vendor"""
         test_db_path = tmp_path / "vendors.json"
         test_db_path.write_text(json.dumps(self.test_vendors))
         mock_get_vendors.return_value = []
         
-        with patch('vendor_manager.config.VENDOR_DATABASE_PATH', test_db_path):
+        with patch('bill_processor.vendor_manager.config.VENDOR_DATABASE_PATH', test_db_path):
             manager = VendorManager()
             vendor, match_type = manager.find_vendor("Nonexistent Vendor")
             
@@ -142,26 +138,26 @@ class TestVendorManagerFindVendor:
 class TestVendorManagerSave:
     """Test save() method"""
     
-    @patch('vendor_manager.gnucash_db.get_all_vendors')
+    @patch('bill_processor.vendor_manager.gnucash_db.get_all_vendors')
     def test_save_creates_directory(self, mock_get_vendors, tmp_path):
         """Test that save creates parent directory if needed"""
         test_db_path = tmp_path / "subdir" / "vendors.json"
         mock_get_vendors.return_value = []
         
-        with patch('vendor_manager.config.VENDOR_DATABASE_PATH', test_db_path):
+        with patch('bill_processor.vendor_manager.config.VENDOR_DATABASE_PATH', test_db_path):
             manager = VendorManager()
             manager.save()
             
             assert test_db_path.parent.exists()
             assert test_db_path.exists()
     
-    @patch('vendor_manager.gnucash_db.get_all_vendors')
+    @patch('bill_processor.vendor_manager.gnucash_db.get_all_vendors')
     def test_save_persists_data(self, mock_get_vendors, tmp_path):
         """Test that save() persists data correctly"""
         test_db_path = tmp_path / "vendors.json"
         mock_get_vendors.return_value = []
         
-        with patch('vendor_manager.config.VENDOR_DATABASE_PATH', test_db_path):
+        with patch('bill_processor.vendor_manager.config.VENDOR_DATABASE_PATH', test_db_path):
             manager = VendorManager()
             manager.vendors['vendors']['test'] = {'name': 'Test'}
             manager.save()
@@ -174,7 +170,7 @@ class TestVendorManagerSave:
 class TestVendorManagerGnuCashVendors:
     """Test GnuCash vendor integration"""
     
-    @patch('vendor_manager.gnucash_db.get_all_vendors')
+    @patch('bill_processor.vendor_manager.gnucash_db.get_all_vendors')
     def test_lazy_load_gnucash_vendors(self, mock_get_vendors, tmp_path):
         """Test that GnuCash vendors are lazy-loaded"""
         test_db_path = tmp_path / "vendors.json"
@@ -183,7 +179,7 @@ class TestVendorManagerGnuCashVendors:
             {'guid': 'g2', 'id': '2', 'name': 'GC Vendor 2'}
         ]
         
-        with patch('vendor_manager.config.VENDOR_DATABASE_PATH', test_db_path):
+        with patch('bill_processor.vendor_manager.config.VENDOR_DATABASE_PATH', test_db_path):
             manager = VendorManager()
             
             # Should not be loaded yet
@@ -195,13 +191,13 @@ class TestVendorManagerGnuCashVendors:
             assert len(vendors) == 2
             assert mock_get_vendors.called
     
-    @patch('vendor_manager.gnucash_db.get_all_vendors')
+    @patch('bill_processor.vendor_manager.gnucash_db.get_all_vendors')
     def test_refresh_gnucash_vendors(self, mock_get_vendors, tmp_path):
         """Test refreshing GnuCash vendor cache"""
         test_db_path = tmp_path / "vendors.json"
         mock_get_vendors.return_value = []
         
-        with patch('vendor_manager.config.VENDOR_DATABASE_PATH', test_db_path):
+        with patch('bill_processor.vendor_manager.config.VENDOR_DATABASE_PATH', test_db_path):
             manager = VendorManager()
             
             # Load vendors
@@ -215,13 +211,13 @@ class TestVendorManagerGnuCashVendors:
 class TestVendorManagerGnuCashVendorConversion:
     """Test _gnucash_vendor_to_dict() method"""
     
-    @patch('vendor_manager.gnucash_db.get_all_vendors')
+    @patch('bill_processor.vendor_manager.gnucash_db.get_all_vendors')
     def test_convert_gnucash_vendor(self, mock_get_vendors, tmp_path):
         """Test converting GnuCash vendor to dict format"""
         test_db_path = tmp_path / "vendors.json"
         mock_get_vendors.return_value = []
         
-        with patch('vendor_manager.config.VENDOR_DATABASE_PATH', test_db_path):
+        with patch('bill_processor.vendor_manager.config.VENDOR_DATABASE_PATH', test_db_path):
             manager = VendorManager()
             
             gc_vendor = {

@@ -7,9 +7,9 @@ from typing import Optional, Dict, List, Tuple
 import requests
 from loguru import logger
 
-import config
-from utils import calculate_distance_miles
-from logging_setup import log_function_entry, log_function_exit, log_api_call, log_error_with_context
+from bill_processor import config
+from bill_processor.utils import calculate_distance_miles
+from bill_processor.logging_setup import log_function_entry, log_function_exit, log_api_call, log_error_with_context
 
 
 class AddressLookupError(Exception):

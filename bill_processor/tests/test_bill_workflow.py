@@ -1,6 +1,6 @@
 import pytest
 import sqlite3
-import gnucash_db
+from bill_processor import gnucash_db
 
 
 class TestBillWorkflow:
@@ -50,10 +50,12 @@ class TestBillWorkflow:
         entry = cursor.fetchone()
         assert entry is not None, "Entry not created"
         assert entry[0] == bill_data['memo'], "Wrong entry description"
-        assert entry[1] == bill_data['amount'] * 100, "quantity_num should be amount in cents"  
-        assert entry[2] == 100, "Wrong quantity_denom"
+        # GnuCash stores entries as: quantity=1 (1 unit) × b_price (dollar amount)
+        # See research/snapshots/diff_bill_created_empty_to_bill_with_entry.json
+        assert entry[1] == 1, "quantity_num should be 1 (one unit)"
+        assert entry[2] == 1, "quantity_denom should be 1"
         assert entry[3] == test_accounts['expense_account'], "Wrong bill expense account (b_acct)"
-        assert entry[4] == bill_data['amount'] * 100, "Wrong b_price_num"
+        assert entry[4] == bill_data['amount'] * 100, "b_price_num should be amount in cents"
         assert entry[5] == 100, "Wrong b_price_denom"
         assert entry[6] == bill_guid, "Entry should use 'bill' column"
         assert entry[7] is None, "Entry should NOT use 'invoice' column"

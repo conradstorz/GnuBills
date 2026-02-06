@@ -19,8 +19,8 @@ from decimal import Decimal
 from contextlib import contextmanager
 from loguru import logger
 
-import config
-from logging_setup import log_function_entry, log_function_exit, log_database_operation, log_error_with_context
+from bill_processor import config
+from bill_processor.logging_setup import log_function_entry, log_function_exit, log_database_operation, log_error_with_context
 
 
 def generate_guid() -> str:
@@ -34,7 +34,7 @@ def _get_schema():
     """
     Get schema discovery instance (lazy import to avoid circular deps).
     """
-    from schema_discovery import get_schema
+    from bill_processor.schema_discovery import get_schema
     return get_schema()
 
 

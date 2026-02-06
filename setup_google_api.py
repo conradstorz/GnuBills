@@ -437,13 +437,8 @@ def verify_config_loads_key() -> Tuple[VerificationResult, Optional[str]]:
     print_diagnostic("Testing config.py integration...")
     
     try:
-        # Add src to path if needed
-        src_path = Path(__file__).parent / "src"
-        if str(src_path) not in sys.path:
-            sys.path.insert(0, str(src_path))
-        
-        # Import config
-        import config
+        # Import config from package
+        from bill_processor import config
         
         # Reload config to ensure fresh .env load
         import importlib
@@ -477,7 +472,7 @@ def verify_config_loads_key() -> Tuple[VerificationResult, Optional[str]]:
             "Cannot import config.py",
             str(e),
             [
-                "Verify src/config.py exists",
+                "Verify bill_processor/config.py exists",
                 "Check for syntax errors in config.py",
                 "Ensure python-dotenv is installed",
                 f"Import error: {e}"
@@ -500,14 +495,9 @@ def verify_address_lookup_integration() -> VerificationResult:
     print_diagnostic("Testing complete address lookup integration...")
     
     try:
-        # Add src to path
-        src_path = Path(__file__).parent / "src"
-        if str(src_path) not in sys.path:
-            sys.path.insert(0, str(src_path))
-        
-        # Import and reload
-        from address_lookup import lookup_google_places
-        import config
+        # Import from package
+        from bill_processor.address_lookup import lookup_google_places
+        from bill_processor import config
         import importlib
         importlib.reload(config)
         

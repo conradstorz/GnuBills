@@ -7,10 +7,10 @@ from pathlib import Path
 from typing import Optional, Dict, List, Tuple
 from loguru import logger
 
-import config
-import gnucash_db
-import address_lookup
-from utils import (
+from bill_processor import config
+from bill_processor import gnucash_db
+from bill_processor import address_lookup
+from bill_processor.utils import (
     fuzzy_match_vendor, 
     strip_vendor_name,
     format_address_for_display,

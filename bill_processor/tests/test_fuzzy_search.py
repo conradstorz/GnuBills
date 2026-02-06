@@ -2,7 +2,7 @@
 Test script to demonstrate fuzzy search functionality.
 """
 
-from src.address_lookup import _generate_fuzzy_search_terms
+from bill_processor.address_lookup import _generate_fuzzy_search_terms
 
 
 def test_fuzzy_terms():

@@ -4,13 +4,9 @@ import tempfile
 import shutil
 from datetime import date
 from pathlib import Path
-import sys
 
-# Add src to path so we can import our modules
-sys.path.append(str(Path(__file__).parent.parent))
-
-from config import GNUCASH_DB_PATH
-import gnucash_db
+from bill_processor.config import GNUCASH_DB_PATH
+from bill_processor import gnucash_db
 
 
 @pytest.fixture(scope="class")

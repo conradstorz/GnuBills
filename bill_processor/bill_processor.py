@@ -10,13 +10,10 @@ from pathlib import Path
 from datetime import date
 from loguru import logger
 
-# Add src to path for imports
-sys.path.insert(0, str(Path(__file__).parent))
-
-import config
-import gnucash_db
-from vendor_manager import VendorManager
-from utils import (
+from bill_processor import config
+from bill_processor import gnucash_db
+from bill_processor.vendor_manager import VendorManager
+from bill_processor.utils import (
     parse_input_line, 
     format_currency, 
     format_date,
@@ -24,7 +21,7 @@ from utils import (
     print_separator,
     confirm_proceed
 )
-from logging_setup import setup_logging_for_script, log_function_entry, log_function_exit, log_stage, log_error_with_context
+from bill_processor.logging_setup import setup_logging_for_script, log_function_entry, log_function_exit, log_stage, log_error_with_context
 
 
 def process_bill(

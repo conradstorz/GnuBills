@@ -32,10 +32,9 @@ from datetime import datetime
 from typing import Dict, List, Any, Optional
 from loguru import logger
 
-# Add parent to path for config import
-sys.path.insert(0, str(Path(__file__).parent))
-import config
-from logging_setup import setup_logging_for_script, log_function_entry, log_function_exit, log_database_operation, log_stage
+# Import from package
+from bill_processor import config
+from bill_processor.logging_setup import setup_logging_for_script, log_function_entry, log_function_exit, log_database_operation, log_stage
 
 SNAPSHOTS_DIR = config.PROJECT_ROOT / "data" / "snapshots"
 

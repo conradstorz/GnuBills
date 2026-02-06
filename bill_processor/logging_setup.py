@@ -8,7 +8,7 @@ All other modules should just import logger from loguru.
 import sys
 from pathlib import Path
 from loguru import logger
-import config
+from bill_processor import config
 
 
 def setup_logging(

@@ -8,7 +8,7 @@ from pathlib import Path
 
 def run_tests():
     """Run the bill workflow tests"""
-    test_dir = Path(__file__).parent / "tests"
+    test_dir = Path(__file__).parent
     
     print("Running Bill Workflow Tests...")
     print("=" * 50)

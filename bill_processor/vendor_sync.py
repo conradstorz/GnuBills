@@ -24,18 +24,15 @@ from loguru import logger
 import sys
 import os
 
-# Add src directory to path for imports
-sys.path.insert(0, str(Path(__file__).parent))
-
-import config
-from gnucash_db import get_connection, generate_guid, get_usd_guid
-from logging_setup import setup_logging_for_script
+from bill_processor import config
+from bill_processor.gnucash_db import get_connection, generate_guid, get_usd_guid
+from bill_processor.logging_setup import setup_logging_for_script
 
 
 # Circular import prevention - import SchemaDiscovery only when needed
 def get_schema_discovery():
     """Lazy import of SchemaDiscovery to prevent circular dependencies."""
-    from schema_discovery import SchemaDiscovery
+    from bill_processor.schema_discovery import SchemaDiscovery
     return SchemaDiscovery
 
 
@@ -607,7 +604,7 @@ def sync_gnucash_to_json(self) -> bool:
             vendor_guid = gc_vendor['guid']
             
             # Generate vendor key (normalized name)
-            from utils import strip_vendor_name
+            from bill_processor.utils import strip_vendor_name
             vendor_key = strip_vendor_name(vendor_name)
             
             # Check if vendor already exists in JSON

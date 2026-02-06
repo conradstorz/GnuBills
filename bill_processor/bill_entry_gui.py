@@ -21,14 +21,11 @@ from datetime import date, datetime
 from typing import List, Dict, Optional
 from loguru import logger
 
-# Add src to path for imports
-sys.path.insert(0, str(Path(__file__).parent))
-
-import config
-from utils import parse_input_line, fuzzy_match_vendor
-from logging_setup import setup_logging_for_script, log_function_entry, log_function_exit, log_stage
-import vendor_manager
-import gnucash_db
+from bill_processor import config
+from bill_processor.utils import parse_input_line, fuzzy_match_vendor
+from bill_processor.logging_setup import setup_logging_for_script, log_function_entry, log_function_exit, log_stage
+from bill_processor import vendor_manager
+from bill_processor import gnucash_db
 
 
 class VendorSyncProgressDialog:
@@ -564,7 +561,7 @@ class SimpleBillEntryGUI:
             # Count vendors in JSON
             json_count = 0
             try:
-                from vendor_manager import VendorManager
+                from bill_processor.vendor_manager import VendorManager
                 vendor_mgr = VendorManager()
                 json_count = len(vendor_mgr.vendors.get('vendors', {}))
             except Exception as e:
@@ -573,7 +570,7 @@ class SimpleBillEntryGUI:
             # Count vendors in GnuCash
             gnucash_count = 0
             try:
-                from gnucash_db import get_connection
+                from bill_processor.gnucash_db import get_connection
                 with get_connection() as conn:
                     cursor = conn.execute("SELECT COUNT(*) FROM vendors")
                     gnucash_count = cursor.fetchone()[0]
@@ -1011,7 +1008,7 @@ class SimpleBillEntryGUI:
             """Run vendor sync in a thread."""
             try:
                 # Import vendor_sync module
-                import vendor_sync
+                from bill_processor import vendor_sync
                 
                 # Create sync utility
                 sync_util = vendor_sync.VendorSyncUtility()
@@ -1105,8 +1102,8 @@ class SimpleBillEntryGUI:
             """Run bill processor in a thread."""
             try:
                 # Import required modules
-                from vendor_manager import VendorManager
-                from utils import parse_input_line, format_currency
+                from bill_processor.vendor_manager import VendorManager
+                from bill_processor.utils import parse_input_line, format_currency
                 
                 # Redirect output to progress dialog
                 class ProgressWriter:

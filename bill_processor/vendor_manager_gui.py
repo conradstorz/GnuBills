@@ -12,13 +12,10 @@ from pathlib import Path
 from typing import Optional, Dict
 from loguru import logger
 
-# Add src directory to path for imports
-sys.path.insert(0, str(Path(__file__).parent))
-
-from vendor_manager import VendorManager
-from address_lookup import lookup_google_places, lookup_openstreetmap, _parse_formatted_address, _get_google_place_phone
-from logging_setup import setup_logging_for_script, log_function_entry, log_function_exit
-from utils import strip_vendor_name
+from bill_processor.vendor_manager import VendorManager
+from bill_processor.address_lookup import lookup_google_places, lookup_openstreetmap, _parse_formatted_address, _get_google_place_phone
+from bill_processor.logging_setup import setup_logging_for_script, log_function_entry, log_function_exit
+from bill_processor.utils import strip_vendor_name
 
 
 class AddressLookupGUI:
@@ -375,7 +372,7 @@ class AddressLookupGUI:
     
     def _search_web(self):
         """Search for vendor address using Google Places API with OpenStreetMap fallback."""
-        import config
+        from bill_processor import config
         vendor_name = self.vendor_name_var.get().strip()
         
         if not vendor_name:

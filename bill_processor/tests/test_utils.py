@@ -6,11 +6,7 @@ import pytest
 from datetime import date, datetime
 from hypothesis import given, strategies as st, settings
 
-import sys
-from pathlib import Path
-sys.path.append(str(Path(__file__).parent.parent))
-
-from utils import (
+from bill_processor.utils import (
     strip_vendor_name,
     parse_input_line,
     fuzzy_match_vendor,
