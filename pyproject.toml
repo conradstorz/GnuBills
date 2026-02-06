@@ -19,7 +19,7 @@ dev = [
 ]
 
 [project.scripts]
-bill-processor = "bill_processor.bill_processor:main"
+bill-processor = "bill_processor.main:main"
 bill-entry = "bill_processor.bill_entry_gui:main"
 vendor-manager-gui = "bill_processor.vendor_manager_gui:main"
 vendor-sync = "bill_processor.vendor_sync:main"
