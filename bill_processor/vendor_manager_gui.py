@@ -2,7 +2,7 @@
 Address Lookup GUI - Standalone tool for managing vendor addresses.
 
 Can be launched standalone or with a vendor name passed as argument.
-Auto-saves all changes to vendor_database.json.
+Use the Save Changes button to persist edits to vendor_database.json.
 """
 
 import sys
@@ -30,11 +30,14 @@ class AddressLookupGUI:
         self.vendor_key = None
         self.vendor_data = {}
         
-        # Track if we're in the middle of loading data (to avoid auto-save during load)
+        # Track if we're in the middle of loading data (to avoid marking dirty during load)
         self.loading = False
         
         # Track the trace ID for new vendor name changes
         self.name_trace_id = None
+        
+        # Track whether there are unsaved changes
+        self.dirty = False
         
         # Create GUI
         self._create_widgets()
@@ -86,6 +89,17 @@ class AddressLookupGUI:
         selection = self.vendor_listbox.curselection()
         if not selection:
             return
+        
+        # Warn about unsaved changes before switching
+        if self.dirty:
+            answer = messagebox.askyesnocancel(
+                "Unsaved Changes",
+                "You have unsaved changes. Save before switching vendors?"
+            )
+            if answer is None:  # Cancel
+                return
+            if answer:  # Yes - save first
+                self._save_vendor()
         
         # Remove any active name trace from new vendor creation
         if self.name_trace_id:
@@ -225,7 +239,7 @@ class AddressLookupGUI:
         self.phone_var = tk.StringVar()
         self.email_var = tk.StringVar()
         
-        # Add trace to all variables for auto-save
+        # Add trace to all variables for dirty tracking
         for var in [self.addr_name_var, self.addr_line1_var, self.addr_line2_var,
                     self.city_var, self.state_var, self.zip_var, self.phone_var, self.email_var]:
             var.trace_add("write", self._on_field_changed)
@@ -246,6 +260,10 @@ class AddressLookupGUI:
             ttk.Entry(addr_frame, textvariable=var, width=60).grid(row=idx, column=1, sticky="ew", pady=2)
         
         addr_frame.columnconfigure(1, weight=1)
+        
+        # Save button
+        self.save_button = ttk.Button(addr_frame, text="Save Changes", command=self._save_vendor, state="disabled")
+        self.save_button.grid(row=len(fields), column=1, sticky="e", pady=(10, 0))
         
         # Search Results Section (initially hidden)
         self.results_frame = ttk.LabelFrame(right_panel, text="Search Results", padding="5")
@@ -331,17 +349,30 @@ class AddressLookupGUI:
         
         finally:
             self.loading = False
+            self.dirty = False
+            self.save_button.config(state="disabled")
         
         log_function_exit("_load_vendor")
     
     # Removed _on_name_changed method - no longer needed
     
     def _on_field_changed(self, *args):
-        """Auto-save when any field changes."""
+        """Mark record as having unsaved changes."""
         if self.loading:
             return
         
         if not self.vendor_key:
+            return
+        
+        if not self.dirty:
+            self.dirty = True
+            self.save_button.config(state="normal")
+            self.status_var.set("Unsaved changes")
+    
+    def _save_vendor(self):
+        """Save the current vendor details to the JSON database."""
+        if not self.vendor_key:
+            messagebox.showwarning("No Vendor", "Select or create a vendor first.")
             return
         
         # Update vendor_data with current field values
@@ -364,8 +395,10 @@ class AddressLookupGUI:
         self.vendor_manager.vendors['vendors'][self.vendor_key] = self.vendor_data
         self.vendor_manager.save()
         
-        self.status_var.set("Auto-saved")
-        logger.debug(f"Auto-saved vendor: {self.vendor_key}")
+        self.dirty = False
+        self.save_button.config(state="disabled")
+        self.status_var.set("Saved")
+        logger.debug(f"Saved vendor: {self.vendor_key}")
         
         # Refresh vendor list
         self._load_vendor_list()
@@ -607,13 +640,13 @@ class AddressLookupGUI:
             
             self.vendor_data['address_source'] = 'google'
             
-            self.status_var.set("Search result populated - auto-saving...")
+            self.status_var.set("Search result populated - saving...")
             
         finally:
             self.loading = False
         
-        # Trigger auto-save
-        self._on_field_changed()
+        # Save the populated result immediately
+        self._save_vendor()
         
         # Hide results frame
         self.results_frame.pack_forget()

@@ -594,6 +594,14 @@ class SimpleBillEntryGUI:
             except Exception as e:
                 logger.error(f"Failed to load vendor manager: {e}")
         return self.vendor_mgr
+
+    def _reload_vendor_manager(self):
+        """Force-reload the vendor manager (e.g. after external changes)."""
+        logger.info("Reloading vendor manager after external changes")
+        self.vendor_mgr = None  # Clear cached instance
+        self._get_vendor_manager()  # Re-load from disk
+        self._update_vendor_stats()
+        self.status_var.set("Vendor list reloaded")
     
     def _on_vendor_keyrelease(self, event):
         """Handle key release in vendor entry for autocomplete."""
@@ -991,11 +999,22 @@ class SimpleBillEntryGUI:
                 logger.info("Launching Vendor Manager (no vendor selected)")
                 self.status_var.set("Launched Vendor Manager")
             
-            subprocess.Popen(cmd, cwd=str(Path(__file__).parent))
+            proc = subprocess.Popen(cmd, cwd=str(Path(__file__).parent))
+            # Poll for subprocess exit, then reload vendors
+            self._poll_subprocess(proc)
             
         except Exception as e:
             logger.error(f"Error launching vendor manager: {e}")
             messagebox.showerror("Error", f"Could not launch vendor manager: {e}")
+
+    def _poll_subprocess(self, proc):
+        """Poll a subprocess and reload vendors when it exits."""
+        if proc.poll() is None:
+            # Still running — check again in 500ms
+            self.root.after(500, self._poll_subprocess, proc)
+        else:
+            # Subprocess exited — reload vendor data
+            self._reload_vendor_manager()
     
     def _launch_vendor_sync(self):
         """Launch the vendor sync utility with progress dialog."""
@@ -1216,13 +1235,14 @@ class SimpleBillEntryGUI:
                                     
                                     # Step 2: Post the bill
                                     progress.append_text(f"  Step 2/3: Posting bill...")
-                                    gnucash_db.post_bill(bill_guid, verify=True)
+                                    gnucash_db.post_bill(bill_guid, post_date=bill_date, due_date=bill_date, verify=True)
                                     
                                     # Step 3: Pay the bill
                                     progress.append_text(f"  Step 3/3: Paying bill...")
                                     gnucash_db.pay_bill(
                                         bill_guid=bill_guid,
                                         checking_account_guid=checking_guid,
+                                        payment_date=bill_date,
                                         memo=memo,
                                         verify=True
                                     )
