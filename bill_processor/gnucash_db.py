@@ -423,39 +423,48 @@ def _get_lock_hostname() -> str:
 
 def clean_stale_lock() -> bool:
     """
-    Clean up stale locks from crashed BillProcessor processes on this machine.
+    Clean up stale locks from crashed processes on this machine.
     
     A lock is considered stale if:
-    - The hostname matches our BillProcessor hostname format
-    - The PID is no longer running
+    - The PID is no longer running on this machine
     
-    For locks from GnuCash or other machines, we leave them alone.
+    This will clean locks from:
+    - Crashed BillProcessor instances
+    - Crashed GnuCash instances on this machine
+    - Other terminated local processes
+    
+    We only clean locks if we can verify the PID is not running locally.
+    If the hostname suggests a different machine, we leave the lock alone.
     
     Returns:
         True if a stale lock was cleaned, False otherwise
     """
+    import socket
+    
     is_locked, hostname, pid = is_gnucash_locked()
     
     if not is_locked:
         return False  # No lock to clean
     
-    my_hostname = _get_lock_hostname()
+    # Get local machine name to check if lock might be from this machine
+    local_machine = socket.gethostname()
     
-    # Only clean locks from our own tool on this machine
-    if hostname != my_hostname:
-        if hostname and hostname.startswith('BillProcessor@'):
-            logger.info(f"Lock held by BillProcessor on different machine ({hostname}), cannot verify if stale")
-        else:
-            logger.info(f"Lock held by GnuCash or other application ({hostname}), not cleaning")
-        return False
+    # Check if this lock could be from a different machine
+    # BillProcessor@ format explicitly includes machine name, others might be local
+    if hostname and hostname.startswith('BillProcessor@'):
+        # Extract machine name from BillProcessor@machinename format
+        lock_machine = hostname.split('@', 1)[1] if '@' in hostname else ''
+        if lock_machine and lock_machine != local_machine:
+            logger.info(f"Lock held by BillProcessor on different machine ({hostname}), cannot clean remotely")
+            return False
     
-    # Check if the process is still running
+    # Check if the process is still running locally
     if _is_process_running(pid):
-        logger.debug(f"Lock holder PID {pid} is still running")
+        logger.debug(f"Lock holder PID {pid} is still running on this machine")
         return False
     
-    # Process is not running - this is a stale lock, clean it up
-    logger.warning(f"Cleaning stale lock from crashed process (PID {pid})")
+    # Process is not running locally - this is a stale lock, clean it up
+    logger.warning(f"Cleaning stale lock from terminated process: {hostname} (PID {pid})")
     
     db_path = Path(config.GNUCASH_DB_PATH)
     
@@ -2292,7 +2301,7 @@ def create_posted_bill_DEPRECATED(
         
         conn.execute(entry_sql, (
             entry_guid, date_posted, date_entered, memo,
-            amount_num, amount_denom,
+            1, 1,  # quantity should always be 1, not amount!
             expense_account_guid, amount_num, amount_denom,
             bill_guid
         ))

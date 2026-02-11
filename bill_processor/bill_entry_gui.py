@@ -272,25 +272,92 @@ class SimpleBillEntryGUI:
             True if database is accessible and lock acquired
             False if database is locked (GnuCash or another instance running)
         """
-        # First, try to clean any stale locks from crashed BillProcessor instances
-        # on this machine (this handles abnormal termination like Ctrl+C)
-        if gnucash_db.clean_stale_lock():
-            logger.info("Cleaned up stale lock from previous crashed session")
-        
-        # Now check if database is still locked (by GnuCash or another instance)
+        # Check if database is locked
         is_locked, hostname, pid = gnucash_db.is_gnucash_locked()
         if is_locked:
-            logger.error(f"GnuCash database is LOCKED by {hostname} (PID {pid})")
-            messagebox.showerror(
-                "Database is Locked",
-                f"The GnuCash database is currently locked.\n\n"
-                f"Please close GnuCash or other instances of this application.\n\n"
-                f"Locked by: {hostname}\n"
-                f"Process ID: {pid}"
-            )
-            # Exit the application completely
-            self.root.destroy()
-            return False
+            logger.warning(f"GnuCash database is LOCKED by {hostname} (PID {pid})")
+            
+            # Check if the lock is stale (PID not running)
+            from bill_processor.gnucash_db import _is_process_running
+            import socket
+            
+            is_running = _is_process_running(pid)
+            local_machine = socket.gethostname()
+            
+            # Build detailed message
+            pid_status = "RUNNING" if is_running else "NOT RUNNING"
+            
+            if is_running:
+                # Process is still running - cannot clean
+                logger.error(f"Database locked by active process: {hostname} (PID {pid})")
+                messagebox.showerror(
+                    "Database is Locked",
+                    f"The GnuCash database is currently locked by an active process.\n\n"
+                    f"Locked by: {hostname}\n"
+                    f"Process ID (PID): {pid}\n"
+                    f"Status: {pid_status}\n\n"
+                    f"Please close GnuCash or other instances of this application\n"
+                    f"before continuing."
+                )
+                self.root.destroy()
+                return False
+            else:
+                # Stale lock detected - ask user what to do
+                message = (
+                    f"DATABASE LOCK DETECTED\n\n"
+                    f"Lock Details:\n"
+                    f"  • Hostname: {hostname}\n"
+                    f"  • Process ID (PID): {pid}\n"
+                    f"  • Status: {pid_status}\n"
+                    f"  • Your machine: {local_machine}\n\n"
+                    f"What is a PID?\n"
+                    f"A PID (Process ID) is a unique number assigned to each running\n"
+                    f"program. When a program crashes or is force-closed, it may leave\n"
+                    f"behind a lock even though the process is no longer running.\n\n"
+                    f"Common Causes of Stale Locks:\n"
+                    f"  • GnuCash crashed or was force-closed\n"
+                    f"  • This application was terminated abnormally (Ctrl+C, crash)\n"
+                    f"  • Computer was shut down while the database was open\n"
+                    f"  • Power failure or system crash\n\n"
+                    f"Since PID {pid} is NOT RUNNING, this appears to be a stale lock.\n\n"
+                    f"Do you want to clear this stale lock and continue?"
+                )
+                
+                response = messagebox.askyesno(
+                    "Stale Database Lock Found",
+                    message,
+                    icon='warning',
+                    default='no'
+                )
+                
+                if response:  # User chose Yes - clear the lock
+                    logger.info(f"User chose to clear stale lock: {hostname} (PID {pid})")
+                    if gnucash_db.clean_stale_lock():
+                        logger.info("Stale lock successfully cleared")
+                        messagebox.showinfo(
+                            "Lock Cleared",
+                            "The stale lock has been cleared.\n\n"
+                            "The application will now proceed."
+                        )
+                        # Continue to acquire our own lock below
+                    else:
+                        logger.error("Failed to clear stale lock")
+                        messagebox.showerror(
+                            "Error",
+                            "Failed to clear the stale lock.\n\n"
+                            "The database may be in use or you may lack permissions."
+                        )
+                        self.root.destroy()
+                        return False
+                else:  # User chose No - exit without modifying
+                    logger.info("User chose NOT to clear stale lock - exiting")
+                    messagebox.showinfo(
+                        "Exiting",
+                        "Database lock was not modified.\n\n"
+                        "The application will now exit."
+                    )
+                    self.root.destroy()
+                    return False
         
         # Database is available - acquire our lock
         if not gnucash_db.acquire_lock():
