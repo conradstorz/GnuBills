@@ -39,6 +39,9 @@ class AddressLookupGUI:
         # Track whether there are unsaved changes
         self.dirty = False
         
+        # Sync vendors from GnuCash to JSON at startup to ensure consistency
+        self._initial_sync()
+        
         # Create GUI
         self._create_widgets()
         
@@ -49,6 +52,24 @@ class AddressLookupGUI:
             self.vendor_name_var.set(vendor_name)
             self.name_entry.config(state="readonly")
             self._load_vendor(vendor_name)
+    
+    def _initial_sync(self):
+        """Sync vendors from GnuCash to JSON at startup to catch external changes."""
+        try:
+            logger.info("Performing initial vendor sync from GnuCash...")
+            from bill_processor.vendor_sync import VendorSyncUtility
+            
+            sync_util = VendorSyncUtility()
+            if sync_util.discover_schema():
+                # Sync from GnuCash to JSON (quiet mode)
+                sync_util.sync_gnucash_to_json()
+                # Reload vendor manager to get updated data
+                self.vendor_manager = VendorManager()
+                logger.info("Initial vendor sync completed")
+        except Exception as e:
+            logger.warning(f"Initial vendor sync failed: {e}")
+            # Continue anyway - this is not critical
+    
     
     def _load_vendor_list(self):
         """Load all vendors into the listbox."""
@@ -370,7 +391,7 @@ class AddressLookupGUI:
             self.status_var.set("Unsaved changes")
     
     def _save_vendor(self):
-        """Save the current vendor details to the JSON database."""
+        """Save the current vendor details to the JSON database and sync to GnuCash."""
         if not self.vendor_key:
             messagebox.showwarning("No Vendor", "Select or create a vendor first.")
             return
@@ -395,9 +416,49 @@ class AddressLookupGUI:
         self.vendor_manager.vendors['vendors'][self.vendor_key] = self.vendor_data
         self.vendor_manager.save()
         
+        # Sync to GnuCash database
+        try:
+            if self.vendor_data.get('gnucash_guid'):
+                # Vendor exists in GnuCash - update it
+                logger.info(f"Syncing vendor changes to GnuCash: {self.vendor_key}")
+                from bill_processor import gnucash_db
+                gnucash_db.update_vendor_address(
+                    vendor_guid=self.vendor_data['gnucash_guid'],
+                    addr_name=self.vendor_data.get('addr_name', ''),
+                    addr_addr1=self.vendor_data.get('addr_line1', ''),
+                    addr_addr2=self.vendor_data.get('addr_line2', ''),
+                    addr_phone=self.vendor_data.get('phone', ''),
+                    addr_email=self.vendor_data.get('email', '')
+                )
+                logger.info(f"Successfully updated vendor in GnuCash: {self.vendor_key}")
+            else:
+                # Vendor doesn't exist in GnuCash yet - create it
+                logger.info(f"Creating new vendor in GnuCash: {self.vendor_key}")
+                from bill_processor import gnucash_db
+                vendor_guid = gnucash_db.create_vendor(
+                    name=self.vendor_data['display_name'],
+                    addr_name=self.vendor_data.get('addr_name', ''),
+                    addr_addr1=self.vendor_data.get('addr_line1', ''),
+                    addr_addr2=self.vendor_data.get('addr_line2', ''),
+                    addr_phone=self.vendor_data.get('phone', ''),
+                    addr_email=self.vendor_data.get('email', '')
+                )
+                # Update JSON with the new GUID
+                self.vendor_data['gnucash_guid'] = vendor_guid
+                self.vendor_manager.vendors['vendors'][self.vendor_key] = self.vendor_data
+                self.vendor_manager.save()
+                logger.info(f"Successfully created vendor in GnuCash with GUID: {vendor_guid}")
+        except Exception as e:
+            logger.error(f"Failed to sync vendor to GnuCash: {e}")
+            messagebox.showwarning(
+                "Sync Warning",
+                f"Vendor saved to JSON but failed to sync to GnuCash:\n{e}\n\n"
+                f"Use 'Vendor Sync' tool to sync changes."
+            )
+        
         self.dirty = False
         self.save_button.config(state="disabled")
-        self.status_var.set("Saved")
+        self.status_var.set("Saved and synced to GnuCash")
         logger.debug(f"Saved vendor: {self.vendor_key}")
         
         # Refresh vendor list
