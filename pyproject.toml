@@ -10,6 +10,7 @@ dependencies = [
     "python-Levenshtein>=0.21.0",
     "loguru>=0.7.3",
     "python-dotenv>=1.0.0",
+    "piecash>=1.2.1",
 ]
 
 [project.optional-dependencies]
