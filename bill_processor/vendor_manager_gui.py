@@ -418,6 +418,14 @@ class AddressLookupGUI:
         
         # Sync to GnuCash database
         try:
+            # Build city, state for addr_addr3
+            city = self.vendor_data.get('city', '').strip()
+            state = self.vendor_data.get('state', '').strip()
+            addr_addr3 = f"{city}, {state}".strip(', ') if city or state else ''
+            
+            # addr_addr4 is postal code
+            addr_addr4 = self.vendor_data.get('zip', '').strip()
+            
             if self.vendor_data.get('gnucash_guid'):
                 # Vendor exists in GnuCash - update it
                 logger.info(f"Syncing vendor changes to GnuCash: {self.vendor_key}")
@@ -427,6 +435,8 @@ class AddressLookupGUI:
                     addr_name=self.vendor_data.get('addr_name', ''),
                     addr_addr1=self.vendor_data.get('addr_line1', ''),
                     addr_addr2=self.vendor_data.get('addr_line2', ''),
+                    addr_addr3=addr_addr3,
+                    addr_addr4=addr_addr4,
                     addr_phone=self.vendor_data.get('phone', ''),
                     addr_email=self.vendor_data.get('email', '')
                 )
@@ -440,6 +450,8 @@ class AddressLookupGUI:
                     addr_name=self.vendor_data.get('addr_name', ''),
                     addr_addr1=self.vendor_data.get('addr_line1', ''),
                     addr_addr2=self.vendor_data.get('addr_line2', ''),
+                    addr_addr3=addr_addr3,
+                    addr_addr4=addr_addr4,
                     addr_phone=self.vendor_data.get('phone', ''),
                     addr_email=self.vendor_data.get('email', '')
                 )
