@@ -826,24 +826,20 @@ def create_vendor(name: str, addr_name: str = None, addr_addr1: str = None,
         with get_connection(readonly=False) as conn:
             logger.debug("INSIDE database connection context - about to execute INSERT")
             
-            # Execute INSERT
+            # Execute INSERT - only use columns that exist in the vendors table
             logger.debug("Executing INSERT statement...")
             conn.execute("""
                 INSERT INTO vendors (
                     guid, id, name, currency, active, notes, tax_override, tax_inc, tax_table,
                     addr_name, addr_addr1, addr_addr2, addr_addr3, addr_addr4, 
                     addr_phone, addr_fax, addr_email,
-                    shipaddr_name, shipaddr_addr1, shipaddr_addr2, shipaddr_addr3, shipaddr_addr4,
-                    shipaddr_phone, shipaddr_fax, shipaddr_email,
-                    terms, billing_id, credit, discount
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    terms
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """, (
                 vendor_guid, vendor_id, name, usd_guid, 1, '', 0, '', '',  # Basic fields + tax_override=0
-                addr_name or '', addr_addr1 or '', addr_addr2 or '', '', '',  # Address fields
-                addr_phone or '', '', addr_email or '',  # Contact fields
-                '', '', '', '', '',  # Shipping address (empty)
-                '', '', '',  # More contact (empty)
-                '', '', 0, 0  # Terms, billing_id, credit, discount (defaults)
+                addr_name or '', addr_addr1 or '', addr_addr2 or '', addr_addr3 or '', addr_addr4 or '',  # Address fields
+                addr_phone or '', '', addr_email or '',  # Contact fields (fax empty)
+                ''  # Terms (empty)
             ))
             logger.debug("INSERT statement executed successfully")
             
