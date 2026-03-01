@@ -706,8 +706,13 @@ class SimpleBillEntryGUI:
     
     def _on_vendor_focusout(self, event):
         """Hide autocomplete when vendor entry loses focus."""
+        # Don't hide if focus is moving to the autocomplete listbox
+        def check_and_hide():
+            current_focus = self.root.focus_get()
+            if current_focus != self.autocomplete_listbox:
+                self._hide_autocomplete()
         # Delay hiding to allow clicking on autocomplete list
-        self.root.after(200, self._hide_autocomplete)
+        self.root.after(200, check_and_hide)
     
     def _show_vendor_matches(self, search_text):
         """Show autocomplete matches for vendor search."""
@@ -792,6 +797,7 @@ class SimpleBillEntryGUI:
             self.autocomplete_listbox.bind('<Double-Button-1>', lambda e: self._on_autocomplete_select(None))
             self.autocomplete_listbox.bind('<Escape>', lambda e: self._hide_autocomplete())
             self.autocomplete_listbox.bind('<Up>', self._on_autocomplete_up)
+            self.autocomplete_listbox.bind('<FocusOut>', self._on_autocomplete_focusout)
         
         # Clear and populate listbox
         self.autocomplete_listbox.delete(0, tk.END)
@@ -835,6 +841,16 @@ class SimpleBillEntryGUI:
                 self.vendor_entry.focus_set()
                 self._hide_autocomplete()
                 return 'break'
+    
+    def _on_autocomplete_focusout(self, event):
+        """Hide autocomplete when listbox loses focus."""
+        # Don't hide if focus is moving back to the vendor entry
+        def check_and_hide():
+            current_focus = self.root.focus_get()
+            if current_focus != self.vendor_entry:
+                self._hide_autocomplete()
+        # Delay to allow focus transitions
+        self.root.after(200, check_and_hide)
     
     def _select_autocomplete_item(self, index):
         """Select an item from autocomplete list."""
