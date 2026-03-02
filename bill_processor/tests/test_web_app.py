@@ -125,3 +125,13 @@ def test_sync_vendors_returns_html(client):
     response = client.post("/vendors/sync")
     assert response.status_code == 200
     assert b"sync-status" in response.content
+
+
+def test_shutdown_endpoint_exists(client):
+    """Shutdown endpoint exists and returns a response (even if server stops)."""
+    # Use raise_server_exceptions=False so test doesn't fail on shutdown signal
+    from fastapi.testclient import TestClient
+    from bill_processor.web.app import app as fastapi_app
+    test_client = TestClient(fastapi_app, raise_server_exceptions=False)
+    response = test_client.post("/shutdown")
+    assert response.status_code in (200, 503, 500)

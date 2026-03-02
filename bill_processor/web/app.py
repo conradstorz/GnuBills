@@ -4,6 +4,10 @@ Serves a state-aware dashboard for managing vendor bills.
 """
 import html
 import json
+import os
+import signal
+import threading
+import time
 from datetime import date
 from pathlib import Path
 from fastapi import FastAPI, Request, Form
@@ -401,3 +405,13 @@ def get_sync_status_partial(request: Request):
         "sync": sync,
         "error": None,
     })
+
+
+@app.post("/shutdown")
+def shutdown():
+    """Gracefully stop the uvicorn server."""
+    def _stop():
+        time.sleep(0.5)
+        os.kill(os.getpid(), signal.SIGTERM)
+    threading.Thread(target=_stop, daemon=True).start()
+    return {"message": "Server shutting down"}
