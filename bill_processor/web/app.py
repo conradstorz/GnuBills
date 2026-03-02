@@ -79,7 +79,8 @@ def dashboard(request: Request):
     sync = _get_sync_status()
     try:
         recent = gnucash_db.get_unpaid_bills()[:10]
-    except Exception:
+    except Exception as e:
+        logger.warning(f"Could not load recent bills: {e}")
         recent = []
     return templates.TemplateResponse(request, "dashboard.html", {
         "queue": queue,

@@ -33,10 +33,10 @@
           <td>{{ bill.memo }}</td>
           <td>{{ bill.date }}</td>
           <td>
-            <button hx-post="/bills/queue/{{ loop.index0 }}/process"
+            <button hx-post="/bills/queue/{{ bill._index }}/process"
                     hx-target="#queued-bills"
                     hx-swap="outerHTML">Process</button>
-            <button hx-delete="/bills/queue/{{ loop.index0 }}"
+            <button hx-delete="/bills/queue/{{ bill._index }}"
                     hx-target="#queued-bills"
                     hx-swap="outerHTML"
                     hx-confirm="Remove this bill from the queue?">Remove</button>

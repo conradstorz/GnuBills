@@ -1,5 +1,5 @@
 <form hx-post="/bills/queue" hx-target="#bill-entry-form" hx-swap="innerHTML">
-  <label>Vendor</label>
+  <label for="vendor-input">Vendor</label>
   <div class="dropdown">
     <input type="text" name="vendor_name" id="vendor-input" required autocomplete="off"
            hx-get="/vendors/search"
@@ -10,14 +10,14 @@
   </div>
   <div id="new-vendor-section"></div>
 
-  <label>Amount ($)</label>
-  <input type="number" name="amount" step="0.01" min="0.01" required>
+  <label for="amount-input">Amount ($)</label>
+  <input type="number" name="amount" id="amount-input" step="0.01" min="0.01" required>
 
-  <label>Memo</label>
-  <input type="text" name="memo" placeholder="optional">
+  <label for="memo-input">Memo</label>
+  <input type="text" name="memo" id="memo-input" placeholder="optional">
 
-  <label>Date</label>
-  <input type="date" name="bill_date" value="{{ today }}">
+  <label for="date-input">Date</label>
+  <input type="date" name="bill_date" id="date-input" value="{{ today }}">
 
   <div style="margin-top:1rem">
     <button type="submit" class="btn-primary">Add to Queue</button>
