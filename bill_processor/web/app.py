@@ -12,7 +12,8 @@ from loguru import logger
 
 from bill_processor import gnucash_db
 from bill_processor import config
-from bill_processor.utils import parse_input_line, fuzzy_match_vendor
+import bill_processor.address_lookup as addr_lookup
+from bill_processor.utils import parse_input_line, fuzzy_match_vendor, strip_vendor_name
 from bill_processor.vendor_manager import VendorManager
 from bill_processor.web import queue_io
 
@@ -190,3 +191,102 @@ def vendor_search(request: Request, vendor_name: str = ""):
         "results": results[:6],
         "query": vendor_name.strip(),
     })
+
+
+@app.get("/vendors/new-form", response_class=HTMLResponse)
+def new_vendor_form(request: Request, name: str = ""):
+    """Return the new vendor inline creation form."""
+    return templates.TemplateResponse(request, "partials/new_vendor_form.html", {
+        "vendor_name": name,
+        "display_name": name,
+        "addr_line1": "",
+        "addr_line2": "",
+        "addr_city": "",
+        "addr_state": "",
+        "addr_zip": "",
+        "addr_phone": "",
+        "message": "",
+    })
+
+
+@app.post("/vendors/lookup-address", response_class=HTMLResponse)
+def lookup_address(request: Request, vendor_name: str = Form("")):
+    """Look up address for vendor name, return pre-filled form fragment."""
+    addr = {}
+    message = ""
+    try:
+        result = addr_lookup.lookup_google_places(vendor_name)
+        if not result:
+            result = addr_lookup.lookup_openstreetmap(vendor_name)
+        if result:
+            addr = result
+        else:
+            message = "Address not found — enter manually"
+    except Exception as e:
+        logger.warning(f"Address lookup failed for '{vendor_name}': {e}")
+        message = "Address lookup unavailable — enter manually"
+
+    return templates.TemplateResponse(request, "partials/new_vendor_form.html", {
+        "vendor_name": vendor_name,
+        "display_name": vendor_name,
+        "addr_line1": addr.get("addr1", ""),
+        "addr_line2": addr.get("addr2", ""),
+        "addr_city": addr.get("city", ""),
+        "addr_state": addr.get("state", ""),
+        "addr_zip": addr.get("zip", ""),
+        "addr_phone": addr.get("phone", ""),
+        "message": message,
+    })
+
+
+@app.post("/vendors/create", response_class=HTMLResponse)
+def create_vendor_route(
+    request: Request,
+    vendor_name: str = Form(""),
+    display_name: str = Form(""),
+    addr_line1: str = Form(""),
+    addr_line2: str = Form(""),
+    addr_city: str = Form(""),
+    addr_state: str = Form(""),
+    addr_zip: str = Form(""),
+    addr_phone: str = Form(""),
+):
+    """Create vendor in GnuCash + JSON cache, return confirmation fragment."""
+    display_name = display_name.strip() or vendor_name.strip()
+    if not display_name:
+        return HTMLResponse('<p class="error-msg">Vendor name is required.</p>')
+
+    try:
+        guid = gnucash_db.create_vendor(
+            name=display_name,
+            addr_name=display_name,
+            addr_addr1=addr_line1,
+            addr_addr2=addr_line2,
+            addr_city=addr_city,
+            addr_state=addr_state,
+            addr_zip=addr_zip,
+            addr_phone=addr_phone,
+        )
+        # Cache in JSON vendor database
+        vm = VendorManager()
+        key = strip_vendor_name(display_name)
+        vm.vendors["vendors"][key] = {
+            "display_name": display_name,
+            "gnucash_guid": guid,
+            "addr_line1": addr_line1,
+            "addr_line2": addr_line2,
+            "addr_city": addr_city,
+            "addr_state": addr_state,
+            "addr_zip": addr_zip,
+        }
+        vm.save()
+        logger.info(f"Created vendor '{display_name}' with GUID {guid}")
+        # Return JS to update the vendor input field, plus a success message
+        safe_name = display_name.replace('"', '\\"').replace("'", "\\'")
+        return HTMLResponse(
+            f'<div class="success-msg">&#10003; Created vendor: {display_name}</div>'
+            f'<script>document.getElementById("vendor-input").value = "{safe_name}";</script>'
+        )
+    except Exception as e:
+        logger.error(f"Failed to create vendor '{display_name}': {e}")
+        return HTMLResponse(f'<p class="error-msg">Failed to create vendor: {e}</p>')

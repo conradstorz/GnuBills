@@ -81,3 +81,26 @@ def test_vendor_search_empty_query(client):
     assert response.status_code == 200
     # Empty query returns empty response
     assert response.content == b""
+
+
+def test_new_vendor_form_renders(client):
+    response = client.get("/vendors/new-form", params={"name": "TestVendor"})
+    assert response.status_code == 200
+    assert b"TestVendor" in response.content
+
+
+def test_address_lookup_returns_form(client):
+    # With no API keys, should still return a form (possibly with error message)
+    response = client.post("/vendors/lookup-address", data={"vendor_name": "Acme Electric"})
+    assert response.status_code == 200
+    # Should return HTML with a form, not a 500
+    assert b"<form" in response.content or b"form" in response.content.lower()
+
+
+def test_create_vendor_empty_name_rejected(client):
+    response = client.post("/vendors/create", data={
+        "vendor_name": "",
+        "display_name": "",
+    })
+    assert response.status_code == 200
+    assert b"error" in response.content.lower() or b"required" in response.content.lower()
