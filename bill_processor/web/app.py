@@ -12,7 +12,7 @@ from loguru import logger
 
 from bill_processor import gnucash_db
 from bill_processor import config
-from bill_processor.utils import parse_input_line
+from bill_processor.utils import parse_input_line, fuzzy_match_vendor
 from bill_processor.vendor_manager import VendorManager
 from bill_processor.web import queue_io
 
@@ -165,16 +165,18 @@ def vendor_search(request: Request, vendor_name: str = ""):
     if not vendor_name or len(vendor_name.strip()) < 2:
         return HTMLResponse("")
 
-    from bill_processor.utils import fuzzy_match_vendor
-    vm = VendorManager()
-
-    _, _, candidates = fuzzy_match_vendor(
-        vendor_name.strip(), vm.vendors.get("vendors", {})
-    )
+    try:
+        vm = VendorManager()
+        _, _, candidates = fuzzy_match_vendor(
+            vendor_name.strip(), vm.vendors.get("vendors", {})
+        )
+    except Exception as e:
+        logger.warning(f"Vendor search failed for '{vendor_name}': {e}")
+        return HTMLResponse("")
 
     seen = set()
     results = []
-    for key, score in sorted(candidates, key=lambda x: x[1], reverse=True):
+    for key, score in candidates:
         if score >= VENDOR_SEARCH_MIN_SCORE and key not in seen:
             seen.add(key)
             vdata = vm.vendors["vendors"].get(key, {})

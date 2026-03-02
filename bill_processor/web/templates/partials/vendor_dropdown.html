@@ -15,7 +15,7 @@
        hx-target="#new-vendor-section"
        hx-swap="innerHTML"
        onclick="document.getElementById('vendor-dropdown').innerHTML = ''">
-    + Add &ldquo;{{ query }}&rdquo; as new vendor&hellip;
+    + Add &ldquo;{{ query | e }}&rdquo; as new vendor&hellip;
   </div>
 </div>
 {% endif %}
