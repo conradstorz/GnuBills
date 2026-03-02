@@ -67,3 +67,17 @@ def test_edit_bill_in_queue(client, tmp_queue):
     assert response.status_code == 200
     content = tmp_queue.read_text()
     assert "200.00" in content
+
+
+def test_vendor_search_returns_html(client):
+    response = client.get("/vendors/search", params={"vendor_name": "acme"})
+    assert response.status_code == 200
+    # Returns HTML fragment (empty or with results)
+    assert "text/html" in response.headers["content-type"]
+
+
+def test_vendor_search_empty_query(client):
+    response = client.get("/vendors/search", params={"vendor_name": ""})
+    assert response.status_code == 200
+    # Empty query returns empty response
+    assert response.content == b""

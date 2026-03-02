@@ -22,6 +22,8 @@ templates = Jinja2Templates(directory=str(BASE_DIR / "templates"))
 app = FastAPI(title="GnuCash Bill Processor")
 app.mount("/static", StaticFiles(directory=str(BASE_DIR / "static")), name="static")
 
+VENDOR_SEARCH_MIN_SCORE = 40  # Lower threshold for dropdown suggestions
+
 
 def _get_sync_status() -> dict:
     """Return vendor sync status: counts and whether sync is needed."""
@@ -154,4 +156,35 @@ def edit_queue_item(
     return templates.TemplateResponse(request, "partials/queued_bills.html", {
         "queue": queue,
         "last_error": None if ok else f"Could not update bill at index {index}",
+    })
+
+
+@app.get("/vendors/search", response_class=HTMLResponse)
+def vendor_search(request: Request, vendor_name: str = ""):
+    """Return HTML dropdown fragment of fuzzy-matched vendors."""
+    if not vendor_name or len(vendor_name.strip()) < 2:
+        return HTMLResponse("")
+
+    from bill_processor.utils import fuzzy_match_vendor
+    vm = VendorManager()
+
+    _, _, candidates = fuzzy_match_vendor(
+        vendor_name.strip(), vm.vendors.get("vendors", {})
+    )
+
+    seen = set()
+    results = []
+    for key, score in sorted(candidates, key=lambda x: x[1], reverse=True):
+        if score >= VENDOR_SEARCH_MIN_SCORE and key not in seen:
+            seen.add(key)
+            vdata = vm.vendors["vendors"].get(key, {})
+            results.append({
+                "key": key,
+                "display_name": vdata.get("display_name", key),
+                "score": score,
+            })
+
+    return templates.TemplateResponse(request, "partials/vendor_dropdown.html", {
+        "results": results[:6],
+        "query": vendor_name.strip(),
     })
