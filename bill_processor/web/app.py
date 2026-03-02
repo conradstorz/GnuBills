@@ -2,6 +2,8 @@
 FastAPI web application for GnuCash Bill Processor.
 Serves a state-aware dashboard for managing vendor bills.
 """
+import html
+import json
 from datetime import date
 from pathlib import Path
 from fastapi import FastAPI, Request, Form
@@ -229,12 +231,12 @@ def lookup_address(request: Request, vendor_name: str = Form("")):
     return templates.TemplateResponse(request, "partials/new_vendor_form.html", {
         "vendor_name": vendor_name,
         "display_name": vendor_name,
-        "addr_line1": addr.get("addr1", ""),
-        "addr_line2": addr.get("addr2", ""),
-        "addr_city": addr.get("city", ""),
-        "addr_state": addr.get("state", ""),
-        "addr_zip": addr.get("zip", ""),
-        "addr_phone": addr.get("phone", ""),
+        "addr_line1": addr.get("addr_line1", ""),
+        "addr_line2": addr.get("addr_line2", ""),
+        "addr_city": "",
+        "addr_state": "",
+        "addr_zip": "",
+        "addr_phone": addr.get("phone") or "",
         "message": message,
     })
 
@@ -278,14 +280,14 @@ def create_vendor_route(
             "addr_city": addr_city,
             "addr_state": addr_state,
             "addr_zip": addr_zip,
+            "addr_phone": addr_phone,
         }
         vm.save()
         logger.info(f"Created vendor '{display_name}' with GUID {guid}")
         # Return JS to update the vendor input field, plus a success message
-        safe_name = display_name.replace('"', '\\"').replace("'", "\\'")
         return HTMLResponse(
-            f'<div class="success-msg">&#10003; Created vendor: {display_name}</div>'
-            f'<script>document.getElementById("vendor-input").value = "{safe_name}";</script>'
+            f'<div class="success-msg">&#10003; Created vendor: {html.escape(display_name)}</div>'
+            f'<script>document.getElementById("vendor-input").value = {json.dumps(display_name)};</script>'
         )
     except Exception as e:
         logger.error(f"Failed to create vendor '{display_name}': {e}")
