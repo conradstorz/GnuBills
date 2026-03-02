@@ -169,8 +169,11 @@ def _process_one_bill(bill: dict) -> dict:
         logger.info(f"Processed bill: {bill['vendor_name']} ${bill['amount']:.2f}")
         return {"ok": True}
     except Exception as e:
-        logger.error(f"Failed to process bill {bill['vendor_name']}: {e}")
-        return {"ok": False, "error": str(e)}
+        logger.error(
+            f"Failed to process bill {bill['vendor_name']}: {e}. "
+            f"Bill may have been partially created in GnuCash — check for duplicates before retrying."
+        )
+        return {"ok": False, "error": f"{e} (bill may be partially created in GnuCash — check before retrying)"}
 
 
 @app.post("/bills/queue/process", response_class=HTMLResponse)
@@ -178,8 +181,8 @@ def process_all(request: Request):
     """Process all queued bills through GnuCash."""
     queue = queue_io.read_queue()
     errors = []
-    # Process in reverse order to avoid index shifting during removal
-    for bill in reversed(queue):
+    # Sort descending by file-line index so removals don't shift earlier indices
+    for bill in sorted(queue, key=lambda b: b["_index"], reverse=True):
         result = _process_one_bill(bill)
         if result["ok"]:
             queue_io.remove_bill(bill["_index"])
