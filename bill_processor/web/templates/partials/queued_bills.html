@@ -1,4 +1,7 @@
-<div class="card" id="queued-bills">
+<div class="card" id="queued-bills"
+     hx-get="/partials/queued-bills"
+     hx-trigger="every 30s"
+     hx-swap="outerHTML">
   <h2>Queued Bills</h2>
   {% if last_error %}
   <p class="error-msg">&#9888; {{ last_error }}</p>

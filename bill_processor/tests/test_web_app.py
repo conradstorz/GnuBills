@@ -135,3 +135,10 @@ def test_shutdown_endpoint_exists(client):
     test_client = TestClient(fastapi_app, raise_server_exceptions=False)
     response = test_client.post("/shutdown")
     assert response.status_code in (200, 503, 500)
+
+
+def test_queued_bills_partial_route(client, tmp_queue):
+    """GET /partials/queued-bills returns the queue card HTML."""
+    response = client.get("/partials/queued-bills")
+    assert response.status_code == 200
+    assert b"queued-bills" in response.content

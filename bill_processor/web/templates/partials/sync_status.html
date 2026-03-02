@@ -1,4 +1,7 @@
-<div class="card" id="sync-status">
+<div class="card" id="sync-status"
+     hx-get="/partials/sync-status"
+     hx-trigger="every 30s"
+     hx-swap="outerHTML">
   <h2>Vendor Sync Status</h2>
   {% if error %}
   <p class="error-msg">Sync failed: {{ error | e }}</p>

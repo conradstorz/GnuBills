@@ -406,6 +406,16 @@ def get_sync_status_partial(request: Request):
     })
 
 
+@app.get("/partials/queued-bills", response_class=HTMLResponse)
+def get_queued_bills_partial(request: Request):
+    """Return the queued bills card (for HTMX polling)."""
+    queue = queue_io.read_queue()
+    return templates.TemplateResponse(request, "partials/queued_bills.html", {
+        "queue": queue,
+        "last_error": None,
+    })
+
+
 @app.post("/shutdown")
 def shutdown():
     """Stop the server. Uses os._exit for reliable cross-platform termination."""
