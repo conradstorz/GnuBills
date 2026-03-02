@@ -104,3 +104,17 @@ def test_create_vendor_empty_name_rejected(client):
     })
     assert response.status_code == 200
     assert b"error" in response.content.lower() or b"required" in response.content.lower()
+
+
+def test_process_all_empty_queue(client, tmp_queue):
+    """Processing an empty queue returns 200 and the queue card."""
+    response = client.post("/bills/queue/process")
+    assert response.status_code == 200
+    assert b"queued-bills" in response.content
+
+
+def test_process_single_missing_index(client, tmp_queue):
+    """Processing a non-existent index returns 200 with error in queue card."""
+    response = client.post("/bills/queue/99/process")
+    assert response.status_code == 200
+    assert b"queued-bills" in response.content

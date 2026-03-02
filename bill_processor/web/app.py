@@ -116,23 +116,100 @@ def remove_from_queue(request: Request, index: int):
     })
 
 
+def _process_one_bill(bill: dict) -> dict:
+    """
+    Run create/post/pay for a single queued bill dict.
+    Returns {"ok": True} or {"ok": False, "error": str}.
+    """
+    vm = VendorManager()
+    vendor_data, match_type = vm.find_vendor(bill["vendor_name"])
+    if not vendor_data:
+        return {"ok": False, "error": f"Vendor not found: {bill['vendor_name']}"}
+
+    vendor_guid = vendor_data.get("gnucash_guid")
+    if not vendor_guid:
+        gc_vendor = gnucash_db.find_vendor_by_name(vendor_data.get("display_name", ""))
+        if not gc_vendor:
+            return {"ok": False, "error": f"No GnuCash record for vendor: {vendor_data.get('display_name')}"}
+        vendor_guid = gc_vendor["guid"]
+
+    # Get expense account GUID — check both possible field names in vendor_data
+    expense_guid = vendor_data.get("expense_account_guid") or vendor_data.get("expense_account")
+    # expense_account may hold a name string rather than a GUID; treat short strings as names
+    if expense_guid and len(str(expense_guid)) != 32:
+        expense_guid = None
+    if not expense_guid:
+        return {"ok": False, "error": f"No expense account GUID for vendor: {vendor_data.get('display_name')}"}
+
+    checking_accounts = gnucash_db.get_checking_accounts()
+    if not checking_accounts:
+        return {"ok": False, "error": "No checking account found in GnuCash"}
+    checking_guid = checking_accounts[0]["guid"]
+
+    bill_date = bill["date"]
+    try:
+        bill_guid = gnucash_db.create_bill(
+            vendor_guid=vendor_guid,
+            expense_account_guid=expense_guid,
+            amount=bill["amount"],
+            memo=bill.get("memo", ""),
+            bill_date=bill_date,
+        )
+        gnucash_db.post_bill(
+            bill_guid=bill_guid,
+            post_date=bill_date,
+            due_date=bill_date,
+        )
+        gnucash_db.pay_bill(
+            bill_guid=bill_guid,
+            checking_account_guid=checking_guid,
+            payment_date=bill_date,
+            memo=bill.get("memo", ""),
+        )
+        logger.info(f"Processed bill: {bill['vendor_name']} ${bill['amount']:.2f}")
+        return {"ok": True}
+    except Exception as e:
+        logger.error(f"Failed to process bill {bill['vendor_name']}: {e}")
+        return {"ok": False, "error": str(e)}
+
+
 @app.post("/bills/queue/process", response_class=HTMLResponse)
-def process_all_stub(request: Request):
-    """Stub — will be implemented in a later task."""
+def process_all(request: Request):
+    """Process all queued bills through GnuCash."""
     queue = queue_io.read_queue()
+    errors = []
+    # Process in reverse order to avoid index shifting during removal
+    for bill in reversed(queue):
+        result = _process_one_bill(bill)
+        if result["ok"]:
+            queue_io.remove_bill(bill["_index"])
+        else:
+            errors.append(f"{bill['vendor_name']}: {result['error']}")
+    remaining = queue_io.read_queue()
     return templates.TemplateResponse(request, "partials/queued_bills.html", {
-        "queue": queue,
-        "last_error": "Bill processing not yet implemented. Check back soon.",
+        "queue": remaining,
+        "last_error": "; ".join(errors) if errors else None,
     })
 
 
 @app.post("/bills/queue/{index}/process", response_class=HTMLResponse)
-def process_one_stub(request: Request, index: int):
-    """Stub — will be implemented in a later task."""
+def process_one(request: Request, index: int):
+    """Process a single queued bill through GnuCash."""
     queue = queue_io.read_queue()
+    # Find the bill with this file-line index
+    bill = next((b for b in queue if b["_index"] == index), None)
+    if not bill:
+        return templates.TemplateResponse(request, "partials/queued_bills.html", {
+            "queue": queue,
+            "last_error": f"Bill at index {index} not found in queue",
+        })
+    result = _process_one_bill(bill)
+    if result["ok"]:
+        queue_io.remove_bill(index)
+    remaining = queue_io.read_queue()
     return templates.TemplateResponse(request, "partials/queued_bills.html", {
-        "queue": queue,
-        "last_error": "Bill processing not yet implemented. Check back soon.",
+        "queue": remaining,
+        "last_error": None if result["ok"] else result["error"],
     })
 
 
