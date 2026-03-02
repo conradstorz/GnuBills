@@ -44,12 +44,25 @@ def main():
     )
 
     # Wait for server to start (up to 10 seconds)
+    started = False
     for _ in range(20):
         if _port_in_use(PORT):
+            started = True
             break
         time.sleep(0.5)
 
-    webbrowser.open(URL)
+    if started:
+        webbrowser.open(URL)
+    else:
+        # .pyw has no console — write failure to a temp file and open it
+        import os as _os
+        import tempfile
+        log_path = Path(tempfile.gettempdir()) / "bill_processor_launch_error.txt"
+        with open(log_path, "w") as f:
+            f.write(f"GnuCash Bill Processor failed to start on port {PORT}.\n")
+            f.write("Check that 'uv' is on your PATH and all dependencies are installed.\n")
+            f.write(f"Project root: {PROJECT_ROOT}\n")
+        _os.startfile(str(log_path))
 
 
 if __name__ == "__main__":

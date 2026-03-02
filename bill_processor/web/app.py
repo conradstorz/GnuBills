@@ -5,7 +5,6 @@ Serves a state-aware dashboard for managing vendor bills.
 import html
 import json
 import os
-import signal
 import threading
 import time
 from datetime import date
@@ -409,9 +408,9 @@ def get_sync_status_partial(request: Request):
 
 @app.post("/shutdown")
 def shutdown():
-    """Gracefully stop the uvicorn server."""
+    """Stop the server. Uses os._exit for reliable cross-platform termination."""
     def _stop():
-        time.sleep(0.5)
-        os.kill(os.getpid(), signal.SIGTERM)
+        time.sleep(1.0)
+        os._exit(0)
     threading.Thread(target=_stop, daemon=True).start()
     return {"message": "Server shutting down"}
