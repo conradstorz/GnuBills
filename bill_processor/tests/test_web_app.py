@@ -1,4 +1,7 @@
 """Tests for the FastAPI web application."""
+import tempfile
+from pathlib import Path
+
 import pytest
 from fastapi.testclient import TestClient
 
@@ -7,6 +10,16 @@ from fastapi.testclient import TestClient
 def client():
     from bill_processor.web.app import app
     return TestClient(app)
+
+
+@pytest.fixture
+def tmp_queue(tmp_path, monkeypatch):
+    """Patch BILLS_INPUT_PATH to a temp file."""
+    queue_file = tmp_path / "bills_to_process.txt"
+    queue_file.write_text("")
+    from bill_processor import config
+    monkeypatch.setattr(config, "BILLS_INPUT_PATH", queue_file)
+    return queue_file
 
 
 def test_status_returns_ok(client):
@@ -21,3 +34,36 @@ def test_dashboard_renders(client):
     response = client.get("/")
     assert response.status_code == 200
     assert b"GnuCash Bill Processor" in response.content
+
+
+def test_add_bill_to_queue(client, tmp_queue):
+    response = client.post("/bills/queue", data={
+        "vendor_name": "Acme Electric",
+        "amount": "123.45",
+        "memo": "Test bill",
+        "bill_date": "2026-03-01",
+    })
+    assert response.status_code == 200
+    content = tmp_queue.read_text()
+    assert "Acme Electric" in content
+    assert "123.45" in content
+
+
+def test_delete_bill_from_queue(client, tmp_queue):
+    tmp_queue.write_text("Acme Electric, 123.45, test, 2026-03-01\n")
+    response = client.delete("/bills/queue/0")
+    assert response.status_code == 200
+    assert tmp_queue.read_text().strip() == ""
+
+
+def test_edit_bill_in_queue(client, tmp_queue):
+    tmp_queue.write_text("Acme Electric, 123.45, test, 2026-03-01\n")
+    response = client.patch("/bills/queue/0", data={
+        "vendor_name": "Acme Electric",
+        "amount": "200.00",
+        "memo": "Updated",
+        "bill_date": "2026-03-01",
+    })
+    assert response.status_code == 200
+    content = tmp_queue.read_text()
+    assert "200.00" in content

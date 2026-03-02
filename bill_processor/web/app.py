@@ -14,6 +14,7 @@ from bill_processor import gnucash_db
 from bill_processor import config
 from bill_processor.utils import parse_input_line
 from bill_processor.vendor_manager import VendorManager
+from bill_processor.web import queue_io
 
 BASE_DIR = Path(__file__).parent
 templates = Jinja2Templates(directory=str(BASE_DIR / "templates"))
@@ -87,4 +88,52 @@ def dashboard(request: Request):
         "sync": sync,
         "recent_bills": recent,
         "today": date.today().isoformat(),
+        "last_error": None,
+    })
+
+
+@app.post("/bills/queue", response_class=HTMLResponse)
+def add_to_queue(
+    request: Request,
+    vendor_name: str = Form(...),
+    amount: float = Form(...),
+    memo: str = Form(""),
+    bill_date: str = Form(""),
+):
+    """Add a bill to the queue and return refreshed bill entry form."""
+    parsed_date = date.fromisoformat(bill_date) if bill_date else date.today()
+    queue_io.add_bill(vendor_name, amount, memo, parsed_date)
+    return templates.TemplateResponse(request, "bill_entry.html", {
+        "today": date.today().isoformat(),
+        "success": f"Added {vendor_name} ${amount:.2f} to queue",
+    })
+
+
+@app.delete("/bills/queue/{index}", response_class=HTMLResponse)
+def remove_from_queue(request: Request, index: int):
+    """Remove a bill from the queue by file-line index."""
+    queue_io.remove_bill(index)
+    bills = queue_io.read_queue()
+    return templates.TemplateResponse(request, "partials/queued_bills.html", {
+        "queue": bills,
+        "last_error": None,
+    })
+
+
+@app.patch("/bills/queue/{index}", response_class=HTMLResponse)
+def edit_queue_item(
+    request: Request,
+    index: int,
+    vendor_name: str = Form(...),
+    amount: float = Form(...),
+    memo: str = Form(""),
+    bill_date: str = Form(""),
+):
+    """Update a queued bill and return refreshed queue card."""
+    parsed_date = date.fromisoformat(bill_date) if bill_date else date.today()
+    queue_io.update_bill(index, vendor_name, amount, memo, parsed_date)
+    bills = queue_io.read_queue()
+    return templates.TemplateResponse(request, "partials/queued_bills.html", {
+        "queue": bills,
+        "last_error": None,
     })
