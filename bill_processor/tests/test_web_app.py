@@ -118,3 +118,10 @@ def test_process_single_missing_index(client, tmp_queue):
     response = client.post("/bills/queue/99/process")
     assert response.status_code == 200
     assert b"queued-bills" in response.content
+
+
+def test_sync_vendors_returns_html(client):
+    """Vendor sync returns 200 with HTML sync status card."""
+    response = client.post("/vendors/sync")
+    assert response.status_code == 200
+    assert b"sync-status" in response.content

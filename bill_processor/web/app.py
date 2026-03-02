@@ -17,6 +17,7 @@ from bill_processor import config
 import bill_processor.address_lookup as addr_lookup
 from bill_processor.utils import parse_input_line, fuzzy_match_vendor, strip_vendor_name
 from bill_processor.vendor_manager import VendorManager
+from bill_processor.vendor_sync import VendorSyncUtility
 from bill_processor.web import queue_io
 
 BASE_DIR = Path(__file__).parent
@@ -78,6 +79,7 @@ def dashboard(request: Request):
         "recent_bills": recent,
         "today": date.today().isoformat(),
         "last_error": None,
+        "error": None,
     })
 
 
@@ -372,3 +374,30 @@ def create_vendor_route(
     except Exception as e:
         logger.error(f"Failed to create vendor '{display_name}': {e}")
         return HTMLResponse(f'<p class="error-msg">Failed to create vendor: {e}</p>')
+
+
+@app.post("/vendors/sync", response_class=HTMLResponse)
+def sync_vendors(request: Request):
+    """Run bidirectional vendor sync and return updated status card."""
+    error = None
+    try:
+        util = VendorSyncUtility()
+        util.sync_all_vendors()
+    except Exception as e:
+        error = str(e)
+        logger.error(f"Vendor sync failed: {e}")
+    sync = _get_sync_status()
+    return templates.TemplateResponse(request, "partials/sync_status.html", {
+        "sync": sync,
+        "error": error,
+    })
+
+
+@app.get("/partials/sync-status", response_class=HTMLResponse)
+def get_sync_status_partial(request: Request):
+    """Return the sync status card (for HTMX polling)."""
+    sync = _get_sync_status()
+    return templates.TemplateResponse(request, "partials/sync_status.html", {
+        "sync": sync,
+        "error": None,
+    })
