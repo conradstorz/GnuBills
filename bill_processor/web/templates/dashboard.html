@@ -1,0 +1,88 @@
+{% extends "base.html" %}
+{% block content %}
+
+<!-- Vendor Sync Status -->
+<div class="card" id="sync-status">
+  <h2>Vendor Sync Status</h2>
+  {% if sync.error is defined %}
+    <p class="error-msg">Could not check sync status: {{ sync.error }}</p>
+  {% elif sync.needs_sync %}
+    <p class="status-warn">&#9888; {{ sync.gc_count }} in GnuCash, {{ sync.json_count }} in local database &mdash; sync needed</p>
+    <button class="btn-primary"
+      hx-post="/vendors/sync"
+      hx-target="#sync-status"
+      hx-swap="outerHTML">Sync Vendors</button>
+  {% else %}
+    <p class="status-ok">&#10003; In sync ({{ sync.gc_count }} vendors)</p>
+    <button disabled class="btn-disabled">Sync Vendors</button>
+  {% endif %}
+</div>
+
+<!-- Queued Bills -->
+<div class="card" id="queued-bills">
+  <h2>Queued Bills</h2>
+  {% if queue %}
+    <p class="status-warn">&#9888; {{ queue|length }} bill(s) waiting to be processed</p>
+    <table>
+      <thead><tr><th>Vendor</th><th>Amount</th><th>Memo</th><th>Date</th><th></th></tr></thead>
+      <tbody>
+        {% for bill in queue %}
+        <tr>
+          <td>{{ bill.vendor_name }}</td>
+          <td>${{ "%.2f"|format(bill.amount) }}</td>
+          <td>{{ bill.memo }}</td>
+          <td>{{ bill.date }}</td>
+          <td>
+            <button hx-post="/bills/queue/{{ loop.index0 }}/process"
+                    hx-target="#queued-bills"
+                    hx-swap="outerHTML">Process</button>
+            <button hx-delete="/bills/queue/{{ loop.index0 }}"
+                    hx-target="#queued-bills"
+                    hx-swap="outerHTML"
+                    hx-confirm="Remove this bill from the queue?">Remove</button>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    <div style="margin-top:0.75rem">
+      <button class="btn-primary"
+        hx-post="/bills/queue/process"
+        hx-target="#queued-bills"
+        hx-swap="outerHTML">Process All</button>
+    </div>
+  {% else %}
+    <p class="status-ok">&#10003; No bills queued</p>
+  {% endif %}
+</div>
+
+<!-- Bill Entry Form -->
+<div class="card">
+  <h2>Enter a Bill</h2>
+  <div id="bill-entry-form">
+    {% include "bill_entry.html" %}
+  </div>
+</div>
+
+<!-- Recent Bills -->
+<div class="card">
+  <h2>Recent Bills</h2>
+  {% if recent_bills %}
+    <table>
+      <thead><tr><th>Date</th><th>Vendor</th><th>Status</th></tr></thead>
+      <tbody>
+        {% for bill in recent_bills %}
+        <tr>
+          <td>{{ bill.date_opened[:10] if bill.date_opened else "&mdash;" }}</td>
+          <td>{{ bill.vendor_name }}</td>
+          <td>{{ "posted" if bill.date_posted else "open" }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  {% else %}
+    <p style="color:#888">No recent bills found.</p>
+  {% endif %}
+</div>
+
+{% endblock %}
