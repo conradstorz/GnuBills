@@ -23,22 +23,6 @@ app = FastAPI(title="GnuCash Bill Processor")
 app.mount("/static", StaticFiles(directory=str(BASE_DIR / "static")), name="static")
 
 
-def _get_queue() -> list[dict]:
-    """Read bills_to_process.txt and return list of parsed bill dicts."""
-    queue_path = config.BILLS_INPUT_PATH
-    if not queue_path.exists():
-        return []
-    bills = []
-    with open(queue_path, "r", encoding="utf-8") as f:
-        for i, line in enumerate(f):
-            parsed = parse_input_line(line)
-            if parsed:
-                parsed["_index"] = i
-                parsed["_raw"] = line.rstrip()
-                bills.append(parsed)
-    return bills
-
-
 def _get_sync_status() -> dict:
     """Return vendor sync status: counts and whether sync is needed."""
     try:
@@ -64,7 +48,7 @@ def _get_sync_status() -> dict:
 @app.get("/status")
 def get_status():
     """Return current system state as JSON (used by HTMX polling)."""
-    queue = _get_queue()
+    queue = queue_io.read_queue()
     sync = _get_sync_status()
     return {
         "vendor_sync": sync,
@@ -76,7 +60,7 @@ def get_status():
 @app.get("/", response_class=HTMLResponse)
 def dashboard(request: Request):
     """Render the main dashboard."""
-    queue = _get_queue()
+    queue = queue_io.read_queue()
     sync = _get_sync_status()
     try:
         recent = gnucash_db.get_unpaid_bills()[:10]
@@ -101,7 +85,14 @@ def add_to_queue(
     bill_date: str = Form(""),
 ):
     """Add a bill to the queue and return refreshed bill entry form."""
-    parsed_date = date.fromisoformat(bill_date) if bill_date else date.today()
+    if not vendor_name.strip():
+        return HTMLResponse('<p class="error-msg">Vendor name is required.</p>', status_code=200)
+    if amount <= 0:
+        return HTMLResponse('<p class="error-msg">Amount must be greater than zero.</p>', status_code=200)
+    try:
+        parsed_date = date.fromisoformat(bill_date) if bill_date else date.today()
+    except ValueError:
+        parsed_date = date.today()
     queue_io.add_bill(vendor_name, amount, memo, parsed_date)
     return templates.TemplateResponse(request, "bill_entry.html", {
         "today": date.today().isoformat(),
@@ -112,11 +103,31 @@ def add_to_queue(
 @app.delete("/bills/queue/{index}", response_class=HTMLResponse)
 def remove_from_queue(request: Request, index: int):
     """Remove a bill from the queue by file-line index."""
-    queue_io.remove_bill(index)
-    bills = queue_io.read_queue()
+    ok = queue_io.remove_bill(index)
+    queue = queue_io.read_queue()
     return templates.TemplateResponse(request, "partials/queued_bills.html", {
-        "queue": bills,
-        "last_error": None,
+        "queue": queue,
+        "last_error": None if ok else f"Could not remove bill at index {index}",
+    })
+
+
+@app.post("/bills/queue/process", response_class=HTMLResponse)
+def process_all_stub(request: Request):
+    """Stub — will be implemented in a later task."""
+    queue = queue_io.read_queue()
+    return templates.TemplateResponse(request, "partials/queued_bills.html", {
+        "queue": queue,
+        "last_error": "Bill processing not yet implemented. Check back soon.",
+    })
+
+
+@app.post("/bills/queue/{index}/process", response_class=HTMLResponse)
+def process_one_stub(request: Request, index: int):
+    """Stub — will be implemented in a later task."""
+    queue = queue_io.read_queue()
+    return templates.TemplateResponse(request, "partials/queued_bills.html", {
+        "queue": queue,
+        "last_error": "Bill processing not yet implemented. Check back soon.",
     })
 
 
@@ -130,10 +141,17 @@ def edit_queue_item(
     bill_date: str = Form(""),
 ):
     """Update a queued bill and return refreshed queue card."""
-    parsed_date = date.fromisoformat(bill_date) if bill_date else date.today()
-    queue_io.update_bill(index, vendor_name, amount, memo, parsed_date)
-    bills = queue_io.read_queue()
+    if not vendor_name.strip():
+        return HTMLResponse('<p class="error-msg">Vendor name is required.</p>', status_code=200)
+    if amount <= 0:
+        return HTMLResponse('<p class="error-msg">Amount must be greater than zero.</p>', status_code=200)
+    try:
+        parsed_date = date.fromisoformat(bill_date) if bill_date else date.today()
+    except ValueError:
+        parsed_date = date.today()
+    ok = queue_io.update_bill(index, vendor_name, amount, memo, parsed_date)
+    queue = queue_io.read_queue()
     return templates.TemplateResponse(request, "partials/queued_bills.html", {
-        "queue": bills,
-        "last_error": None,
+        "queue": queue,
+        "last_error": None if ok else f"Could not update bill at index {index}",
     })
