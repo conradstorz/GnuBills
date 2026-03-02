@@ -402,7 +402,7 @@ def get_sync_status_partial(request: Request):
     sync = _get_sync_status()
     return templates.TemplateResponse(request, "partials/sync_status.html", {
         "sync": sync,
-        "error": None,
+        "error": None,  # Polling auto-clears stale action errors — intentional
     })
 
 
@@ -412,7 +412,7 @@ def get_queued_bills_partial(request: Request):
     queue = queue_io.read_queue()
     return templates.TemplateResponse(request, "partials/queued_bills.html", {
         "queue": queue,
-        "last_error": None,
+        "last_error": None,  # Polling auto-clears stale action errors — intentional
     })
 
 
