@@ -3,7 +3,7 @@ Windows desktop launcher for GnuCash Bill Processor web UI.
 
 To use: create a Windows shortcut to this file on your desktop.
 Double-clicking will start the server (if not already running)
-and open the browser at http://localhost:8000.
+and open the browser at http://localhost:8008.
 
 The .pyw extension runs Python without a console window on Windows.
 """
@@ -14,7 +14,7 @@ import webbrowser
 import socket
 from pathlib import Path
 
-PORT = 8000
+PORT = 8008
 URL = f"http://localhost:{PORT}"
 PROJECT_ROOT = Path(__file__).parent
 

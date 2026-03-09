@@ -12,7 +12,7 @@ uv run python -m bill_processor.main # Run CLI bill processor
 uv run bill-entry                    # Launch bill entry GUI (tkinter)
 uv run vendor-manager-gui            # Launch vendor manager GUI
 uv run vendor-sync                   # Sync vendors between JSON and GnuCash
-uv run uvicorn bill_processor.web.app:app --port 8000  # Start web UI server (dev mode)
+uv run uvicorn bill_processor.web.app:app --port 8008  # Start web UI server (dev mode)
 # Or double-click launcher.pyw for Windows desktop launch (no console window)
 
 # Testing
@@ -59,7 +59,7 @@ This tool automates the GnuCash vendor bill workflow (create → post → pay) b
 | `logging_setup.py` | Loguru configuration. Always use `from loguru import logger` — never `import logging`. |
 | `web/app.py`      | FastAPI routes — dashboard, queue CRUD, vendor search/create, bill processing, vendor sync |
 | `web/queue_io.py` | Queue file I/O — read/write/edit/delete for `data/bills_to_process.txt` |
-| `launcher.pyw`    | Windows launcher — starts uvicorn and opens browser at `localhost:8000` |
+| `launcher.pyw`    | Windows launcher — starts uvicorn and opens browser at `localhost:8008` |
 
 ### GnuCash database schema notes
 

@@ -297,31 +297,23 @@ def new_vendor_form(request: Request, name: str = ""):
 
 
 @app.post("/vendors/lookup-address", response_class=HTMLResponse)
-def lookup_address(request: Request, vendor_name: str = Form("")):
-    """Look up address for vendor name, return pre-filled form fragment."""
-    addr = {}
+def lookup_address(request: Request, vendor_name: str = Form(""), display_name: str = Form("")):
+    """Look up address candidates and return a picker fragment."""
+    search_name = display_name.strip() or vendor_name.strip()
+    candidates = []
     message = ""
     try:
-        result = addr_lookup.lookup_google_places(vendor_name)
-        if not result:
-            result = addr_lookup.lookup_openstreetmap(vendor_name)
-        if result:
-            addr = result
-        else:
-            message = "Address not found — enter manually"
+        candidates = addr_lookup.lookup_google_places(search_name, return_all=True) or []
+        if not candidates:
+            candidates = addr_lookup.lookup_openstreetmap(search_name, return_all=True) or []
+        if not candidates:
+            message = "No results found — enter address manually"
     except Exception as e:
-        logger.warning(f"Address lookup failed for '{vendor_name}': {e}")
+        logger.warning(f"Address lookup failed for '{search_name}': {e}")
         message = "Address lookup unavailable — enter manually"
 
-    return templates.TemplateResponse(request, "partials/new_vendor_form.html", {
-        "vendor_name": vendor_name,
-        "display_name": vendor_name,
-        "addr_line1": addr.get("addr_line1", ""),
-        "addr_line2": addr.get("addr_line2", ""),
-        "addr_city": "",
-        "addr_state": "",
-        "addr_zip": "",
-        "addr_phone": addr.get("phone") or "",
+    return templates.TemplateResponse(request, "partials/address_candidates.html", {
+        "candidates": candidates,
         "message": message,
     })
 
