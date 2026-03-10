@@ -1,5 +1,5 @@
 # GnuCash Bill Processor
-
+*** this branch is now depricated *** 3/9/2026
 **Simplify vendor bill management in GnuCash** - Automatically create complete vendor records with addresses and streamline the bill/post/pay workflow.
 
 ## Why Use This Tool?
